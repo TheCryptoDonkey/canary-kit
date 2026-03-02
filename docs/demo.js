@@ -1,10 +1,10 @@
 /**
- * demo.js — Wordchain interactive demo page
+ * demo.js — Canary interactive demo page
  *
  * Handles all application logic: state management, localStorage persistence,
  * demo group creation, UI rendering, event handlers, and live countdown tick.
  *
- * NOTE: The esm.sh import below will resolve once wordchain is published to npm.
+ * NOTE: The esm.sh import below will resolve once canary-kit is published to npm.
  * For local dev, the import map in index.html redirects this URL to ../dist/index.js.
  */
 
@@ -19,7 +19,7 @@ import {
   reseed,
   addMember,
   removeMember,
-} from 'https://esm.sh/wordchain@latest'
+} from 'https://esm.sh/canary-kit@latest'
 
 // ---------------------------------------------------------------------------
 // Nostr tools — loaded dynamically so offline mode still works
@@ -156,9 +156,9 @@ async function handleIncomingInvitation(event) {
 // ---------------------------------------------------------------------------
 
 const STORAGE_KEYS = {
-  groups: 'wordchain:groups',
-  settings: 'wordchain:settings',
-  identity: 'wordchain:identity',
+  groups: 'canary:groups',
+  settings: 'canary:settings',
+  identity: 'canary:identity',
 }
 
 const DEFAULT_RELAYS = [

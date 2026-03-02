@@ -1,5 +1,5 @@
 /**
- * Wordlist curation script for Wordchain en-v1.
+ * Wordlist curation script for Canary en-v1.
  *
  * Filters the BIP-39 English wordlist for spoken-word clarity,
  * then backfills with supplementary words to maintain exactly 2048 entries.

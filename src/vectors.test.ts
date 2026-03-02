@@ -7,7 +7,7 @@ import {
 import { verifyWord } from './verify.js'
 
 /**
- * Canonical test vectors for the Wordchain protocol (NIP Appendix C).
+ * Canonical test vectors for the Canary protocol (NIP Appendix C).
  *
  * These vectors define the expected output for known inputs.
  * Any compliant implementation MUST produce the same results.

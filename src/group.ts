@@ -16,7 +16,7 @@ export interface GroupConfig {
   wordlist?: string
 }
 
-/** Persistent state for a wordchain group. All fields are serialisable. */
+/** Persistent state for a canary group. All fields are serialisable. */
 export interface GroupState {
   name: string
   seed: string

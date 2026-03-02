@@ -1,14 +1,14 @@
-NIP-XXX
-=======
+NIP-CANARY
+==========
 
-Wordchain: Secure Word Verification for Trusted Groups
--------------------------------------------------------
+NIP-CANARY: Spoken-Word Identity Verification for Trusted Groups
+-----------------------------------------------------------------
 
 `draft` `optional`
 
 ## Abstract
 
-Wordchain is a protocol for trusted groups to share rotating verification words, enabling
+Canary is a protocol for trusted groups to share rotating verification words, enabling
 human identity verification in an age of trivial AI voice and video cloning. Words are
 derived deterministically from a shared secret seed using HMAC-SHA256 — no network is
 required after initial setup. The protocol includes duress signalling: each member has a
@@ -27,7 +27,7 @@ naive:
 - No duress signalling (if a member is forced to reveal the word, there is no silent alarm)
 - No protocol (just "remember a word" — no tooling, no synchronisation, no offline support)
 
-Wordchain solves all of these by applying well-understood cryptographic primitives
+Canary solves all of these by applying well-understood cryptographic primitives
 (HMAC-SHA256, time-based counters) to the spoken-word verification problem, distributed
 over Nostr relays with Meshtastic mesh as a resilient fallback.
 
@@ -35,7 +35,7 @@ over Nostr relays with Meshtastic mesh as a resilient fallback.
 
 | Term                  | Definition                                                                                    |
 |-----------------------|-----------------------------------------------------------------------------------------------|
-| Wordchain             | A deterministic sequence of verification words derived from a shared seed                    |
+| Canary                | A deterministic sequence of verification words derived from a shared seed                    |
 | Group seed            | A 256-bit random secret shared by all group members                                           |
 | Rotation interval     | The time period for automatic word rotation (e.g. 86400 for 24 h, 604800 for 7 days)         |
 | Counter               | `floor(unix_timestamp / rotation_interval)` — determines the current word                    |
@@ -175,14 +175,14 @@ numbers 28800–28802 are ephemeral events (NIP-16 convention for ephemeral even
 20000–29999 range).
 
 ```
-Kind 38800  Wordchain Group         Replaceable
+Kind 38800  Canary Group            Replaceable
 Kind 28800  Seed Distribution       Ephemeral
 Kind 38801  Member Update           Replaceable
 Kind 28801  Re-seed                 Ephemeral
 Kind 28802  Word Used               Ephemeral
 ```
 
-### Kind 38800: Wordchain Group
+### Kind 38800: Canary Group
 
 Published by the group creator. This is the group's permanent, addressable record.
 Clients MUST use the `d` tag value as the group identifier throughout the group's
@@ -347,7 +347,7 @@ monitoring the compromised member's device. Clients SHOULD initiate an automatic
 ### Creation
 
 1. Creator generates a cryptographically random 256-bit group seed.
-2. Creator publishes a Wordchain Group event (kind 38800) naming all initial members.
+2. Creator publishes a Canary Group event (kind 38800) naming all initial members.
 3. Creator publishes Seed Distribution events (kind 28800) to each member, individually
    encrypted with NIP-44 to their public key.
 
@@ -429,7 +429,7 @@ the group seed:
 - If the attacker has compromised the member's device AND obtained the group seed, they
   can derive both the verification word and the duress word. At this point, the device is
   the weakest link, not the protocol.
-- If the attacker knows the Wordchain protocol exists and demands the member display the
+- If the attacker knows the Canary protocol exists and demands the member display the
   application, the member would expose the verification word. Implementations SHOULD NOT
   display the duress word in the default UI. The duress word SHOULD be derived on demand
   only, and SHOULD be accessible only through a non-obvious secondary gesture.
@@ -450,7 +450,7 @@ in `p` tags) but MUST NOT have access to the seed, words, or reason text.
 
 ### Meshtastic (Fallback)
 
-When Nostr relays are unavailable, a wordchain group MAY operate over Meshtastic mesh
+When Nostr relays are unavailable, a canary group MAY operate over Meshtastic mesh
 radio. Each group maps to a Meshtastic channel with a PSK derived as follows:
 
 ```
@@ -532,7 +532,7 @@ compliance with this NIP MUST use the exact wordlist defined in Appendix A.
   groups.
 - Three words: 33 bits (1 in approximately 8,589,934,592). Maximum configuration.
 
-Wordchain is designed to protect against real-time impersonation, not offline brute force.
+Canary is designed to protect against real-time impersonation, not offline brute force.
 An attacker on a live call gets one attempt. Entropy requirements are therefore far lower
 than for passwords or keys.
 
@@ -624,19 +624,19 @@ Notes:
 ## Appendix A: English Wordlist (en-v1)
 
 The canonical `en-v1` wordlist is maintained in the reference implementation repository
-and distributed with the `wordchain` npm package. Implementations MUST use this exact
+and distributed with the `canary-kit` npm package. Implementations MUST use this exact
 list without modification. The wordlist file is named `en-v1.txt`, contains exactly 2048
 entries, one word per line, words ordered alphabetically, UTF-8 encoding, Unix line
 endings.
 
-Reference: `https://github.com/TheCryptoDonkey/wordchain` — `src/wordlists/en-v1.txt`
+Reference: `https://github.com/TheCryptoDonkey/canary-kit` — `src/wordlists/en-v1.txt`
 
 ## Reference Implementation
 
-TypeScript: `wordchain` (npm)
+TypeScript: `canary-kit` (npm)
 
 ```
-npm install wordchain
+npm install canary-kit
 ```
 
-Source: `https://github.com/TheCryptoDonkey/wordchain`
+Source: `https://github.com/TheCryptoDonkey/canary-kit`

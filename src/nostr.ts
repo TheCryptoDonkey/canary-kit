@@ -1,5 +1,5 @@
 /**
- * Wordchain Nostr event kinds.
+ * Canary Nostr event kinds.
  *
  * Placeholder values — exact kind numbers will be allocated when the NIP
  * is submitted. Using 38800–38804 range as a proposal.

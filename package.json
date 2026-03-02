@@ -1,7 +1,7 @@
 {
-  "name": "wordchain",
+  "name": "canary-kit",
   "version": "0.0.0-development",
-  "description": "Deterministic spoken-word identity verification for trusted groups",
+  "description": "Spoken-word identity verification for trusted groups",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -31,7 +31,8 @@
     "bench": "vitest bench"
   },
   "keywords": [
-    "wordchain",
+    "canary",
+    "canary-kit",
     "verification",
     "identity",
     "duress",
@@ -47,7 +48,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/TheCryptoDonkey/wordchain.git"
+    "url": "https://github.com/TheCryptoDonkey/canary-kit.git"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",

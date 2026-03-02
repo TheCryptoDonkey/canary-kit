@@ -1,9 +1,9 @@
-# wordchain
+# canary-kit
 
-> Deterministic spoken-word identity verification for trusted groups
+> Spoken-word identity verification for trusted groups
 
-[![npm](https://img.shields.io/npm/v/wordchain)](https://www.npmjs.com/package/wordchain)
-[![CI](https://github.com/TheCryptoDonkey/wordchain/actions/workflows/ci.yml/badge.svg)](https://github.com/TheCryptoDonkey/wordchain/actions)
+[![npm](https://img.shields.io/npm/v/canary-kit)](https://www.npmjs.com/package/canary-kit)
+[![CI](https://github.com/TheCryptoDonkey/canary-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/TheCryptoDonkey/canary-kit/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## The Problem
@@ -13,11 +13,11 @@ AI voice cloning takes three seconds of audio. Your family "safe word" is static
 ## Quick Start
 
 ```bash
-npm install wordchain
+npm install canary-kit
 ```
 
 ```typescript
-import { createGroup, getCurrentWord, getCurrentDuressWord, verifyWord } from 'wordchain'
+import { createGroup, getCurrentWord, getCurrentDuressWord, verifyWord } from 'canary-kit'
 
 // Create a group
 const group = createGroup({
@@ -41,7 +41,7 @@ const duressResult = verifyWord('bridge', group.seed, group.members, group.count
 // => { status: 'duress', member: '1111...1111' }
 ```
 
-## Why Wordchain
+## Why Canary
 
 **Offline-first.** Words are derived locally from a shared seed and a time-based counter. No network is required after initial setup.
 
@@ -65,7 +65,7 @@ import {
   deriveVerificationPhrase,
   deriveDuressWord,
   deriveDuressPhrase,
-} from 'wordchain'
+} from 'canary-kit'
 ```
 
 | Function | Signature | Description |
@@ -78,7 +78,7 @@ import {
 ### Verification
 
 ```typescript
-import { verifyWord, type VerifyResult, type VerifyStatus } from 'wordchain'
+import { verifyWord, type VerifyResult, type VerifyStatus } from 'canary-kit'
 ```
 
 `verifyWord(spokenWord, seedHex, memberPubkeys, counter): VerifyResult`
@@ -107,7 +107,7 @@ import {
   removeMember,
   type GroupConfig,
   type GroupState,
-} from 'wordchain'
+} from 'canary-kit'
 ```
 
 All functions are pure — they return new state without mutating the input.
@@ -135,7 +135,7 @@ interface GroupConfig {
 ### Counter
 
 ```typescript
-import { getCounter, counterToBytes, DEFAULT_ROTATION_INTERVAL } from 'wordchain'
+import { getCounter, counterToBytes, DEFAULT_ROTATION_INTERVAL } from 'canary-kit'
 ```
 
 | Export | Description |
@@ -147,9 +147,9 @@ import { getCounter, counterToBytes, DEFAULT_ROTATION_INTERVAL } from 'wordchain
 ### Wordlist
 
 ```typescript
-import { WORDLIST, WORDLIST_SIZE, getWord, indexOf } from 'wordchain'
+import { WORDLIST, WORDLIST_SIZE, getWord, indexOf } from 'canary-kit'
 // or, for direct access:
-import { WORDLIST, WORDLIST_SIZE, getWord, indexOf } from 'wordchain/wordlist'
+import { WORDLIST, WORDLIST_SIZE, getWord, indexOf } from 'canary-kit/wordlist'
 ```
 
 | Export | Description |
@@ -172,7 +172,7 @@ import {
   buildWordUsedEvent,
   KINDS,
   type UnsignedEvent,
-} from 'wordchain/nostr'
+} from 'canary-kit/nostr'
 ```
 
 All builders return an `UnsignedEvent`. Sign with your own Nostr library.
@@ -189,7 +189,7 @@ All builders return an `UnsignedEvent`. Sign with your own Nostr library.
 
 ## Protocol
 
-The full specification is in [NIP-XXX.md](NIP-XXX.md).
+The full specification is in [NIP-CANARY.md](NIP-CANARY.md).
 
 | Event | Kind | Type |
 |---|---|---|

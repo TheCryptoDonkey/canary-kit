@@ -1,5 +1,5 @@
 /**
- * Wordchain English wordlist (en-v1).
+ * Canary English wordlist (en-v1).
  *
  * 2048 words curated for spoken-word clarity. Based on BIP-39 English,
  * filtered for verbal verification: no homophones, no phonetic
