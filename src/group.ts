@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { randomSeed } from './crypto.js'
 import { getCounter, DEFAULT_ROTATION_INTERVAL } from './counter.js'
 import {
   deriveVerificationWord,
@@ -33,7 +33,7 @@ export interface GroupState {
 
 /** Generate a cryptographically secure 32-byte seed as a hex string. */
 function generateSeed(): string {
-  return randomBytes(32).toString('hex')
+  return randomSeed()
 }
 
 /**
