@@ -1398,9 +1398,12 @@ input::placeholder {
 }
 
 @media (max-width: 480px) {
+  :root {
+    --header-height: 48px;
+  }
+
   .header {
     padding: 0 1rem;
-    height: 48px;
   }
 
   .sidebar {
@@ -1480,7 +1483,7 @@ input::placeholder {
 }
 
 /* ============================================================
-   21. FOCUS VISIBLE — keyboard nav
+   22. FOCUS VISIBLE — keyboard nav
    ============================================================ */
 
 :focus-visible {
