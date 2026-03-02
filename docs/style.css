@@ -55,7 +55,7 @@
   --font-body:    'IBM Plex Mono', 'Courier New', monospace;
 
   /* Layout */
-  --sidebar-width: 300px;
+  --sidebar-width: 320px;
   --header-height: 56px;
   --content-max:   860px;
 
@@ -1252,4 +1252,33 @@ input::placeholder {
 button:focus-visible {
   outline: 2px solid var(--amber-500);
   outline-offset: 2px;
+}
+
+/* ============================================================
+   DEMO BANNER — fixed bottom-centre hint
+   ============================================================ */
+
+.demo-banner {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  background: var(--bg-raised);
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.1));
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  z-index: 50;
+  letter-spacing: 0.03em;
+}
+
+.demo-banner a {
+  color: var(--amber-400);
+  text-decoration: none;
+}
+
+.demo-banner a:hover {
+  text-decoration: underline;
 }
