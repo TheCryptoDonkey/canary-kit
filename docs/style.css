@@ -52,7 +52,7 @@
   /* Typography */
   --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --font-mono:    'IBM Plex Mono', 'Courier New', monospace;
-  --font-body:    'IBM Plex Mono', 'Courier New', monospace;
+  --font-body:    'IBM Plex Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
 
   /* Layout */
   --sidebar-width: 320px;
@@ -99,7 +99,7 @@ body::before {
   content: '';
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: 10;
   pointer-events: none;
   /* SVG feTurbulence noise filter rendered as a data URI */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
