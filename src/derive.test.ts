@@ -1,8 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { deriveVerificationWord, deriveVerificationPhrase } from './derive.js'
+import {
+  deriveVerificationWord,
+  deriveVerificationPhrase,
+  deriveDuressWord,
+  deriveDuressPhrase,
+} from './derive.js'
 
 // Fixed test seed (32 bytes hex = 64 hex chars)
 const TEST_SEED = 'a'.repeat(64)
+const ALICE_PUBKEY = '1'.repeat(64)
+const BOB_PUBKEY = '2'.repeat(64)
 
 describe('deriveVerificationWord', () => {
   it('returns a single word from the wordlist', () => {
@@ -62,5 +69,50 @@ describe('deriveVerificationPhrase', () => {
     const single = deriveVerificationWord(TEST_SEED, 5)
     const phrase = deriveVerificationPhrase(TEST_SEED, 5, 3)
     expect(phrase[0]).toBe(single)
+  })
+})
+
+describe('deriveDuressWord', () => {
+  it('returns a word from the wordlist', () => {
+    const word = deriveDuressWord(TEST_SEED, ALICE_PUBKEY, 0)
+    expect(typeof word).toBe('string')
+    expect(word.length).toBeGreaterThan(0)
+  })
+
+  it('is deterministic', () => {
+    const w1 = deriveDuressWord(TEST_SEED, ALICE_PUBKEY, 0)
+    const w2 = deriveDuressWord(TEST_SEED, ALICE_PUBKEY, 0)
+    expect(w1).toBe(w2)
+  })
+
+  it('different members get different duress words', () => {
+    const alice = deriveDuressWord(TEST_SEED, ALICE_PUBKEY, 0)
+    const bob = deriveDuressWord(TEST_SEED, BOB_PUBKEY, 0)
+    expect(alice).not.toBe(bob)
+  })
+
+  it('duress word differs from verification word', () => {
+    const verify = deriveVerificationWord(TEST_SEED, 0)
+    const duress = deriveDuressWord(TEST_SEED, ALICE_PUBKEY, 0)
+    expect(duress).not.toBe(verify)
+  })
+
+  it('changes with counter', () => {
+    const w1 = deriveDuressWord(TEST_SEED, ALICE_PUBKEY, 0)
+    const w2 = deriveDuressWord(TEST_SEED, ALICE_PUBKEY, 1)
+    expect(w1).not.toBe(w2)
+  })
+})
+
+describe('deriveDuressPhrase', () => {
+  it('returns correct number of words', () => {
+    expect(deriveDuressPhrase(TEST_SEED, ALICE_PUBKEY, 0, 2)).toHaveLength(2)
+    expect(deriveDuressPhrase(TEST_SEED, ALICE_PUBKEY, 0, 3)).toHaveLength(3)
+  })
+
+  it('no word in duress phrase matches corresponding verification phrase word', () => {
+    const verify = deriveVerificationPhrase(TEST_SEED, 0, 3)
+    const duress = deriveDuressPhrase(TEST_SEED, ALICE_PUBKEY, 0, 3)
+    expect(duress).not.toEqual(verify)
   })
 })
