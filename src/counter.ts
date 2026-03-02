@@ -1,0 +1,24 @@
+/** Default rotation interval: 7 days in seconds. */
+export const DEFAULT_ROTATION_INTERVAL = 604_800
+
+/**
+ * Derive the current counter from a unix timestamp and rotation interval.
+ * Counter = floor(timestamp / interval).
+ */
+export function getCounter(
+  timestampSec: number,
+  rotationIntervalSec: number = DEFAULT_ROTATION_INTERVAL,
+): number {
+  return Math.floor(timestampSec / rotationIntervalSec)
+}
+
+/**
+ * Serialise a counter to an 8-byte big-endian Uint8Array.
+ * Same encoding as TOTP (RFC 6238).
+ */
+export function counterToBytes(counter: number): Uint8Array {
+  const buf = new Uint8Array(8)
+  const view = new DataView(buf.buffer)
+  view.setBigUint64(0, BigInt(counter), false) // false = big-endian
+  return buf
+}
