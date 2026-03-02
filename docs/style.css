@@ -135,6 +135,37 @@
   text-shadow: 0 0 20px rgba(180, 83, 9, 0.25);
 }
 
+/* ── Theme toggle ──────────────────────────────────────────── */
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  border-color: var(--border-amber);
+  background: var(--bg-hover);
+}
+
+.theme-toggle__icon::before {
+  content: '☾';
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .theme-toggle__icon::before {
+  content: '☀';
+}
+
 /* ============================================================
    2. RESET & BASE
    ============================================================ */

@@ -22,6 +22,43 @@ import {
 } from 'https://esm.sh/canary-kit@latest'
 
 // ---------------------------------------------------------------------------
+// Theme management — must run before first render to prevent flash
+// ---------------------------------------------------------------------------
+
+const THEME_STORAGE_KEY = 'canary:theme'
+
+function getInitialTheme() {
+  try {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY)
+    if (stored === 'light' || stored === 'dark') return stored
+  } catch {}
+  if (window.matchMedia?.('(prefers-color-scheme: light)').matches) return 'light'
+  return 'dark'
+}
+
+function applyTheme(theme) {
+  if (theme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light')
+  } else {
+    document.documentElement.removeAttribute('data-theme')
+  }
+}
+
+function setupThemeToggle() {
+  const btn = document.getElementById('theme-toggle')
+  if (!btn) return
+  btn.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'
+    const next = current === 'light' ? 'dark' : 'light'
+    applyTheme(next)
+    try { localStorage.setItem(THEME_STORAGE_KEY, next) } catch {}
+  })
+}
+
+// Apply theme immediately (before first render) to prevent flash
+applyTheme(getInitialTheme())
+
+// ---------------------------------------------------------------------------
 // Nostr tools — loaded dynamically so offline mode still works
 // ---------------------------------------------------------------------------
 
@@ -1104,6 +1141,7 @@ function init() {
   setupSettings()
   setupInvite()
   setupAuth()
+  setupThemeToggle()
   startTick()
 
   // Load Nostr tools (non-blocking — offline mode still works)
