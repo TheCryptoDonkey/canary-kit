@@ -199,9 +199,7 @@ const STORAGE_KEYS = {
 }
 
 const DEFAULT_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://nos.lol',
-  'wss://relay.nostr.band',
+  'wss://relay.trotters.cc',
 ]
 
 // Demo group seed and member pubkeys (test vectors — not real keys)
