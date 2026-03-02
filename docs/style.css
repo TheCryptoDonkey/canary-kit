@@ -408,6 +408,16 @@ input::placeholder {
   color: var(--amber-500);
 }
 
+.group-item__badge {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  background: var(--bg-raised);
+  padding: 0.125rem 0.375rem;
+  border-radius: 3px;
+  letter-spacing: 0.05em;
+}
+
 .create-group-btn {
   font-family: var(--font-mono);
   font-size: 0.78rem;
@@ -471,10 +481,13 @@ input::placeholder {
     0 0 80px rgba(245, 158, 11, 0.08),
     0 2px 4px rgba(0, 0, 0, 0.4),
     0 0 40px rgba(248, 250, 252, 0.05);
-  animation: word-appear 0.6s var(--ease-out) both;
   /* Keep long words from overflowing */
   word-break: break-word;
   max-width: 100%;
+}
+
+.word-appear {
+  animation: word-appear 0.6s var(--ease-out) both;
 }
 
 /* ── Countdown ───────────────────────────────────────────────── */

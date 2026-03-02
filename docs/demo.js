@@ -5,7 +5,7 @@
  * demo group creation, UI rendering, event handlers, and live countdown tick.
  *
  * NOTE: The esm.sh import below will resolve once wordchain is published to npm.
- * For local dev, Task 4 provides a shim that intercepts this import.
+ * For local dev, the import map in index.html redirects this URL to ../dist/index.js.
  */
 
 import {
@@ -57,6 +57,7 @@ function updateRelayStatus(status) {
       label.textContent = 'connecting'
       break
     default:
+      dot.classList.add('relay-dot--error')
       label.textContent = 'offline'
   }
 }
@@ -516,7 +517,9 @@ function renderSettings() {
   const rotationBtns = document.querySelectorAll('#setting-rotation .seg-btn')
   for (const btn of rotationBtns) {
     const val = parseInt(btn.dataset.value, 10)
-    btn.classList.toggle('seg-btn--active', val === group.rotationInterval)
+    const isActive = val === group.rotationInterval
+    btn.classList.toggle('seg-btn--active', isActive)
+    btn.setAttribute('aria-pressed', String(isActive))
     btn.disabled = isDemoGroup
   }
 
@@ -524,7 +527,9 @@ function renderSettings() {
   const wordCountBtns = document.querySelectorAll('#setting-wordcount .seg-btn')
   for (const btn of wordCountBtns) {
     const val = parseInt(btn.dataset.value, 10)
-    btn.classList.toggle('seg-btn--active', val === group.wordCount)
+    const isActive = val === group.wordCount
+    btn.classList.toggle('seg-btn--active', isActive)
+    btn.setAttribute('aria-pressed', String(isActive))
     btn.disabled = isDemoGroup
   }
 
@@ -596,7 +601,8 @@ function handleVerify(e) {
   const spokenWord = input.value.trim()
   if (!spokenWord) return
 
-  const counter = group.counter + group.usageOffset
+  const now = Math.floor(Date.now() / 1000)
+  const counter = getCounter(now, group.rotationInterval) + group.usageOffset
   const result = verifyWord(spokenWord, group.seed, group.members, counter)
 
   const resultEl = document.getElementById('verify-result')
@@ -668,15 +674,14 @@ function setupDuressLongPress() {
     const group = state.groups[state.activeGroupId]
     if (!group || group.members.length === 0) return
 
+    const now = Math.floor(Date.now() / 1000)
+    const counter = getCounter(now, group.rotationInterval) + group.usageOffset
     let duressWord
     if (state.identity) {
       // Authenticated: show the user's own duress word
-      const userPubkey = state.identity.pubkey
-      const counter = group.counter + group.usageOffset
-      duressWord = deriveDuressWord(group.seed, userPubkey, counter)
+      duressWord = deriveDuressWord(group.seed, state.identity.pubkey, counter)
     } else {
       // Demo mode: show the first member's (Alice's) duress word
-      const counter = group.counter + group.usageOffset
       duressWord = deriveDuressWord(group.seed, group.members[0], counter)
     }
 
