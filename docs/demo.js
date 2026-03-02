@@ -22,6 +22,135 @@ import {
 } from 'https://esm.sh/wordchain@latest'
 
 // ---------------------------------------------------------------------------
+// Nostr tools — loaded dynamically so offline mode still works
+// ---------------------------------------------------------------------------
+
+let nostrTools = null
+let pool = null
+
+async function loadNostrTools() {
+  try {
+    const mod = await import('https://esm.sh/nostr-tools@latest')
+    nostrTools = mod
+    // SimplePool is in the main export
+    pool = new mod.SimplePool()
+    updateRelayStatus('connected')
+    return true
+  } catch (err) {
+    console.warn('nostr-tools not available — offline mode:', err.message)
+    updateRelayStatus('disconnected')
+    return false
+  }
+}
+
+function updateRelayStatus(status) {
+  const dot = document.getElementById('relay-dot')
+  const label = document.getElementById('relay-label')
+  dot.className = 'relay-dot'
+  switch (status) {
+    case 'connected':
+      dot.classList.add('relay-dot--connected')
+      label.textContent = `${state.settings.relays.length} relays`
+      break
+    case 'partial':
+      dot.classList.add('relay-dot--connecting')
+      label.textContent = 'connecting'
+      break
+    default:
+      label.textContent = 'offline'
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Nostr event publishing
+// ---------------------------------------------------------------------------
+
+async function publishEvent(event) {
+  if (!pool || !nostrTools) return null
+
+  let signed
+  if (window.nostr) {
+    signed = await window.nostr.signEvent(event)
+  } else if (state.identity?.privkey) {
+    const skBytes = new Uint8Array(
+      state.identity.privkey.match(/.{2}/g).map(b => parseInt(b, 16))
+    )
+    signed = nostrTools.finalizeEvent(event, skBytes)
+  } else {
+    return null
+  }
+
+  try {
+    await Promise.allSettled(
+      pool.publish(state.settings.relays, signed)
+    )
+    return signed
+  } catch (err) {
+    console.error('Publish failed:', err)
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Invitation subscription
+// ---------------------------------------------------------------------------
+
+function subscribeToInvitations() {
+  if (!pool || !state.identity) return
+  pool.subscribeMany(
+    state.settings.relays,
+    [{ kinds: [28800], '#p': [state.identity.pubkey] }],
+    {
+      onevent(event) {
+        handleIncomingInvitation(event)
+      },
+    }
+  )
+}
+
+async function handleIncomingInvitation(event) {
+  if (!nostrTools || !state.identity) return
+  try {
+    let decrypted
+    if (window.nostr?.nip44?.decrypt) {
+      decrypted = await window.nostr.nip44.decrypt(event.pubkey, event.content)
+    } else if (state.identity.privkey) {
+      const skBytes = new Uint8Array(
+        state.identity.privkey.match(/.{2}/g).map(b => parseInt(b, 16))
+      )
+      // nostr-tools nip44 is in a submodule
+      const nip44 = await import('https://esm.sh/nostr-tools@latest/nip44')
+      const conversationKey = nip44.v2.utils.getConversationKey(skBytes, event.pubkey)
+      decrypted = nip44.v2.decrypt(event.content, conversationKey)
+    }
+    if (decrypted) {
+      const payload = JSON.parse(decrypted)
+      if (payload.seed && payload.name) {
+        const id = payload.groupId || crypto.randomUUID?.() || Date.now().toString(36)
+        if (!state.groups[id]) {
+          const now = Math.floor(Date.now() / 1000)
+          state.groups[id] = {
+            name: payload.name,
+            seed: payload.seed,
+            members: payload.members || [event.pubkey, state.identity.pubkey],
+            rotationInterval: payload.rotationInterval || DEFAULT_ROTATION_INTERVAL,
+            wordCount: payload.wordCount || 1,
+            wordlist: 'en-v1',
+            counter: getCounter(now, payload.rotationInterval || DEFAULT_ROTATION_INTERVAL),
+            usageOffset: 0,
+            createdAt: now,
+          }
+          saveGroups()
+          renderGroupList()
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to process invitation:', err)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -686,19 +815,39 @@ function setupInvite() {
   const inviteBtn = document.getElementById('invite-btn')
   const inviteInput = document.getElementById('invite-input')
 
-  inviteBtn.addEventListener('click', () => {
+  inviteBtn.addEventListener('click', async () => {
     const raw = inviteInput.value.trim()
     if (!raw) return
 
-    // Accept only 64-character lowercase hex pubkeys for now
+    let pubkey
     if (raw.startsWith('npub1')) {
-      alert('Please paste a hex pubkey. npub decoding is not yet supported.')
-      return
-    }
-    const pubkey = raw.toLowerCase()
-    if (!/^[0-9a-f]{64}$/.test(pubkey)) {
-      alert('Please enter a valid 64-character hex pubkey.')
-      return
+      // Attempt npub bech32 decoding via nostr-tools
+      let nip19 = nostrTools?.nip19
+      if (!nip19) {
+        try {
+          nip19 = await import('https://esm.sh/nostr-tools@latest/nip19')
+        } catch {
+          // nip19 unavailable
+        }
+      }
+      if (nip19) {
+        try {
+          const decoded = nip19.decode(raw)
+          pubkey = decoded.data
+        } catch {
+          alert('Invalid npub.')
+          return
+        }
+      } else {
+        alert('Please paste a hex pubkey. npub decoding requires network connectivity.')
+        return
+      }
+    } else {
+      pubkey = raw.toLowerCase()
+      if (!/^[0-9a-f]{64}$/.test(pubkey)) {
+        alert('Please enter a valid 64-character hex pubkey.')
+        return
+      }
     }
 
     const group = state.groups[state.activeGroupId]
@@ -855,33 +1004,45 @@ function setupAuth() {
         saveIdentity()
         renderIdentityBadge()
         renderAuthButton()
+        subscribeToInvitations()
         return
       } catch {
         // User rejected or extension failed — fall through to ephemeral
       }
     }
 
-    // Fallback: generate an ephemeral keypair using Web Crypto
+    // Fallback: generate an ephemeral keypair
     try {
-      const privkeyBytes = crypto.getRandomValues(new Uint8Array(32))
-      const privkey = Array.from(privkeyBytes)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('')
+      if (nostrTools) {
+        // Use nostr-tools for a proper secp256k1 keypair
+        const sk = nostrTools.generateSecretKey()
+        const pubkey = nostrTools.getPublicKey(sk)
+        const privkey = Array.from(sk).map(b => b.toString(16).padStart(2, '0')).join('')
+        state.identity = { pubkey, privkey }
+      } else {
+        // Offline fallback: generate an ephemeral keypair using Web Crypto
+        const privkeyBytes = crypto.getRandomValues(new Uint8Array(32))
+        const privkey = Array.from(privkeyBytes)
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')
 
-      // Derive a simple "pubkey" by hashing the private key with SHA-256
-      const hashBuf = await crypto.subtle.digest(
-        'SHA-256',
-        privkeyBytes,
-      )
-      const pubkey = Array.from(new Uint8Array(hashBuf))
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('')
+        // Derive a simple "pubkey" by hashing the private key with SHA-256
+        const hashBuf = await crypto.subtle.digest(
+          'SHA-256',
+          privkeyBytes,
+        )
+        const pubkey = Array.from(new Uint8Array(hashBuf))
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')
 
-      state.identity = { pubkey, privkey }
+        state.identity = { pubkey, privkey }
+      }
+
       state.isDemo = false
       saveIdentity()
       renderIdentityBadge()
       renderAuthButton()
+      subscribeToInvitations()
     } catch {
       alert('Could not generate an ephemeral identity. Your browser may not support Web Crypto.')
     }
@@ -937,6 +1098,11 @@ function init() {
   setupInvite()
   setupAuth()
   startTick()
+
+  // Load Nostr tools (non-blocking — offline mode still works)
+  loadNostrTools().then(() => {
+    if (state.identity) subscribeToInvitations()
+  })
 }
 
 init()
