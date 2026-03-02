@@ -16,9 +16,6 @@ import {
   deriveDuressWord,
   verifyWord,
   createGroup,
-  getCurrentWord,
-  getCurrentDuressWord,
-  advanceCounter,
   reseed,
   addMember,
   removeMember,
@@ -176,19 +173,16 @@ function ensureDemoGroup() {
  */
 function formatCountdown(seconds) {
   if (seconds <= 0) return 'rotating…'
-
   const d = Math.floor(seconds / 86400)
   const h = Math.floor((seconds % 86400) / 3600)
   const m = Math.floor((seconds % 3600) / 60)
   const s = seconds % 60
-
-  if (d > 0 || h > 0) {
-    const parts = []
-    if (d > 0) parts.push(`${d}d`)
-    if (h > 0) parts.push(`${h}h`)
-    return `rotates in ${parts.join(' ')}`
-  }
-  return `rotates in ${m}m ${s}s`
+  const parts = []
+  if (d > 0) parts.push(`${d}d`)
+  if (h > 0) parts.push(`${h}h`)
+  if (d === 0 && m > 0) parts.push(`${m}m`)
+  if (d === 0 && h === 0) parts.push(`${s}s`)
+  return `rotates in ${parts.join(' ')}`
 }
 
 /**
@@ -219,8 +213,7 @@ function getMemberName(pubkey, isDemo) {
   if (isDemo && DEMO_MEMBER_NAMES[pubkey]) {
     return DEMO_MEMBER_NAMES[pubkey]
   }
-  // Shorten pubkey to first 8 chars for display
-  return pubkey.slice(0, 8) + '…'
+  return pubkey.slice(0, 8) + '…' + pubkey.slice(-4)
 }
 
 // ---------------------------------------------------------------------------
@@ -274,7 +267,8 @@ function renderHero() {
   const group = state.groups[state.activeGroupId]
   if (!group) return
 
-  const counter = group.counter + group.usageOffset
+  const now = Math.floor(Date.now() / 1000)
+  const counter = getCounter(now, group.rotationInterval) + group.usageOffset
   let word
   if (group.wordCount === 1) {
     word = deriveVerificationWord(group.seed, counter)
@@ -311,46 +305,49 @@ function renderMembers() {
   list.innerHTML = ''
 
   for (const pubkey of group.members) {
-    const counter = group.counter + group.usageOffset
+    const nowMember = Math.floor(Date.now() / 1000)
+    const counter = getCounter(nowMember, group.rotationInterval) + group.usageOffset
     const duressWord = deriveDuressWord(group.seed, pubkey, counter)
     const name = getMemberName(pubkey, isDemoGroup)
 
-    const li = document.createElement('li')
-    li.className = 'member-item'
-    li.dataset.pubkey = pubkey
+    const row = document.createElement('div')
+    row.className = 'member-row'
+    row.dataset.pubkey = pubkey
 
     const info = document.createElement('div')
-    info.className = 'member-info'
+    info.className = 'member-row__info'
+
+    const dotEl = document.createElement('span')
+    dotEl.className = 'member-row__dot'
 
     const nameEl = document.createElement('span')
-    nameEl.className = 'member-name'
+    nameEl.className = 'member-row__name'
     nameEl.textContent = name
 
     const keyEl = document.createElement('span')
-    keyEl.className = 'member-key'
+    keyEl.className = 'member-row__pubkey'
     keyEl.textContent = pubkey.slice(0, 8) + '…' + pubkey.slice(-4)
 
+    info.appendChild(dotEl)
     info.appendChild(nameEl)
     info.appendChild(keyEl)
 
     const actions = document.createElement('div')
-    actions.className = 'member-actions'
+    actions.className = 'member-row__actions'
 
     // Duress toggle button
     const duressBtn = document.createElement('button')
-    duressBtn.className = 'member-duress-btn'
+    duressBtn.className = 'member-row__btn'
     duressBtn.textContent = 'Duress'
     duressBtn.title = 'Show duress word for this member'
 
     const duressDetail = document.createElement('div')
-    duressDetail.className = 'member-duress-detail'
-    duressDetail.hidden = true
+    duressDetail.className = 'member-row__duress'
     duressDetail.textContent = duressWord
 
     duressBtn.addEventListener('click', () => {
-      const isHidden = duressDetail.hidden
-      duressDetail.hidden = !isHidden
-      duressBtn.classList.toggle('member-duress-btn--active', isHidden)
+      const isVisible = duressDetail.classList.contains('member-row__duress--visible')
+      duressDetail.classList.toggle('member-row__duress--visible', !isVisible)
     })
 
     actions.appendChild(duressBtn)
@@ -358,16 +355,16 @@ function renderMembers() {
     // Remove button — hidden for demo group
     if (!isDemoGroup) {
       const removeBtn = document.createElement('button')
-      removeBtn.className = 'member-remove-btn'
+      removeBtn.className = 'member-row__btn member-row__btn--remove'
       removeBtn.textContent = 'Remove'
       removeBtn.addEventListener('click', () => handleRemoveMember(pubkey))
       actions.appendChild(removeBtn)
     }
 
-    li.appendChild(info)
-    li.appendChild(actions)
-    li.appendChild(duressDetail)
-    list.appendChild(li)
+    row.appendChild(info)
+    row.appendChild(actions)
+    row.appendChild(duressDetail)
+    list.appendChild(row)
   }
 
   // Invite controls — hidden for demo group
@@ -418,7 +415,7 @@ function renderRelayList() {
 
   for (const relay of state.settings.relays) {
     const li = document.createElement('li')
-    li.className = 'relay-item'
+    li.className = 'relay-tag'
     li.dataset.relay = relay
 
     const urlSpan = document.createElement('span')
@@ -426,7 +423,7 @@ function renderRelayList() {
     urlSpan.textContent = relay
 
     const removeBtn = document.createElement('button')
-    removeBtn.className = 'relay-remove-btn'
+    removeBtn.className = 'relay-tag__remove'
     removeBtn.textContent = 'Remove'
     removeBtn.dataset.relay = relay
 
@@ -487,7 +484,7 @@ function handleVerify(e) {
       iconEl.textContent = '✓'
       textEl.textContent = 'Verified — word is correct.'
       break
-    case 'duress':
+    case 'duress': {
       resultEl.classList.add('verify-result--duress')
       iconEl.textContent = '⚠'
       const memberName = result.member
@@ -495,6 +492,7 @@ function handleVerify(e) {
         : 'someone'
       textEl.textContent = `Duress — ${memberName} may be under coercion.`
       break
+    }
     case 'stale':
       resultEl.classList.add('verify-result--stale')
       iconEl.textContent = '◷'
@@ -693,7 +691,11 @@ function setupInvite() {
     if (!raw) return
 
     // Accept only 64-character lowercase hex pubkeys for now
-    const pubkey = raw.toLowerCase().replace(/^npub1/, '') // minimal npub strip
+    if (raw.startsWith('npub1')) {
+      alert('Please paste a hex pubkey. npub decoding is not yet supported.')
+      return
+    }
+    const pubkey = raw.toLowerCase()
     if (!/^[0-9a-f]{64}$/.test(pubkey)) {
       alert('Please enter a valid 64-character hex pubkey.')
       return
@@ -762,7 +764,7 @@ function setupSettings() {
   // Relay list — delegated remove
   const relayList = document.getElementById('setting-relays')
   relayList.addEventListener('click', (e) => {
-    const btn = e.target.closest('.relay-remove-btn')
+    const btn = e.target.closest('.relay-tag__remove')
     if (!btn) return
     const relay = btn.dataset.relay
     state.settings.relays = state.settings.relays.filter((r) => r !== relay)
