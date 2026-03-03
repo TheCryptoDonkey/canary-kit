@@ -1,32 +1,46 @@
-// app/panels/verify.ts — Verify panel: spoken-word verification input
+// app/panels/verify.ts — Verify panel: spoken-token verification input
 
-import { verifyWord, getCounter } from 'canary-kit'
+import { getCounter } from 'canary-kit'
+import { verifyToken, type TokenVerifyResult } from 'canary-kit/token'
+import type { TokenEncoding } from 'canary-kit/encoding'
 import { getState } from '../state.js'
-import type { VerifyStatus } from 'canary-kit'
+import type { AppGroup } from '../types.js'
+
+// ── Encoding helper ───────────────────────────────────────────
+
+function toTokenEncoding(group: AppGroup): TokenEncoding {
+  switch (group.encodingFormat) {
+    case 'pin': return { format: 'pin', digits: 6 }
+    case 'hex': return { format: 'hex', length: 8 }
+    case 'words':
+    default: return { format: 'words', count: group.wordCount }
+  }
+}
+
+const GROUP_CONTEXT = 'canary:group'
 
 // ── Status display config ──────────────────────────────────
 
-const STATUS_ICONS: Record<VerifyStatus, string> = {
-  verified: '✓',
+type VerifyDisplayStatus = 'valid' | 'duress' | 'invalid'
+
+const STATUS_ICONS: Record<VerifyDisplayStatus, string> = {
+  valid: '✓',
   duress: '⚠',
-  stale: '◷',
-  failed: '✗',
+  invalid: '✗',
 }
 
-function buildMessage(status: VerifyStatus, members?: string[]): string {
+function buildMessage(status: VerifyDisplayStatus, identities?: string[]): string {
   switch (status) {
-    case 'verified':
-      return 'Verified — word is correct.'
+    case 'valid':
+      return 'Verified — token is correct.'
     case 'duress': {
-      const names = members?.length
-        ? members.map((pk) => pk.slice(0, 8) + '…').join(', ')
+      const names = identities?.length
+        ? identities.map((pk) => pk.slice(0, 8) + '…').join(', ')
         : 'unknown member'
       return `Duress — ${names} may be under coercion.`
     }
-    case 'stale':
-      return 'Stale — word is from a previous window.'
-    case 'failed':
-      return 'Failed — word does not match.'
+    case 'invalid':
+      return 'Failed — token does not match.'
   }
 }
 
@@ -50,6 +64,8 @@ export function renderVerify(container: HTMLElement): void {
     return
   }
 
+  const placeholderNoun = group.encodingFormat === 'words' ? 'word' : group.encodingFormat === 'pin' ? 'PIN' : 'hex code'
+
   container.innerHTML = `
     <section class="panel verify-panel">
       <h2 class="panel__title">Verify Someone</h2>
@@ -59,7 +75,7 @@ export function renderVerify(container: HTMLElement): void {
           class="input"
           id="verify-input"
           type="text"
-          placeholder="Enter the word you heard"
+          placeholder="Enter the ${placeholderNoun} you heard"
           autocomplete="off"
           spellcheck="false"
         />
@@ -89,24 +105,30 @@ export function renderVerify(container: HTMLElement): void {
 
     const nowSec = Math.floor(Date.now() / 1000)
     const counter = getCounter(nowSec, currentGroup.rotationInterval) + currentGroup.usageOffset
+    const encoding = toTokenEncoding(currentGroup)
 
-    const result = verifyWord(spokenWord, currentGroup.seed, currentGroup.members, counter, currentGroup.wordCount)
+    const result = verifyToken(
+      currentGroup.seed,
+      GROUP_CONTEXT,
+      counter,
+      spokenWord,
+      currentGroup.members,
+      { encoding, tolerance: currentGroup.tolerance },
+    )
 
-    // Remove all status classes before adding the new one
     resultEl!.className = 'verify-result'
     resultEl!.classList.add(`verify-result--${result.status}`)
 
     const icon = STATUS_ICONS[result.status]
-    const message = buildMessage(result.status, result.members)
+    const message = buildMessage(result.status, result.identities)
 
     resultEl!.innerHTML = `<span class="verify-icon">${icon}</span>${message}`
     resultEl!.hidden = false
 
-    // Dispatch custom event for duress status
     if (result.status === 'duress') {
       document.dispatchEvent(
         new CustomEvent('canary:duress', {
-          detail: { members: result.members ?? [] },
+          detail: { members: result.identities ?? [] },
           bubbles: true,
         }),
       )
