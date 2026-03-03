@@ -25,8 +25,10 @@ export interface AppGroup extends GroupState {
 /** The local identity (Nostr keypair) for this device. */
 export interface AppIdentity {
   pubkey: string
+  privkey?: string          // hex, stored locally when no NIP-07 extension
   nsec?: string
   displayName?: string
+  signerType: 'nip07' | 'local'
 }
 
 /** Persisted user preferences. */

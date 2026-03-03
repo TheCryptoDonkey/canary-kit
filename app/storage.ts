@@ -196,7 +196,15 @@ export async function unlockAndRestoreState(pin: string): Promise<void> {
     view: 'groups',
     groups: validGroups,
     activeGroupId: null,
-    identity: identity && typeof identity.pubkey === 'string' ? identity : null,
+    identity: identity && typeof identity.pubkey === 'string'
+      ? {
+          pubkey: identity.pubkey,
+          privkey: identity.privkey,
+          nsec: identity.nsec,
+          displayName: identity.displayName,
+          signerType: identity.signerType ?? 'local',
+        }
+      : null,
     settings,
   }
 
@@ -230,7 +238,15 @@ export function restoreState(): void {
     view: 'groups',
     groups: validGroups,
     activeGroupId: null,
-    identity: identity && typeof identity.pubkey === 'string' ? identity : null,
+    identity: identity && typeof identity.pubkey === 'string'
+      ? {
+          pubkey: identity.pubkey,
+          privkey: identity.privkey,
+          nsec: identity.nsec,
+          displayName: identity.displayName,
+          signerType: identity.signerType ?? 'local',
+        }
+      : null,
     settings,
   }
 

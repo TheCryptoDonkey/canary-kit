@@ -32,6 +32,8 @@ import { renderSettings } from './panels/settings.js'
 import { renderCallSimulation, destroyCallSimulation } from './views/call-simulation.js'
 import { acceptInvite } from './invite.js'
 import type { PresetName } from 'canary-kit'
+import { resolveSigner } from './nostr/signer.js'
+import type { AppIdentity } from './types.js'
 
 // ── Storage bootstrap ──────────────────────────────────────────
 // Subscribe first (before restoring) so all state changes are persisted.
@@ -125,7 +127,7 @@ function showLockScreen(): void {
     try {
       await unlockAndRestoreState(pin)
       // Success: build the full app shell and start auto-lock.
-      ensureLocalIdentity()
+      await ensureLocalIdentity()
       buildShell()
       const header = document.getElementById('header')
       if (header) renderHeader(header)
@@ -456,25 +458,34 @@ function wireGlobalEvents(): void {
 }
 
 // ── Local identity ────────────────────────────────────────────
-// Generate a random 64-hex pubkey so demo features (duress, beacons,
-// liveness) work without a NIP-07 extension.  Persisted via state.
+// Resolve a real Nostr keypair — NIP-07 extension if available,
+// otherwise a locally generated keypair.  Persisted via state.
 
-function ensureLocalIdentity(): void {
+async function ensureLocalIdentity(): Promise<void> {
   let { identity } = getState()
-  if (!identity?.pubkey) {
-    const bytes = new Uint8Array(32)
-    crypto.getRandomValues(bytes)
-    const pubkey = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-    identity = { pubkey, displayName: 'You' }
-    update({ identity })
+
+  const resolved = await resolveSigner({
+    pubkey: identity?.pubkey ?? '',
+    privkey: identity?.privkey,
+  })
+
+  const newIdentity: AppIdentity = {
+    pubkey: resolved.pubkey,
+    privkey: resolved.privkey,
+    displayName: identity?.displayName ?? 'You',
+    signerType: resolved.signerType,
+  }
+
+  if (!identity || identity.pubkey !== newIdentity.pubkey || identity.signerType !== newIdentity.signerType) {
+    update({ identity: newIdentity })
   }
 
   // Ensure the local identity is a member of all existing groups
   // (groups created before local identity was introduced).
   const { groups } = getState()
   for (const [id, group] of Object.entries(groups)) {
-    if (!group.members.includes(identity!.pubkey)) {
-      const members = [...group.members, identity!.pubkey]
+    if (!group.members.includes(newIdentity.pubkey)) {
+      const members = [...group.members, newIdentity.pubkey]
       const updated = { ...groups, [id]: { ...group, members } }
       update({ groups: updated })
     }
@@ -483,14 +494,14 @@ function ensureLocalIdentity(): void {
 
 // ── Bootstrap ──────────────────────────────────────────────────
 
-function init(): void {
+async function init(): Promise<void> {
   if (hasPinSalt()) {
     // PIN is set — show lock screen. State will be restored after unlock.
     showLockScreen()
   } else {
     // No PIN — restore state directly and boot the app.
     restoreState()
-    ensureLocalIdentity()
+    await ensureLocalIdentity()
     buildShell()
 
     if (window.location.hash === '#call') {
@@ -510,7 +521,7 @@ function init(): void {
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init)
+  document.addEventListener('DOMContentLoaded', () => { void init() })
 } else {
-  init()
+  void init()
 }
