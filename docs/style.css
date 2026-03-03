@@ -1713,11 +1713,6 @@ input::placeholder {
     width: calc(100vw - 1rem);
   }
 
-  .demo-banner {
-    width: calc(100% - 2rem);
-    text-align: center;
-  }
-
   .welcome-screen {
     padding: 2rem 1rem;
   }
@@ -1767,31 +1762,3 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
-/* ============================================================
-   DEMO BANNER — fixed bottom-centre hint
-   ============================================================ */
-
-.demo-banner {
-  position: fixed;
-  bottom: 1rem;
-  left: 50%;
-  transform: translateX(-50%);
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
-  color: var(--text-muted);
-  background: var(--bg-raised);
-  border: 1px solid var(--border, rgba(148, 163, 184, 0.1));
-  border-radius: 6px;
-  padding: 0.625rem 1.25rem;
-  z-index: 50;
-  letter-spacing: 0.03em;
-}
-
-.demo-banner a {
-  color: var(--amber-400);
-  text-decoration: none;
-}
-
-.demo-banner a:hover {
-  text-decoration: underline;
-}

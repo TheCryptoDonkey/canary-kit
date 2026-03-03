@@ -1307,10 +1307,6 @@ function setupWelcome() {
   document.getElementById('try-demo-btn').addEventListener('click', () => {
     ensureDemoGroup()
     render()
-    // Show demo banner now that we've left the welcome screen
-    if (!window.nostr && !state.identity) {
-      document.getElementById('demo-banner').hidden = false
-    }
   })
 
   document.getElementById('welcome-signin-btn').addEventListener('click', () => {
@@ -1363,7 +1359,6 @@ function setupAuth() {
         state.isDemo = false
         saveIdentity()
         subscribeToInvitations()
-        document.getElementById('demo-banner').hidden = true
         render()
         return
       } catch {
@@ -1401,7 +1396,6 @@ function setupAuth() {
       state.isDemo = false
       saveIdentity()
       subscribeToInvitations()
-      document.getElementById('demo-banner').hidden = true
       render()
     } catch {
       alert('Could not generate an ephemeral identity. Your browser may not support Web Crypto.')
@@ -1465,11 +1459,6 @@ function init() {
   loadNostrTools().then(() => {
     if (state.identity) subscribeToInvitations()
   })
-
-  // Show demo banner if no NIP-07 extension and no saved identity, but only when not on welcome screen
-  if (!window.nostr && !state.identity && getAppState() !== 'welcome') {
-    document.getElementById('demo-banner').hidden = false
-  }
 }
 
 init()
