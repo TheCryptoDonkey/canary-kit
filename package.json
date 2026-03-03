@@ -6,6 +6,9 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -35,6 +38,7 @@
   "files": [
     "dist/",
     "LICENSE",
+    "CANARY.md",
     "NIP-CANARY.md"
   ],
   "scripts": {
@@ -42,7 +46,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "bench": "vitest bench"
+    "bench": "vitest bench",
+    "demo": "npm run build && npx serve . -l 8787"
   },
   "keywords": [
     "canary",

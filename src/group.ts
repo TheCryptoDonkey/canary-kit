@@ -6,11 +6,14 @@ import {
   deriveDuressWord,
   deriveDuressPhrase,
 } from './derive.js'
+import { PRESETS, type PresetName } from './presets.js'
 
 /** Configuration provided when creating a new group. */
 export interface GroupConfig {
   name: string
   members: string[]
+  /** Named threat-profile preset. Explicit fields override preset values. */
+  preset?: PresetName
   rotationInterval?: number
   wordCount?: 1 | 2 | 3
   wordlist?: string
@@ -49,14 +52,20 @@ function effectiveCounter(state: GroupState): number {
 
 /** Create a new group with a freshly generated seed and time-based counter. */
 export function createGroup(config: GroupConfig): GroupState {
+  if (config.preset !== undefined) {
+    if (typeof config.preset !== 'string' || !Object.hasOwn(PRESETS, config.preset)) {
+      throw new Error(`Unknown preset: "${config.preset}". Valid presets: ${Object.keys(PRESETS).join(', ')}`)
+    }
+  }
   const now = Math.floor(Date.now() / 1000)
-  const interval = config.rotationInterval ?? DEFAULT_ROTATION_INTERVAL
+  const base = config.preset !== undefined ? PRESETS[config.preset as keyof typeof PRESETS] : undefined
+  const interval = config.rotationInterval ?? base?.rotationInterval ?? DEFAULT_ROTATION_INTERVAL
   return {
     name: config.name,
     seed: randomSeed(),
     members: [...config.members],
     rotationInterval: interval,
-    wordCount: config.wordCount ?? 1,
+    wordCount: config.wordCount ?? base?.wordCount ?? 1,
     wordlist: config.wordlist ?? 'en-v1',
     counter: getCounter(now, interval),
     usageOffset: 0,

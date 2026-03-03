@@ -4,8 +4,8 @@
  * SHA-256: FIPS 180-4
  * HMAC:    RFC 2104
  *
- * Uses only Uint8Array and the global `crypto` object (available in Node 19+
- * and all modern browsers). No async, no Web Crypto subtle API, no Buffer.
+ * Uses only Uint8Array and the global `crypto` object (Web Crypto API).
+ * No async, no Web Crypto subtle API, no Buffer.
  */
 
 // ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ export function hmacSha256(key: Uint8Array, data: Uint8Array): Uint8Array {
 
 /**
  * Generate a cryptographically secure 32-byte seed as a 64-character hex string.
- * Uses the global `crypto.getRandomValues` — available in Node 19+ and all browsers.
+ * Uses the global `crypto.getRandomValues` (Web Crypto API).
  */
 export function randomSeed(): string {
   const bytes = new Uint8Array(32)

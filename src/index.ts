@@ -39,6 +39,12 @@ export {
 } from './group.js'
 
 export {
+  PRESETS,
+  type PresetName,
+  type GroupPreset,
+} from './presets.js'
+
+export {
   deriveBeaconKey,
   encryptBeacon,
   decryptBeacon,

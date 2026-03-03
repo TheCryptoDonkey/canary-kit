@@ -8,7 +8,18 @@
 
 ## The Problem
 
-AI voice cloning takes three seconds of audio. Your family "safe word" is static, never rotates, and has no duress signalling. You need a protocol, not a Post-it note.
+AI voice cloning takes three seconds of audio. The security advice — "agree on a
+family safe word" — is widespread, but common implementations are dangerously naive:
+static words that never rotate, no duress signalling, and no protocol behind them.
+
+Existing standards solve parts of this:
+- **TOTP/HOTP** rotate tokens automatically, but output digits for machines, not words for humans
+- **ZRTP SAS** produces human-readable strings, but doesn't rotate or signal duress
+- **BIP-39** provides a spoken wordlist, but has no verification or coercion resistance
+
+CANARY combines these ideas into a single protocol: deterministic rotation (like TOTP),
+coercion-resistant duress signalling, and spoken-word output — three properties that
+have never been combined in a standard before.
 
 ## Quick Start
 
@@ -41,6 +52,8 @@ const result = verifyWord(word, group.seed, group.members,
 
 ## Why Canary
 
+**Built on proven primitives.** CANARY extends the HMAC-counter pattern from HOTP (RFC 4226) and TOTP (RFC 6238) to human-to-human spoken verification, adding duress signalling and coercion resistance. If TOTP proves you have a secret to a server, CANARY proves you're safe to another person.
+
 **Offline-first.** Words are derived locally from a shared seed and a time-based counter. No network is required after initial setup.
 
 **Duress-aware.** Every member has a personal duress word distinct from the verification word. Speaking it silently alerts the group while giving the attacker plausible deniability.
@@ -49,9 +62,9 @@ const result = verifyWord(word, group.seed, group.members,
 
 **Multi-channel.** Seed distribution uses Nostr relays with NIP-44 encryption. Meshtastic mesh provides a resilient offline fallback.
 
-**Zero dependencies.** Pure JavaScript — no runtime dependencies, no Node.js APIs. Works in browsers, Node.js, Deno, and edge runtimes.
+**Zero dependencies.** Pure JavaScript — no runtime dependencies. Requires `globalThis.crypto` (Web Crypto API): all browsers, Node.js 22+, Deno, and edge runtimes.
 
-**Protocol-grade.** Formal NIP specification, published test vectors, and a curated 2048-word spoken-clarity wordlist.
+**Protocol-grade.** Formal specification with published test vectors and a curated 2048-word spoken-clarity wordlist.
 
 ## API Reference
 
@@ -150,11 +163,45 @@ All functions are pure — they return new state without mutating the input.
 interface GroupConfig {
   name: string
   members: string[]           // hex-encoded Nostr pubkeys
+  preset?: PresetName         // threat-profile preset; explicit fields override
   rotationInterval?: number   // seconds; default 604800 (7 days)
   wordCount?: 1 | 2 | 3      // words per challenge; default 1
   wordlist?: string           // wordlist identifier; default 'en-v1'
 }
 ```
+
+### Threat-Profile Presets
+
+```typescript
+import { createGroup, PRESETS, type PresetName } from 'canary-kit'
+```
+
+Pre-configured group settings for common risk profiles:
+
+| Preset | Words | Rotation | Use case |
+|--------|-------|----------|----------|
+| `family` | 1 | 7 days | Casual family/friend verification |
+| `field-ops` | 2 | 24 hours | Journalism, activism, field work |
+| `enterprise` | 2 | 48 hours | Corporate incident response |
+
+```typescript
+// Use a preset
+const group = createGroup({
+  name: 'Newsroom',
+  members: [alicePubkey, bobPubkey],
+  preset: 'field-ops',
+})
+
+// Override specific preset values
+const custom = createGroup({
+  name: 'Custom',
+  members: [alicePubkey, bobPubkey],
+  preset: 'field-ops',
+  wordCount: 3, // override preset's 2
+})
+```
+
+Explicit config values always override preset defaults.
 
 ### Counter
 
@@ -223,7 +270,7 @@ import {
 
 ## Protocol
 
-The full specification is in [NIP-CANARY.md](NIP-CANARY.md).
+The full protocol specification is in [CANARY.md](CANARY.md). The Nostr binding is in [NIP-CANARY.md](NIP-CANARY.md).
 
 | Event | Kind | Type |
 |---|---|---|
