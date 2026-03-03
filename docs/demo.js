@@ -52,6 +52,9 @@ function setupThemeToggle() {
     const next = current === 'light' ? 'dark' : 'light'
     applyTheme(next)
     try { localStorage.setItem(THEME_STORAGE_KEY, next) } catch {}
+    if (beaconMap) {
+      beaconMap.setStyle(getMapStyle())
+    }
   })
 }
 
@@ -215,6 +218,12 @@ const DEMO_MEMBER_NAMES = {
   [DEMO_PUBKEY_B]: 'Bob',
 }
 
+// ── Demo beacon simulation positions (central London) ──
+const DEMO_POSITIONS = {
+  [DEMO_PUBKEY_A]: { lat: 51.5074, lon: -0.1278 },  // Alice — Westminster
+  [DEMO_PUBKEY_B]: { lat: 51.5155, lon: -0.1410 },  // Bob — Marylebone
+}
+
 // ---------------------------------------------------------------------------
 // Application state
 // ---------------------------------------------------------------------------
@@ -237,6 +246,15 @@ const REVEAL_DURATION = 30 // seconds
 
 // Pending confirm callback
 let confirmCallback = null
+
+// ── Beacon State ──────────────────────────────────────────
+const BEACON_INTERVAL_MS = 3000  // 3s for demo simulation
+let beaconMap = null              // MapLibre GL map instance
+let beaconMarkers = {}            // { [pubkey]: { marker, el } }
+let beaconPositions = {}          // { [pubkey]: { lat, lon, geohash, precision, timestamp } }
+let beaconSimInterval = null      // setInterval ID for demo simulation
+let mapLibreLoaded = false
+let duressAlertActive = null      // DuressAlert object or null
 
 // ---------------------------------------------------------------------------
 // Persistence layer
@@ -396,6 +414,248 @@ function getAppState() {
   if (!state.identity && Object.keys(state.groups).length === 0) return 'welcome'
   if (state.activeGroupId === 'demo') return 'demo'
   return 'active'
+}
+
+// ---------------------------------------------------------------------------
+// MapLibre GL lazy-loader
+// ---------------------------------------------------------------------------
+
+async function loadMapLibre() {
+  if (window.maplibregl) return window.maplibregl
+  return new Promise((resolve, reject) => {
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = 'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css'
+    document.head.appendChild(link)
+
+    const script = document.createElement('script')
+    script.src = 'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js'
+    script.onload = () => resolve(window.maplibregl)
+    script.onerror = () => reject(new Error('Failed to load MapLibre GL'))
+    document.head.appendChild(script)
+  })
+}
+
+// ---------------------------------------------------------------------------
+// geohash-kit dynamic importer
+// ---------------------------------------------------------------------------
+
+let geohashKit = null
+
+async function loadGeohashKit() {
+  if (geohashKit) return geohashKit
+  try {
+    geohashKit = await import('https://esm.sh/geohash-kit@latest')
+    return geohashKit
+  } catch {
+    console.warn('geohash-kit not available — beacon simulation disabled')
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Beacon map — style, init, markers
+// ---------------------------------------------------------------------------
+
+function getMapStyle() {
+  const theme = document.documentElement.getAttribute('data-theme')
+  return theme === 'light'
+    ? 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
+    : 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+}
+
+async function initBeaconMap() {
+  const container = document.getElementById('beacon-map')
+  if (!container) return
+
+  const placeholder = container.querySelector('.beacon-map__placeholder')
+
+  try {
+    const maplibregl = await loadMapLibre()
+    if (placeholder) placeholder.remove()
+
+    const firstPos = Object.values(beaconPositions)[0]
+    const centre = firstPos
+      ? [firstPos.lon, firstPos.lat]
+      : [-0.1278, 51.5074]
+
+    beaconMap = new maplibregl.Map({
+      container,
+      style: getMapStyle(),
+      center: centre,
+      zoom: 13,
+      attributionControl: false,
+    })
+
+    beaconMap.addControl(new maplibregl.AttributionControl({ compact: true }))
+    mapLibreLoaded = true
+
+    for (const [pubkey, pos] of Object.entries(beaconPositions)) {
+      addBeaconMarker(pubkey, pos.lat, pos.lon)
+    }
+  } catch (err) {
+    console.error('Map init failed:', err)
+    if (placeholder) {
+      placeholder.querySelector('.beacon-map__placeholder-text').textContent =
+        'Map unavailable — check your connection'
+    }
+  }
+}
+
+function addBeaconMarker(pubkey, lat, lon) {
+  if (!beaconMap || !window.maplibregl) return
+
+  if (beaconMarkers[pubkey]) {
+    beaconMarkers[pubkey].marker.remove()
+  }
+
+  const el = document.createElement('div')
+  el.className = 'beacon-marker'
+  el.style.cssText = `
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #22c55e; border: 2px solid rgba(255,255,255,0.8);
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+  `
+
+  const isDemoGroup = state.activeGroupId === 'demo'
+  const name = getMemberName(pubkey, isDemoGroup)
+  const popup = new window.maplibregl.Popup({ offset: 12, closeButton: false })
+    .setText(name)
+
+  const marker = new window.maplibregl.Marker({ element: el })
+    .setLngLat([lon, lat])
+    .setPopup(popup)
+    .addTo(beaconMap)
+
+  beaconMarkers[pubkey] = { marker, el }
+}
+
+function updateBeaconMarker(pubkey, lat, lon) {
+  if (beaconMarkers[pubkey]) {
+    beaconMarkers[pubkey].marker.setLngLat([lon, lat])
+  } else {
+    addBeaconMarker(pubkey, lat, lon)
+  }
+}
+
+function setMarkerDuress(pubkey) {
+  if (beaconMarkers[pubkey]) {
+    const el = beaconMarkers[pubkey].el
+    el.style.background = '#ef4444'
+    el.style.boxShadow = '0 0 12px rgba(239, 68, 68, 0.6)'
+    el.style.width = '18px'
+    el.style.height = '18px'
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Demo beacon simulation
+// ---------------------------------------------------------------------------
+
+function startBeaconSimulation() {
+  if (beaconSimInterval) return
+
+  const gh = geohashKit
+  if (!gh) return
+
+  for (const [pubkey, pos] of Object.entries(DEMO_POSITIONS)) {
+    const geohash = gh.encode(pos.lat, pos.lon, 6)
+    beaconPositions[pubkey] = {
+      lat: pos.lat, lon: pos.lon,
+      geohash, precision: 6,
+      timestamp: Math.floor(Date.now() / 1000),
+    }
+    updateBeaconMarker(pubkey, pos.lat, pos.lon)
+  }
+  renderBeaconMembers()
+
+  beaconSimInterval = setInterval(() => {
+    for (const [pubkey, pos] of Object.entries(DEMO_POSITIONS)) {
+      const lat = (beaconPositions[pubkey]?.lat ?? pos.lat) + (Math.random() - 0.5) * 0.001
+      const lon = (beaconPositions[pubkey]?.lon ?? pos.lon) + (Math.random() - 0.5) * 0.001
+      const geohash = gh.encode(lat, lon, 6)
+      beaconPositions[pubkey] = {
+        lat, lon, geohash, precision: 6,
+        timestamp: Math.floor(Date.now() / 1000),
+      }
+      updateBeaconMarker(pubkey, lat, lon)
+    }
+    renderBeaconMembers()
+  }, BEACON_INTERVAL_MS)
+}
+
+function stopBeaconSimulation() {
+  if (beaconSimInterval) {
+    clearInterval(beaconSimInterval)
+    beaconSimInterval = null
+  }
+  beaconPositions = {}
+  for (const { marker } of Object.values(beaconMarkers)) marker.remove()
+  beaconMarkers = {}
+}
+
+// ---------------------------------------------------------------------------
+// Beacon member list renderer
+// ---------------------------------------------------------------------------
+
+function renderBeaconMembers() {
+  const list = document.getElementById('beacon-members')
+  if (!list) return
+
+  const group = state.groups[state.activeGroupId]
+  if (!group) { list.innerHTML = ''; return }
+
+  const isDemoGroup = state.activeGroupId === 'demo'
+
+  list.innerHTML = group.members.map(pubkey => {
+    const pos = beaconPositions[pubkey]
+    const name = getMemberName(pubkey, isDemoGroup)
+    const dotClass = pos
+      ? (Date.now() / 1000 - pos.timestamp < 30 ? 'active' : 'stale')
+      : 'offline'
+    const info = pos
+      ? `${pos.geohash} · ${formatTimeSince(pos.timestamp)}`
+      : 'No beacon'
+
+    return `
+      <li class="beacon-member">
+        <span class="beacon-member__name">
+          <span class="beacon-member__dot beacon-member__dot--${dotClass}"></span>
+          ${name}
+        </span>
+        <span class="beacon-member__info">${info}</span>
+      </li>
+    `
+  }).join('')
+}
+
+function formatTimeSince(timestamp) {
+  const seconds = Math.floor(Date.now() / 1000 - timestamp)
+  if (seconds < 60) return 'just now'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  return `${Math.floor(seconds / 3600)}h ago`
+}
+
+// ---------------------------------------------------------------------------
+// Beacon panel setup
+// ---------------------------------------------------------------------------
+
+function setupBeaconPanel() {
+  const enableBtn = document.getElementById('enable-beacon-btn')
+  if (enableBtn) {
+    enableBtn.addEventListener('click', async () => {
+      enableBtn.disabled = true
+      enableBtn.textContent = 'Loading map…'
+
+      await loadGeohashKit()
+      await initBeaconMap()
+
+      const appState = getAppState()
+      if (appState === 'demo') {
+        startBeaconSimulation()
+      }
+    })
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1412,6 +1672,9 @@ function setupAuth() {
       clearInterval(revealCountdown)
       revealTimeout = null
       revealCountdown = null
+      stopBeaconSimulation()
+      duressAlertActive = null
+      document.getElementById('duress-alert-banner')?.setAttribute('hidden', '')
       localStorage.removeItem(STORAGE_KEYS.groups)
       localStorage.removeItem(STORAGE_KEYS.identity)
       localStorage.removeItem(STORAGE_KEYS.settings)
@@ -1532,6 +1795,7 @@ function init() {
   setupDemoCta()
   setupShareModal()
   setupThemeToggle()
+  setupBeaconPanel()
   startTick()
 
   // Load Nostr tools (non-blocking — offline mode still works)
