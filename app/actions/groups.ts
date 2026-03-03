@@ -10,7 +10,16 @@ import {
 } from 'canary-kit'
 
 import { getState, update, updateGroup } from '../state.js'
+import { broadcastAction } from '../sync.js'
 import type { AppGroup } from '../types.js'
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16)
+  }
+  return bytes
+}
 
 /**
  * Create a new group, wrap the SDK result as an AppGroup with app-layer
@@ -43,6 +52,10 @@ export function createNewGroup(name: string, preset: PresetName, memberPubkey?: 
     groups: { ...groups, [id]: appGroup },
     activeGroupId: id,
   })
+
+  if (memberPubkey) {
+    broadcastAction(id, { type: 'member-join', pubkey: memberPubkey, timestamp: Math.floor(Date.now() / 1000) })
+  }
 
   return id
 }
@@ -77,6 +90,7 @@ export function reseedGroup(id: string): void {
 
   const reseeded = reseed(group)
   updateGroup(id, reseeded)
+  broadcastAction(id, { type: 'reseed', seed: hexToBytes(reseeded.seed), counter: reseeded.counter, timestamp: Math.floor(Date.now() / 1000) })
 }
 
 /**
@@ -93,6 +107,7 @@ export function addGroupMember(id: string, pubkey: string): void {
 
   const updated = addMember(group, pubkey)
   updateGroup(id, updated)
+  broadcastAction(id, { type: 'member-join', pubkey, timestamp: Math.floor(Date.now() / 1000) })
 }
 
 /**
@@ -109,6 +124,7 @@ export function removeGroupMember(id: string, pubkey: string): void {
 
   const updated = removeMember(group, pubkey)
   updateGroup(id, updated)
+  broadcastAction(id, { type: 'member-leave', pubkey, timestamp: Math.floor(Date.now() / 1000) })
 }
 
 /**
@@ -125,4 +141,5 @@ export function burnWord(id: string): void {
 
   const updated = advanceCounter(group)
   updateGroup(id, updated)
+  broadcastAction(id, { type: 'counter-advance', counter: updated.counter, usageOffset: updated.usageOffset, timestamp: Math.floor(Date.now() / 1000) })
 }
