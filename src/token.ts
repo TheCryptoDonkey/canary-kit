@@ -150,3 +150,22 @@ export function verifyToken(
   // 3. No match
   return { status: 'invalid' }
 }
+
+/**
+ * CANARY-DURESS: Derive a liveness heartbeat token for dead man's switch.
+ *
+ * Algorithm: HMAC-SHA256(secret, utf8(context + ":alive") || utf8(identity) || counter_be32)
+ *
+ * The liveness token proves both identity and knowledge of the secret.
+ * If heartbeats stop arriving, the implementation triggers its DMS response.
+ */
+export function deriveLivenessToken(
+  secret: Uint8Array | string,
+  context: string,
+  identity: string,
+  counter: number,
+): Uint8Array {
+  const key = normaliseSecret(secret)
+  const data = concatBytes(utf8(context + ':alive'), utf8(identity), counterBe32(counter))
+  return hmacSha256(key, data)
+}

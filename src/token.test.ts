@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveTokenBytes, deriveToken, deriveDuressTokenBytes, deriveDuressToken, verifyToken } from './token.js'
+import { deriveTokenBytes, deriveToken, deriveDuressTokenBytes, deriveDuressToken, verifyToken, deriveLivenessToken } from './token.js'
 import { hexToBytes, bytesToHex } from './crypto.js'
 
 const SECRET_1 = '0000000000000000000000000000000000000000000000000000000000000001'
@@ -184,5 +184,39 @@ describe('verifyToken', () => {
     const result = verifyToken(SECRET_1, 'test', 11, duress, [IDENTITY_A, IDENTITY_B], { tolerance: 1 })
     expect(result.status).toBe('duress')
     expect(result.identity).toBe(IDENTITY_B)
+  })
+})
+
+describe('deriveLivenessToken', () => {
+  it('returns 32 bytes', () => {
+    const bytes = deriveLivenessToken(SECRET_1, 'test', IDENTITY_A, 0)
+    expect(bytes).toBeInstanceOf(Uint8Array)
+    expect(bytes.length).toBe(32)
+  })
+
+  it('is deterministic', () => {
+    const a = deriveLivenessToken(SECRET_1, 'test', IDENTITY_A, 0)
+    const b = deriveLivenessToken(SECRET_1, 'test', IDENTITY_A, 0)
+    expect(bytesToHex(a)).toBe(bytesToHex(b))
+  })
+
+  it('different from verify and duress derivations', () => {
+    const verify = deriveTokenBytes(SECRET_1, 'test', 0)
+    const duress = deriveDuressTokenBytes(SECRET_1, 'test', IDENTITY_A, 0)
+    const liveness = deriveLivenessToken(SECRET_1, 'test', IDENTITY_A, 0)
+    expect(bytesToHex(liveness)).not.toBe(bytesToHex(verify))
+    expect(bytesToHex(liveness)).not.toBe(bytesToHex(duress))
+  })
+
+  it('different identity produces different output', () => {
+    const a = deriveLivenessToken(SECRET_1, 'test', IDENTITY_A, 0)
+    const b = deriveLivenessToken(SECRET_1, 'test', IDENTITY_B, 0)
+    expect(bytesToHex(a)).not.toBe(bytesToHex(b))
+  })
+
+  it('different counter produces different output', () => {
+    const a = deriveLivenessToken(SECRET_1, 'test', IDENTITY_A, 0)
+    const b = deriveLivenessToken(SECRET_1, 'test', IDENTITY_A, 1)
+    expect(bytesToHex(a)).not.toBe(bytesToHex(b))
   })
 })
