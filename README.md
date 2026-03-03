@@ -17,7 +17,7 @@ npm install canary-kit
 ```
 
 ```typescript
-import { createGroup, getCurrentWord, getCurrentDuressWord, verifyWord } from 'canary-kit'
+import { createGroup, getCurrentWord, getCurrentDuressWord, verifyWord, getCounter } from 'canary-kit'
 
 // Create a group
 const group = createGroup({
@@ -33,12 +33,10 @@ const word = getCurrentWord(group)
 const duress = getCurrentDuressWord(group, alicePubkey)
 // => "bridge"
 
-// Verify a spoken word
-const result = verifyWord('falcon', group.seed, group.members, group.counter)
+// Verify a spoken word (uses getCurrentWord internally for comparison)
+const result = verifyWord(word, group.seed, group.members,
+  getCounter(Math.floor(Date.now() / 1000), group.rotationInterval) + group.usageOffset)
 // => { status: 'verified' }
-
-const duressResult = verifyWord('bridge', group.seed, group.members, group.counter)
-// => { status: 'duress', member: '1111...1111' }
 ```
 
 ## Why Canary
@@ -51,7 +49,7 @@ const duressResult = verifyWord('bridge', group.seed, group.members, group.count
 
 **Multi-channel.** Seed distribution uses Nostr relays with NIP-44 encryption. Meshtastic mesh provides a resilient offline fallback.
 
-**Zero dependencies.** Built on Node.js built-in `crypto`. No third-party runtime dependencies.
+**Zero dependencies.** Pure JavaScript — no runtime dependencies, no Node.js APIs. Works in browsers, Node.js, Deno, and edge runtimes.
 
 **Protocol-grade.** Formal NIP specification, published test vectors, and a curated 2048-word spoken-clarity wordlist.
 
@@ -74,6 +72,32 @@ import {
 | `deriveVerificationPhrase` | `(seedHex: string, counter: number, wordCount: 1 \| 2 \| 3) => string[]` | Derives a multi-word verification phrase |
 | `deriveDuressWord` | `(seedHex: string, memberPubkeyHex: string, counter: number) => string` | Derives a member's unique duress word; guaranteed not to collide with the verification word |
 | `deriveDuressPhrase` | `(seedHex: string, memberPubkeyHex: string, counter: number, wordCount: 1 \| 2 \| 3) => string[]` | Derives a member's multi-word duress phrase |
+
+### CANARY Protocol (Universal)
+
+The universal protocol API works with any transport — not just Nostr groups.
+
+```typescript
+import {
+  deriveToken, deriveTokenBytes,
+  deriveDuressToken, deriveDuressTokenBytes,
+  verifyToken,
+  deriveLivenessToken,
+  type TokenVerifyResult, type VerifyOptions,
+} from 'canary-kit/token'
+
+import {
+  encodeAsWords, encodeAsPin, encodeAsHex,
+  encodeToken, type TokenEncoding,
+} from 'canary-kit/encoding'
+```
+
+| Function | Description |
+|---|---|
+| `deriveToken(secret, context, counter, encoding?)` | Derive an encoded verification token |
+| `deriveDuressToken(secret, context, identity, counter, encoding?)` | Derive a duress token for a specific identity |
+| `verifyToken(secret, context, counter, input, identities, options?)` | Verify a token — returns `valid`, `duress` (with identity), or `invalid` |
+| `deriveLivenessToken(secret, context, identity, counter)` | Derive a liveness heartbeat token for dead man's switch |
 
 ### Verification
 
@@ -187,6 +211,16 @@ All builders return an `UnsignedEvent`. Sign with your own Nostr library.
 
 `KINDS` exports all five kind numbers as named constants.
 
+### Beacon & Duress Alerts
+
+```typescript
+import {
+  deriveBeaconKey,
+  encryptBeacon, decryptBeacon,
+  buildDuressAlert, encryptDuressAlert, decryptDuressAlert,
+} from 'canary-kit/beacon'
+```
+
 ## Protocol
 
 The full specification is in [NIP-CANARY.md](NIP-CANARY.md).
@@ -198,6 +232,8 @@ The full specification is in [NIP-CANARY.md](NIP-CANARY.md).
 | Member update | `38801` | Replaceable |
 | Reseed | `28801` | Ephemeral |
 | Word used | `28802` | Ephemeral |
+
+All kind numbers above are provisional — pending final NIP allocation.
 
 Content is encrypted with **NIP-44**. Events may carry a **NIP-40** `expiration` tag.
 
