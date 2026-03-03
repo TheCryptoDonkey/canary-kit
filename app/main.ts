@@ -459,6 +459,21 @@ function wireGlobalEvents(): void {
     clearPinKey()
     showLockScreen()
   })
+
+  // Handle incoming sync messages for beacon/duress side effects.
+  document.addEventListener('canary:sync-message', (evt) => {
+    const { message, sender } = (evt as CustomEvent).detail
+    if (message.type === 'beacon') {
+      console.info(`[canary] Beacon from ${sender.slice(0, 8)}…: ${message.lat}, ${message.lon}`)
+    } else if (message.type === 'duress-alert') {
+      const banner = document.getElementById('duress-alert-banner')
+      if (banner) {
+        banner.hidden = false
+        banner.className = 'call-sim__banner call-sim__banner--duress'
+        banner.textContent = `DURESS ALERT from ${sender.slice(0, 8)}…`
+      }
+    }
+  })
 }
 
 // ── Local identity ────────────────────────────────────────────

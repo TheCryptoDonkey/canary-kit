@@ -3,6 +3,7 @@
 import { getCounter, deriveBeaconKey, buildDuressAlert, encryptDuressAlert } from 'canary-kit'
 import { verifyToken } from 'canary-kit/token'
 import { getState } from '../state.js'
+import { broadcastAction } from '../sync.js'
 import { toTokenEncoding, GROUP_CONTEXT } from '../utils/encoding.js'
 
 // ── Status display config ──────────────────────────────────
@@ -130,6 +131,14 @@ export function renderVerify(container: HTMLElement): void {
           alertEl.textContent = `Alert encrypted (${encrypted.length}B)`
           resultEl!.parentElement?.appendChild(alertEl)
           setTimeout(() => alertEl.remove(), 5000)
+        })
+
+        // Broadcast duress alert to group members via sync transport
+        broadcastAction(currentGroupId, {
+          type: 'duress-alert',
+          lat: 0,
+          lon: 0,
+          timestamp: Math.floor(Date.now() / 1000),
         })
       }
     }

@@ -1,6 +1,7 @@
 // app/panels/beacons.ts — Beacons panel: MapLibre map with member location markers
 
 import { getState } from '../state.js'
+import { broadcastAction } from '../sync.js'
 import { deriveBeaconKey, encryptBeacon } from 'canary-kit'
 
 let map: any = null
@@ -105,6 +106,17 @@ function startBeaconWatch(): void {
         positions[identity.pubkey] = { lat, lon, geohash, precision, timestamp: Math.floor(Date.now() / 1000) }
         updateMapMarker(identity.pubkey, lat, lon)
         updateBeaconList()
+
+        // Broadcast beacon to group members via sync transport
+        if (activeGroupId) {
+          broadcastAction(activeGroupId, {
+            type: 'beacon',
+            lat,
+            lon,
+            accuracy: pos.coords.accuracy,
+            timestamp: Math.floor(Date.now() / 1000),
+          })
+        }
       }
     },
     () => { /* geolocation error — silent */ },
