@@ -1351,6 +1351,141 @@ input::placeholder {
 }
 
 /* ============================================================
+   WELCOME SCREEN
+   ============================================================ */
+
+.layout--welcome {
+  justify-content: center;
+}
+
+.welcome-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 4rem 2rem;
+  max-width: 640px;
+  margin: 0 auto;
+  gap: 2.5rem;
+  animation: fade-in 0.8s var(--ease-out) both;
+}
+
+.welcome-screen[hidden] {
+  display: none;
+}
+
+.welcome-title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(2rem, 5vw, 3rem);
+  color: var(--text-bright);
+  line-height: 1.15;
+  text-shadow:
+    0 0 40px rgba(245, 158, 11, 0.15),
+    0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.welcome-subtitle {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  max-width: 42ch;
+}
+
+.welcome-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+  text-align: left;
+}
+
+.welcome-step {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1rem 1.25rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.welcome-step__number {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--amber-500);
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-amber);
+  border-radius: 50%;
+}
+
+.welcome-step__label {
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.welcome-step__text {
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-top: 0.25rem;
+}
+
+.welcome-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.welcome-btn {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  border-radius: 6px;
+  padding: 0.75rem 1.75rem;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+
+.welcome-btn--primary {
+  color: var(--bg-deep);
+  background: var(--amber-500);
+  border: 1px solid var(--amber-500);
+}
+
+.welcome-btn--primary:hover {
+  background: var(--amber-400);
+  border-color: var(--amber-400);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+}
+
+.welcome-btn--secondary {
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.welcome-btn--secondary:hover {
+  color: var(--amber-400);
+  border-color: var(--border-amber);
+  background: var(--bg-hover);
+}
+
+/* ============================================================
    20. RESPONSIVE
    ============================================================ */
 
@@ -1459,6 +1594,19 @@ input::placeholder {
   .demo-banner {
     width: calc(100% - 2rem);
     text-align: center;
+  }
+
+  .welcome-screen {
+    padding: 2rem 1rem;
+  }
+
+  .welcome-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .welcome-btn {
+    width: 100%;
   }
 }
 
