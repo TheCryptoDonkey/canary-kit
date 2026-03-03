@@ -1,6 +1,6 @@
 // app/panels/verify.ts — Verify panel: spoken-token verification input
 
-import { getCounter } from 'canary-kit'
+import { getCounter, deriveBeaconKey, buildDuressAlert, encryptDuressAlert } from 'canary-kit'
 import { verifyToken, type TokenVerifyResult } from 'canary-kit/token'
 import type { TokenEncoding } from 'canary-kit/encoding'
 import { getState } from '../state.js'
@@ -132,6 +132,20 @@ export function renderVerify(container: HTMLElement): void {
           bubbles: true,
         }),
       )
+
+      // Build and encrypt a duress alert for each identified member
+      const beaconKey = deriveBeaconKey(currentGroup.seed)
+      for (const memberId of result.identities ?? []) {
+        const alert = buildDuressAlert(memberId, null)
+        void encryptDuressAlert(beaconKey, alert).then((encrypted) => {
+          console.info('[canary] Duress alert encrypted:', encrypted.slice(0, 32) + '…')
+          const alertEl = document.createElement('div')
+          alertEl.className = 'verify-alert-encrypted'
+          alertEl.textContent = `Alert encrypted (${encrypted.length}B)`
+          resultEl!.parentElement?.appendChild(alertEl)
+          setTimeout(() => alertEl.remove(), 5000)
+        })
+      }
     }
   }
 
