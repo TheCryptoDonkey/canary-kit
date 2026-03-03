@@ -132,3 +132,41 @@ describe('applySyncMessage', () => {
     expect(afterDuress).toEqual(group)
   })
 })
+
+describe('full round-trip: encode → decode → apply', () => {
+  function makeGroup() {
+    return createGroup({ name: 'test', members: [PUBKEY_AAA], preset: 'family' })
+  }
+
+  it('member-join round-trip updates group state', () => {
+    const group = makeGroup()
+    const msg: SyncMessage = { type: 'member-join', pubkey: PUBKEY_BBB, timestamp: Date.now() }
+    const encoded = encodeSyncMessage(msg)
+    const decoded = decodeSyncMessage(encoded)
+    const updated = applySyncMessage(group, decoded)
+    expect(updated.members).toContain(PUBKEY_BBB)
+  })
+
+  it('reseed round-trip preserves binary seed', () => {
+    const group = makeGroup()
+    const newSeed = crypto.getRandomValues(new Uint8Array(32))
+    const msg: SyncMessage = { type: 'reseed', seed: newSeed, counter: 5, timestamp: Date.now() }
+    const encoded = encodeSyncMessage(msg)
+    const decoded = decodeSyncMessage(encoded)
+    const updated = applySyncMessage(group, decoded)
+    expect(updated.seed).toBe(bytesToHex(newSeed))
+    expect(updated.counter).toBe(5)
+    expect(updated.usageOffset).toBe(0)
+  })
+
+  it('counter-advance monotonicity across encode/decode', () => {
+    const group = makeGroup()
+    const futureCounter = group.counter + 10
+    const msg1: SyncMessage = { type: 'counter-advance', counter: futureCounter, usageOffset: 2, timestamp: 1 }
+    const msg2: SyncMessage = { type: 'counter-advance', counter: futureCounter - 5, usageOffset: 1, timestamp: 2 }
+    let state = applySyncMessage(group, decodeSyncMessage(encodeSyncMessage(msg1)))
+    state = applySyncMessage(state, decodeSyncMessage(encodeSyncMessage(msg2)))
+    expect(state.counter).toBe(futureCounter)
+    expect(state.usageOffset).toBe(2)
+  })
+})
