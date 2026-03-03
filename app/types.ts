@@ -18,6 +18,8 @@ export interface AppGroup extends GroupState {
   livenessInterval: number
   /** Last check-in unix timestamp per member pubkey. */
   livenessCheckins: Record<string, number>
+  /** Verification tolerance window: accept tokens within +/- this many counters. */
+  tolerance: number
 }
 
 /** The local identity (Nostr keypair) for this device. */

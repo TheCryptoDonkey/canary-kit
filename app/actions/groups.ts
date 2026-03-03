@@ -35,6 +35,7 @@ export function createNewGroup(name: string, preset: PresetName, memberPubkey?: 
     usedInvites: [],
     livenessInterval: sdkGroup.rotationInterval,
     livenessCheckins: {},
+    tolerance: 1,
   }
 
   const { groups } = getState()

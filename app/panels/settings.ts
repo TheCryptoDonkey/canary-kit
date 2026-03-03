@@ -66,6 +66,17 @@ export function renderSettings(container: HTMLElement): void {
           </div>
         </div>
 
+        <!-- Tolerance Window -->
+        <div class="settings-section">
+          <span class="input-label">Tolerance</span>
+          <div class="segmented">
+            <button class="segmented__btn ${group.tolerance === 0 ? 'segmented__btn--active' : ''}" data-tolerance="0">0</button>
+            <button class="segmented__btn ${group.tolerance === 1 ? 'segmented__btn--active' : ''}" data-tolerance="1">+/-1</button>
+            <button class="segmented__btn ${group.tolerance === 2 ? 'segmented__btn--active' : ''}" data-tolerance="2">+/-2</button>
+            <button class="segmented__btn ${group.tolerance === 3 ? 'segmented__btn--active' : ''}" data-tolerance="3">+/-3</button>
+          </div>
+        </div>
+
         <!-- Nostr Sync Toggle -->
         <div class="settings-section">
           <label class="toggle-label">
@@ -158,6 +169,14 @@ export function renderSettings(container: HTMLElement): void {
   container.querySelectorAll('[data-enc]').forEach(btn => {
     btn.addEventListener('click', () => {
       updateGroup(activeGroupId!, { encodingFormat: (btn as HTMLElement).dataset.enc as 'words' | 'pin' | 'hex' })
+    })
+  })
+
+  // ── Tolerance window ─────────────────────────────────────────
+
+  container.querySelectorAll('[data-tolerance]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      updateGroup(activeGroupId!, { tolerance: Number((btn as HTMLElement).dataset.tolerance) })
     })
   })
 
@@ -295,6 +314,7 @@ export function renderSettings(container: HTMLElement): void {
           usedInvites: [],
           livenessInterval: imported.rotationInterval,
           livenessCheckins: {},
+          tolerance: imported.tolerance ?? 1,
         }
         const { groups: currentGroups } = getState()
         update({ groups: { ...currentGroups, [id]: appGroup }, activeGroupId: id })
