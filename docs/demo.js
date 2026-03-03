@@ -62,21 +62,7 @@ applyTheme(getInitialTheme())
 // Nostr tools — loaded dynamically so offline mode still works
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// QR code library — lazy-loaded
-// ---------------------------------------------------------------------------
-
-let QRC = null
-async function loadQR() {
-  if (QRC) return QRC
-  try {
-    const mod = await import('https://esm.sh/qr-creator@1.0.6')
-    QRC = mod.default || mod
-    return QRC
-  } catch {
-    return null
-  }
-}
+import { renderQR } from './qr.js'
 
 let nostrTools = null
 let pool = null
@@ -1071,7 +1057,7 @@ function buildInviteLink(groupId) {
   return `${location.origin}${location.pathname}#join/${encoded}`
 }
 
-async function showShareModal(groupId) {
+function showShareModal(groupId) {
   const link = buildInviteLink(groupId)
   if (!link) return
 
@@ -1081,19 +1067,13 @@ async function showShareModal(groupId) {
   const qrContainer = document.getElementById('share-qr')
   qrContainer.innerHTML = ''
 
-  const qr = await loadQR()
-  if (qr) {
-    const canvas = document.createElement('canvas')
-    qr.render({
-      text: link,
-      radius: 0.5,
-      ecLevel: 'M',
-      fill: '#f8fafc',
-      background: '#0a0e17',
-      size: 200,
-    }, canvas)
-    qrContainer.appendChild(canvas)
-  }
+  const canvas = renderQR(link, {
+    size: 200,
+    fg: '#f8fafc',
+    bg: '#0a0e17',
+    margin: 2,
+  })
+  qrContainer.appendChild(canvas)
 
   document.getElementById('share-modal').showModal()
 }
