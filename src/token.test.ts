@@ -107,7 +107,7 @@ describe('deriveDuressTokenBytes', () => {
 
 describe('deriveDuressToken', () => {
   it('returns encoded string', () => {
-    const token = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 0)
+    const token = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 0, undefined, 1)
     expect(typeof token).toBe('string')
     expect(token.length).toBeGreaterThan(0)
   })
@@ -115,21 +115,21 @@ describe('deriveDuressToken', () => {
   it('never collides with normal token', () => {
     for (let c = 0; c < 100; c++) {
       const normal = deriveToken(SECRET_1, 'test', c)
-      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, c)
+      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, c, undefined, 1)
       expect(duress).not.toBe(normal)
     }
   })
 
   it('different identities produce different duress tokens', () => {
-    const a = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 0)
-    const b = deriveDuressToken(SECRET_1, 'test', IDENTITY_B, 0)
+    const a = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 0, undefined, 1)
+    const b = deriveDuressToken(SECRET_1, 'test', IDENTITY_B, 0, undefined, 1)
     expect(a).not.toBe(b)
   })
 
   it('works with PIN encoding', () => {
     const encoding = { format: 'pin' as const, digits: 4 }
     const normal = deriveToken(SECRET_1, 'test', 0, encoding)
-    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 0, encoding)
+    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 0, encoding, 1)
     expect(duress).toHaveLength(4)
     expect(duress).not.toBe(normal)
   })
@@ -139,7 +139,7 @@ describe('deriveDuressToken', () => {
     const encoding = { format: 'pin' as const, digits: 4 }
     for (let c = 0; c < 1000; c++) {
       const normal = deriveToken(SECRET_1, 'test', c, encoding)
-      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, c, encoding)
+      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, c, encoding, 1)
       expect(duress).not.toBe(normal)
     }
   })
@@ -153,7 +153,7 @@ describe('verifyToken', () => {
   })
 
   it('returns duress with identity for duress token', () => {
-    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 0)
+    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 0, undefined, 1)
     const result = verifyToken(SECRET_1, 'test', 0, duress, [IDENTITY_A, IDENTITY_B])
     expect(result.status).toBe('duress')
     expect(result.identities).toEqual([IDENTITY_A])
@@ -190,14 +190,14 @@ describe('verifyToken', () => {
   })
 
   it('detects duress with tolerance', () => {
-    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_B, 10)
+    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_B, 10, undefined, 1)
     const result = verifyToken(SECRET_1, 'test', 11, duress, [IDENTITY_A, IDENTITY_B], { tolerance: 1 })
     expect(result.status).toBe('duress')
     expect(result.identities).toEqual([IDENTITY_B])
   })
 
   it('returns identities array (not singular identity) for duress', () => {
-    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 0)
+    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 0, undefined, 1)
     const result = verifyToken(SECRET_1, 'test', 0, duress, [IDENTITY_A, IDENTITY_B])
     expect(result.status).toBe('duress')
     expect(result.identities).toEqual([IDENTITY_A])
@@ -233,8 +233,8 @@ describe('tolerance window', () => {
 
 describe('concatenation ambiguity', () => {
   it('concatenation ambiguity is resolved by null-byte separator', () => {
-    const a = deriveDuressToken(SECRET_1, 'x:duress', '', 0)
-    const b = deriveDuressToken(SECRET_1, 'x', ':duress', 0)
+    const a = deriveDuressToken(SECRET_1, 'x:duress', '', 0, undefined, 1)
+    const b = deriveDuressToken(SECRET_1, 'x', ':duress', 0, undefined, 1)
     expect(a).not.toBe(b)
   })
 })
@@ -342,7 +342,7 @@ describe('deriveDirectionalPair', () => {
 
   it('works with PIN encoding', () => {
     const encoding = { format: 'pin' as const, digits: 4 }
-    const pair = deriveDirectionalPair(SECRET_1, 'trott', ['requester', 'provider'], 0, encoding)
+    const pair = deriveDirectionalPair(SECRET_1, 'dispatch', ['requester', 'provider'], 0, encoding)
     expect(pair.requester).toHaveLength(4)
     expect(pair.provider).toHaveLength(4)
     expect(pair.requester).not.toBe(pair.provider)
@@ -364,7 +364,7 @@ describe('cross-counter collision avoidance', () => {
     const context = 'canary:verify'
 
     for (let c = 0; c < 200; c++) {
-      const duress = deriveDuressToken(secret, context, IDENTITY_A, c)
+      const duress = deriveDuressToken(secret, context, IDENTITY_A, c, undefined, 1)
       const lo = Math.max(0, c - 1)
       const hi = c + 1
       for (let adj = lo; adj <= hi; adj++) {
@@ -391,7 +391,7 @@ describe('cross-counter collision avoidance', () => {
 
   it('verifyToken: duress at exact counter wins over normal at adjacent counter', () => {
     // Even with tolerance, a duress token at the exact counter must be detected
-    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 10)
+    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 10, undefined, 1)
     const result = verifyToken(SECRET_1, 'test', 10, duress, [IDENTITY_A, IDENTITY_B], { tolerance: 1 })
     expect(result.status).toBe('duress')
     expect(result.identities).toEqual([IDENTITY_A])

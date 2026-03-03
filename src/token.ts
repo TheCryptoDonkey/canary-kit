@@ -87,7 +87,7 @@ export function deriveDuressToken(
   identity: string,
   counter: number,
   encoding: TokenEncoding = DEFAULT_ENCODING,
-  maxTolerance: number = 1,
+  maxTolerance: number,
 ): string {
   if (!Number.isInteger(maxTolerance) || maxTolerance < 0) {
     throw new RangeError('maxTolerance must be a non-negative integer')

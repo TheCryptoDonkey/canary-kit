@@ -40,28 +40,28 @@ describe('CANARY-DERIVE protocol vectors', () => {
     expect(deriveToken(SECRET, CONTEXT, 1)).toBe('famous')
   })
 
-  it('vector 4: 4-digit PIN — context="trott:handoff"', () => {
-    expect(deriveToken(SECRET, 'trott:handoff', 0, { format: 'pin', digits: 4 })).toBe('2796')
+  it('vector 4: 4-digit PIN — context="dispatch:handoff"', () => {
+    expect(deriveToken(SECRET, 'dispatch:handoff', 0, { format: 'pin', digits: 4 })).toBe('2818')
   })
 
-  it('vector 5: 3-word phrase — context="signet:verify"', () => {
-    expect(deriveToken(SECRET, 'signet:verify', 0, { format: 'words', count: 3 })).toBe('throw drafter category')
+  it('vector 5: 3-word phrase — context="id:verify"', () => {
+    expect(deriveToken(SECRET, 'id:verify', 0, { format: 'words', count: 3 })).toBe('decrease mistake require')
   })
 })
 
 describe('CANARY-DURESS protocol vectors', () => {
   it('vector 6: duress word — identity="alice"', () => {
-    const word = deriveDuressToken(SECRET, CONTEXT, IDENTITY, 0)
+    const word = deriveDuressToken(SECRET, CONTEXT, IDENTITY, 0, undefined, 1)
     const normal = deriveToken(SECRET, CONTEXT, 0)
     expect(word).not.toBe(normal)
     expect(word).toBe('airport')
   })
 
-  it('vector 7: duress PIN — context="trott:handoff", identity="rider123"', () => {
-    const pin = deriveDuressToken(SECRET, 'trott:handoff', 'rider123', 0, { format: 'pin', digits: 4 })
-    const normal = deriveToken(SECRET, 'trott:handoff', 0, { format: 'pin', digits: 4 })
+  it('vector 7: duress PIN — context="dispatch:handoff", identity="rider123"', () => {
+    const pin = deriveDuressToken(SECRET, 'dispatch:handoff', 'rider123', 0, { format: 'pin', digits: 4 }, 1)
+    const normal = deriveToken(SECRET, 'dispatch:handoff', 0, { format: 'pin', digits: 4 })
     expect(pin).not.toBe(normal)
-    expect(pin).toBe('0325')
+    expect(pin).toBe('0973')
   })
 
   it('vector 8: verification round-trip — valid', () => {
@@ -71,7 +71,7 @@ describe('CANARY-DURESS protocol vectors', () => {
   })
 
   it('vector 9: verification round-trip — duress', () => {
-    const duress = deriveDuressToken(SECRET, CONTEXT, IDENTITY, 0)
+    const duress = deriveDuressToken(SECRET, CONTEXT, IDENTITY, 0, undefined, 1)
     const result = verifyToken(SECRET, CONTEXT, 0, duress, [IDENTITY])
     expect(result.status).toBe('duress')
     expect(result.identities).toEqual([IDENTITY])

@@ -214,7 +214,7 @@ describe('createSession — duress detection', () => {
       theirIdentity: 'customer-123',
     })
     const counter = agent.counter(FIXED_NOW)
-    const duressWord = deriveDuressToken(SECRET, 'aviva:caller', 'customer-123', counter)
+    const duressWord = deriveDuressToken(SECRET, 'aviva:caller', 'customer-123', counter, undefined, 1)
     const result = agent.verify(duressWord, FIXED_NOW)
     expect(result.status).toBe('duress')
     expect(result.identities).toEqual(['customer-123'])
@@ -229,7 +229,7 @@ describe('createSession — duress detection', () => {
       preset: 'call',
     })
     const counter = agent.counter(FIXED_NOW)
-    const duressWord = deriveDuressToken(SECRET, 'aviva:caller', 'customer-123', counter)
+    const duressWord = deriveDuressToken(SECRET, 'aviva:caller', 'customer-123', counter, undefined, 1)
     const result = agent.verify(duressWord, FIXED_NOW)
     expect(result.status).toBe('invalid')
   })
@@ -239,7 +239,7 @@ describe('createSession — handoff preset (fixed counter)', () => {
   it('uses fixed counter from config', () => {
     const session = createSession({
       secret: SECRET,
-      namespace: 'trott',
+      namespace: 'dispatch',
       roles: ['requester', 'provider'],
       myRole: 'provider',
       preset: 'handoff',
@@ -253,7 +253,7 @@ describe('createSession — handoff preset (fixed counter)', () => {
     expect(() => {
       const session = createSession({
         secret: SECRET,
-        namespace: 'trott',
+        namespace: 'dispatch',
         roles: ['requester', 'provider'],
         myRole: 'provider',
         preset: 'handoff',
@@ -265,7 +265,7 @@ describe('createSession — handoff preset (fixed counter)', () => {
   it('myToken and theirToken are different', () => {
     const session = createSession({
       secret: SECRET,
-      namespace: 'trott',
+      namespace: 'dispatch',
       roles: ['requester', 'provider'],
       myRole: 'provider',
       preset: 'handoff',
@@ -277,7 +277,7 @@ describe('createSession — handoff preset (fixed counter)', () => {
   it('verify works with fixed counter', () => {
     const provider = createSession({
       secret: SECRET,
-      namespace: 'trott',
+      namespace: 'dispatch',
       roles: ['requester', 'provider'],
       myRole: 'provider',
       preset: 'handoff',
@@ -285,7 +285,7 @@ describe('createSession — handoff preset (fixed counter)', () => {
     })
     const requester = createSession({
       secret: SECRET,
-      namespace: 'trott',
+      namespace: 'dispatch',
       roles: ['requester', 'provider'],
       myRole: 'requester',
       preset: 'handoff',

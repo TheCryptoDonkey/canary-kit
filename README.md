@@ -163,7 +163,7 @@ import {
 | Function | Description |
 |---|---|
 | `deriveToken(secret, context, counter, encoding?)` | Derive an encoded verification token |
-| `deriveDuressToken(secret, context, identity, counter, encoding?, maxTolerance?)` | Derive a duress token for a specific identity |
+| `deriveDuressToken(secret, context, identity, counter, encoding, maxTolerance)` | Derive a duress token for a specific identity |
 | `verifyToken(secret, context, counter, input, identities, options?)` | Verify a token — returns `valid`, `duress` (with matching identities), or `invalid` |
 | `deriveLivenessToken(secret, context, identity, counter)` | Derive a liveness heartbeat token for dead man's switch |
 | `deriveDirectionalPair(secret, namespace, roles, counter, encoding?)` | Derive two directional tokens from the same secret |

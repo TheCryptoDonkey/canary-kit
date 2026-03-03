@@ -405,7 +405,8 @@ separate concerns:
 | Protocol operation         | State function     | Event builder(s)                    |
 |----------------------------|--------------------|-------------------------------------|
 | Create group + distribute  | `createGroup()`    | `buildGroupEvent()` + `buildSeedDistributionEvent()` × N |
-| Remove member + reseed     | `removeMember()`   | `buildMemberUpdateEvent()` + `buildReseedEvent()` + `buildSeedDistributionEvent()` |
+| Add member                 | `addMember()`      | `buildMemberUpdateEvent()` + `buildGroupEvent()` + `buildSeedDistributionEvent()` |
+| Remove member + reseed     | `removeMember()`   | `buildMemberUpdateEvent()` + `buildGroupEvent()` + `buildReseedEvent()` + `buildSeedDistributionEvent()` |
 | Advance counter            | `advanceCounter()` | `buildWordUsedEvent()`              |
 | Full reseed                | `reseed()`         | `buildReseedEvent()` + `buildSeedDistributionEvent()` × N |
 
