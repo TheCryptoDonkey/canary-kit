@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveTokenBytes, deriveToken, deriveDuressTokenBytes, deriveDuressToken } from './token.js'
+import { deriveTokenBytes, deriveToken, deriveDuressTokenBytes, deriveDuressToken, verifyToken } from './token.js'
 import { hexToBytes, bytesToHex } from './crypto.js'
 
 const SECRET_1 = '0000000000000000000000000000000000000000000000000000000000000001'
@@ -132,5 +132,57 @@ describe('deriveDuressToken', () => {
     const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 0, encoding)
     expect(duress).toHaveLength(4)
     expect(duress).not.toBe(normal)
+  })
+})
+
+describe('verifyToken', () => {
+  it('returns valid for correct token', () => {
+    const token = deriveToken(SECRET_1, 'test', 0)
+    const result = verifyToken(SECRET_1, 'test', 0, token, [IDENTITY_A])
+    expect(result.status).toBe('valid')
+  })
+
+  it('returns duress with identity for duress token', () => {
+    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 0)
+    const result = verifyToken(SECRET_1, 'test', 0, duress, [IDENTITY_A, IDENTITY_B])
+    expect(result.status).toBe('duress')
+    expect(result.identity).toBe(IDENTITY_A)
+  })
+
+  it('returns invalid for unknown token', () => {
+    const result = verifyToken(SECRET_1, 'test', 0, 'nonsenseword', [IDENTITY_A])
+    expect(result.status).toBe('invalid')
+  })
+
+  it('normalises input (case + whitespace)', () => {
+    const token = deriveToken(SECRET_1, 'test', 0)
+    const result = verifyToken(SECRET_1, 'test', 0, '  ' + token.toUpperCase() + '  ', [IDENTITY_A])
+    expect(result.status).toBe('valid')
+  })
+
+  it('respects tolerance window', () => {
+    const token = deriveToken(SECRET_1, 'test', 5)
+    const result = verifyToken(SECRET_1, 'test', 6, token, [], { tolerance: 1 })
+    expect(result.status).toBe('valid')
+  })
+
+  it('rejects outside tolerance window', () => {
+    const token = deriveToken(SECRET_1, 'test', 5)
+    const result = verifyToken(SECRET_1, 'test', 8, token, [], { tolerance: 1 })
+    expect(result.status).toBe('invalid')
+  })
+
+  it('works with PIN encoding', () => {
+    const encoding = { format: 'pin' as const, digits: 4 }
+    const pin = deriveToken(SECRET_1, 'test', 0, encoding)
+    const result = verifyToken(SECRET_1, 'test', 0, pin, [IDENTITY_A], { encoding })
+    expect(result.status).toBe('valid')
+  })
+
+  it('detects duress with tolerance', () => {
+    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_B, 10)
+    const result = verifyToken(SECRET_1, 'test', 11, duress, [IDENTITY_A, IDENTITY_B], { tolerance: 1 })
+    expect(result.status).toBe('duress')
+    expect(result.identity).toBe(IDENTITY_B)
   })
 })

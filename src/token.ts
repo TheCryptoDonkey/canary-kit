@@ -94,3 +94,59 @@ export function deriveDuressToken(
 
   return token
 }
+
+/** Result of verifying a token. */
+export interface TokenVerifyResult {
+  /** 'valid' = matches normal token, 'duress' = matches a duress token, 'invalid' = no match. */
+  status: 'valid' | 'duress' | 'invalid'
+  /** Identity of the duress signaller (only when status = 'duress'). */
+  identity?: string
+}
+
+/** Options for token verification. */
+export interface VerifyOptions {
+  /** Output encoding to use for comparison (default: single word). */
+  encoding?: TokenEncoding
+  /** Counter tolerance window: accept tokens within ±tolerance counter values (default: 0). */
+  tolerance?: number
+}
+
+/**
+ * CANARY-DURESS: Verify a spoken/entered token against a group.
+ *
+ * Checks in order:
+ * 1. Normal verification token (within tolerance window) → 'valid'
+ * 2. Each identity's duress token (within tolerance window) → 'duress'
+ * 3. No match → 'invalid'
+ */
+export function verifyToken(
+  secret: Uint8Array | string,
+  context: string,
+  counter: number,
+  input: string,
+  identities: string[],
+  options?: VerifyOptions,
+): TokenVerifyResult {
+  const encoding = options?.encoding ?? DEFAULT_ENCODING
+  const tolerance = options?.tolerance ?? 0
+  const normalised = input.toLowerCase().trim()
+
+  // 1. Check normal token within tolerance window
+  for (let c = counter - tolerance; c <= counter + tolerance; c++) {
+    if (normalised === deriveToken(secret, context, c, encoding)) {
+      return { status: 'valid' }
+    }
+  }
+
+  // 2. Check duress tokens for each identity
+  for (const identity of identities) {
+    for (let c = counter - tolerance; c <= counter + tolerance; c++) {
+      if (normalised === deriveDuressToken(secret, context, identity, c, encoding)) {
+        return { status: 'duress', identity }
+      }
+    }
+  }
+
+  // 3. No match
+  return { status: 'invalid' }
+}
