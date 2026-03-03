@@ -100,7 +100,7 @@ const seed = deriveSeed(taskSecret, requesterId, providerId)
 
 const session = createSession({
   secret: seed,
-  namespace: 'trott',
+  namespace: 'dispatch',
   roles: ['requester', 'provider'],
   myRole: 'provider',
   preset: 'handoff',

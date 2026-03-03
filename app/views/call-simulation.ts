@@ -25,7 +25,7 @@ const SCENARIOS: Record<string, ScenarioConfig> = {
   },
   rideshare: {
     label: 'Rideshare',
-    namespace: 'trott',
+    namespace: 'dispatch',
     roles: ['requester', 'provider'],
     preset: 'handoff',
     encoding: 'pin',

@@ -75,7 +75,7 @@ separate keys or counters.
 | Term               | Definition                                                                                     |
 |--------------------|------------------------------------------------------------------------------------------------|
 | Secret             | A 256-bit (32-byte) shared key known to all verifying parties                                  |
-| Context            | A UTF-8 string identifying the derivation purpose (e.g. `"canary:verify"`, `"trott:handoff"`) |
+| Context            | A UTF-8 string identifying the derivation purpose (e.g. `"canary:verify"`, `"dispatch:handoff"`) |
 | Counter            | An unsigned integer determining the current token; scheme is application-defined                |
 | Identity           | A UTF-8 string identifying a specific person (pubkey, username, employee ID, etc.)             |
 | Verification token | The current group token, derived from secret + context + counter                               |
@@ -105,7 +105,7 @@ Where:
 - Output: 32 bytes (256 bits), truncated and encoded per the output format
 
 The `context` string ensures the same secret can derive different tokens for different
-purposes without collision. For example, `"canary:verify"` and `"trott:handoff"` produce
+purposes without collision. For example, `"canary:verify"` and `"dispatch:handoff"` produce
 entirely independent token sequences from the same secret.
 
 ### Counter Schemes
@@ -117,7 +117,7 @@ more based on their use case:
 |-----------------|-------------------------------------|-----------------------------------------|
 | **Time-based**  | `floor(unix_time / period)`         | Canary groups (7d), short-lived (30s)   |
 | **Sequence**    | Monotonic integer                   | Burn-after-use, one-time tokens         |
-| **Event-based** | Deterministic from event ID         | TROTT (hash of task ID)                 |
+| **Event-based** | Deterministic from event ID         | Platforms (hash of task ID)              |
 
 ### Tolerance Window
 
@@ -193,7 +193,7 @@ More output = more security, harder to speak:
 |--------------|-------|---------------|----------------------------------|
 | 1 word       | ~11   | ~2,048        | Casual verification, voice call  |
 | 2–3 words    | ~22–33| ~4M–8B        | Group identity, high-security    |
-| 4-digit PIN  | ~13.3 | 10,000        | Quick handoff (TROTT)            |
+| 4-digit PIN  | ~13.3 | 10,000        | Quick handoff (dispatch)         |
 | 6-digit code | ~19.9 | 1,000,000     | TOTP-equivalent                  |
 
 ### Directional Pair Pattern
@@ -250,10 +250,10 @@ the two parties. Example namespaces:
 
 | Namespace   | Roles                        | Use case                       |
 |-------------|------------------------------|--------------------------------|
-| `trott`     | `requester`, `provider`      | Task handoff verification      |
+| `dispatch`  | `requester`, `provider`      | Task handoff verification      |
 | `aviva`     | `caller`, `agent`            | Insurance phone verification   |
 | `barclays`  | `customer`, `agent`          | Banking phone verification     |
-| `signet`    | `subject`, `verifier`        | Identity verification          |
+| `id`        | `subject`, `verifier`        | Identity verification          |
 
 ---
 
@@ -430,7 +430,7 @@ Liveness monitoring parameters are application-defined:
 |----------------|-----------------------------------------------------|
 | Canary-kit     | Alert the group with last known location            |
 | Key management | Lock signing keys, broadcast revocation             |
-| TROTT          | Escalate to dispatch, freeze escrow                 |
+| Dispatch       | Escalate to dispatch, freeze escrow                 |
 | Banking        | Freeze account, alert fraud team                    |
 
 ---
@@ -604,10 +604,10 @@ Liveness:
 | 1  | deriveTokenBytes   | `canary:verify`  | —          | 0       | raw hex     | `c51524053f1f27a4c871c63069f285ce5ac5b69a40d6caa5af9b6945dd9556d1` |
 | 2  | deriveToken        | `canary:verify`  | —          | 0       | 1 word      | `net`                                                              |
 | 3  | deriveToken        | `canary:verify`  | —          | 1       | 1 word      | `famous`                                                           |
-| 4  | deriveToken        | `trott:handoff`  | —          | 0       | 4-digit PIN | `2796`                                                             |
-| 5  | deriveToken        | `signet:verify`  | —          | 0       | 3 words     | `throw drafter category`                                           |
-| 6  | deriveDuressToken  | `canary:verify`  | `alice`    | 0       | 1 word      | `airport`                                                          |
-| 7  | deriveDuressToken  | `trott:handoff`  | `rider123` | 0       | 4-digit PIN | `0325`                                                             |
+| 4  | deriveToken        | `dispatch:handoff` | —        | 0       | 4-digit PIN | `2818`                                                             |
+| 5  | deriveToken        | `id:verify`        | —        | 0       | 3 words     | `decrease mistake require`                                         |
+| 6  | deriveDuressToken  | `canary:verify`    | `alice`  | 0       | 1 word      | `airport`                                                          |
+| 7  | deriveDuressToken  | `dispatch:handoff` | `rider123` | 0     | 4-digit PIN | `0973`                                                             |
 | 8  | verifyToken        | `canary:verify`  | `alice`    | 0       | input: `net`   | `{ status: 'valid' }`                                           |
 | 9  | verifyToken        | `canary:verify`  | `alice`    | 0       | input: `airport`| `{ status: 'duress', identities: ['alice'] }`                  |
 | 10 | deriveLivenessToken| `canary:verify`  | `alice`    | 0       | raw hex     | `b38a10676ea8d4e716ad606e0b2ae7d9678e47ff44b0920a68ed6cb02e9bb858` |

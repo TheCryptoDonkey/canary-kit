@@ -91,7 +91,7 @@ export const SESSION_PRESETS: Readonly<Record<SessionPresetName, Readonly<Sessio
 export interface SessionConfig {
   /** Shared secret (hex string or Uint8Array). */
   secret: Uint8Array | string
-  /** Namespace prefix for context strings (e.g. 'aviva', 'trott'). */
+  /** Namespace prefix for context strings (e.g. 'aviva', 'dispatch'). */
   namespace: string
   /** The two roles in the session (e.g. ['caller', 'agent']). */
   roles: [string, string]
