@@ -603,36 +603,42 @@ function stopBeaconSimulation() {
 // Duress alert display
 // ---------------------------------------------------------------------------
 
-function showDuressAlert(memberPubkey) {
+function showDuressAlert(memberPubkeys) {
+  if (!Array.isArray(memberPubkeys) || memberPubkeys.length === 0) return
   const isDemoGroup = state.activeGroupId === 'demo'
-  const name = getMemberName(memberPubkey, isDemoGroup)
-  const pos = beaconPositions[memberPubkey]
+  const names = memberPubkeys.map(pk => getMemberName(pk, isDemoGroup))
 
   const banner = document.getElementById('duress-alert-banner')
   const nameEl = document.getElementById('duress-alert-name')
   const locationEl = document.getElementById('duress-alert-location')
 
   if (banner && nameEl) {
-    nameEl.textContent = name
-    if (pos && locationEl) {
-      locationEl.textContent = `Last known: ${pos.geohash} (precision ${pos.precision})`
+    nameEl.textContent = names.join(', ')
+    const positions = memberPubkeys.map(pk => beaconPositions[pk]).filter(Boolean)
+    if (positions.length > 0 && locationEl) {
+      const labels = positions.map(p => p.geohash)
+      locationEl.textContent = `Last known: ${labels.join('; ')}`
     } else if (locationEl) {
       locationEl.textContent = 'Location unknown'
     }
     banner.removeAttribute('hidden')
   }
 
-  setMarkerDuress(memberPubkey)
+  for (const pk of memberPubkeys) setMarkerDuress(pk)
 
-  if (beaconMap && pos) {
-    beaconMap.flyTo({
-      center: [pos.lon, pos.lat],
-      zoom: 16,
-      speed: 1.2,
-    })
+  const positions = memberPubkeys.map(pk => beaconPositions[pk]).filter(Boolean)
+  if (beaconMap && positions.length === 1) {
+    beaconMap.flyTo({ center: [positions[0].lon, positions[0].lat], zoom: 16, speed: 1.2 })
+  } else if (beaconMap && positions.length > 1) {
+    const lngs = positions.map(p => p.lon)
+    const lats = positions.map(p => p.lat)
+    beaconMap.fitBounds(
+      [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+      { padding: 60, speed: 1.2 }
+    )
   }
 
-  duressAlertActive = { member: memberPubkey, timestamp: Date.now() }
+  duressAlertActive = { member: memberPubkeys[0], timestamp: Date.now() }
 }
 
 function dismissDuressAlert() {
@@ -1159,9 +1165,7 @@ function handleVerify(e) {
       const names = members.map(m => getMemberName(m, isDemo))
       const label = names.length > 0 ? names.join(', ') : 'someone'
       textEl.textContent = `Duress — ${label} may be under coercion.`
-      for (const member of members) {
-        showDuressAlert(member)
-      }
+      showDuressAlert(members)
       break
     }
     case 'stale':

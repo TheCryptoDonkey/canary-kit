@@ -433,10 +433,10 @@ Notes:
 
 **Round-Trip Verification:**
 
-| #  | Input word | Seed   | Members              | Counter | Expected status | Expected member |
-|----|------------|--------|----------------------|---------|-----------------|-----------------|
-| 9  | `garnet`   | SEED_1 | [PUBKEY_A, PUBKEY_B] | 0       | `verified`      | —               |
-| 10 | `theory`   | SEED_1 | [PUBKEY_A, PUBKEY_B] | 0       | `duress`        | PUBKEY_A        |
+| #  | Input word | Seed   | Members              | Counter | Expected status | Expected members |
+|----|------------|--------|----------------------|---------|-----------------|------------------|
+| 9  | `garnet`   | SEED_1 | [PUBKEY_A, PUBKEY_B] | 0       | `verified`      | —                |
+| 10 | `theory`   | SEED_1 | [PUBKEY_A, PUBKEY_B] | 0       | `duress`        | [PUBKEY_A]       |
 
 ## Dependencies
 
