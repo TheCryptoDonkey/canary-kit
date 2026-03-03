@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { verifyWord, type VerifyResult } from './verify.js'
-import { deriveVerificationWord, deriveDuressWord } from './derive.js'
+import { deriveVerificationWord, deriveDuressWord, deriveVerificationPhrase, deriveDuressPhrase } from './derive.js'
 
 const TEST_SEED = 'a'.repeat(64)
 const ALICE = '1'.repeat(64)
@@ -122,5 +122,57 @@ describe('cross-counter collision avoidance (verifyWord)', () => {
         `counter=${c}: stale word "${prevVerify}" classified as "${result.status}"`,
       ).not.toBe('duress')
     }
+  })
+})
+
+describe('verifyWord multi-word', () => {
+  it('returns verified for correct 2-word verification phrase', () => {
+    const phrase = deriveVerificationPhrase(TEST_SEED, COUNTER, 2).join(' ')
+    const result = verifyWord(phrase, TEST_SEED, MEMBERS, COUNTER, 2)
+    expect(result.status).toBe('verified')
+  })
+
+  it('returns verified for correct 3-word verification phrase', () => {
+    const phrase = deriveVerificationPhrase(TEST_SEED, COUNTER, 3).join(' ')
+    const result = verifyWord(phrase, TEST_SEED, MEMBERS, COUNTER, 3)
+    expect(result.status).toBe('verified')
+  })
+
+  it('returns duress for member duress phrase (wordCount=2)', () => {
+    const phrase = deriveDuressPhrase(TEST_SEED, ALICE, COUNTER, 2).join(' ')
+    const result = verifyWord(phrase, TEST_SEED, MEMBERS, COUNTER, 2)
+    expect(result.status).toBe('duress')
+    expect(result.members).toEqual([ALICE])
+  })
+
+  it('returns stale for previous counter verification phrase (wordCount=2)', () => {
+    const phrase = deriveVerificationPhrase(TEST_SEED, COUNTER - 1, 2).join(' ')
+    const result = verifyWord(phrase, TEST_SEED, MEMBERS, COUNTER, 2)
+    expect(result.status).toBe('stale')
+  })
+
+  it('returns failed for unknown multi-word input', () => {
+    const result = verifyWord('alpha bravo', TEST_SEED, MEMBERS, COUNTER, 2)
+    expect(result.status).toBe('failed')
+  })
+
+  it('normalises multi-word input (extra spaces, case)', () => {
+    const phrase = deriveVerificationPhrase(TEST_SEED, COUNTER, 2).join(' ')
+    const messy = '  ' + phrase.toUpperCase().replace(' ', '   ') + '  '
+    const result = verifyWord(messy, TEST_SEED, MEMBERS, COUNTER, 2)
+    expect(result.status).toBe('verified')
+  })
+
+  it('detects stale duress phrase from previous counter (wordCount=2)', () => {
+    const phrase = deriveDuressPhrase(TEST_SEED, ALICE, 0, 2).join(' ')
+    const result = verifyWord(phrase, TEST_SEED, MEMBERS, 1, 2)
+    expect(result.status).toBe('duress')
+    expect(result.members).toEqual([ALICE])
+  })
+
+  it('defaults to wordCount=1 when omitted (backward compat)', () => {
+    const word = deriveVerificationWord(TEST_SEED, COUNTER)
+    const result = verifyWord(word, TEST_SEED, MEMBERS, COUNTER)
+    expect(result.status).toBe('verified')
   })
 })

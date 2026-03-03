@@ -1,4 +1,4 @@
-import { deriveVerificationWord, deriveDuressWord } from './derive.js'
+import { deriveVerificationWord, deriveDuressWord, deriveVerificationPhrase, deriveDuressPhrase } from './derive.js'
 
 export type VerifyStatus = 'verified' | 'duress' | 'stale' | 'failed'
 
@@ -27,18 +27,29 @@ export function verifyWord(
   seedHex: string,
   memberPubkeys: string[],
   counter: number,
+  wordCount: 1 | 2 | 3 = 1,
 ): VerifyResult {
-  const normalised = spokenWord.toLowerCase().trim()
+  const normalised = spokenWord.toLowerCase().trim().replace(/\s+/g, ' ')
+
+  function verifyPhrase(seed: string, c: number): string {
+    if (wordCount === 1) return deriveVerificationWord(seed, c)
+    return deriveVerificationPhrase(seed, c, wordCount).join(' ')
+  }
+
+  function duressPhrase(seed: string, pubkey: string, c: number): string {
+    if (wordCount === 1) return deriveDuressWord(seed, pubkey, c)
+    return deriveDuressPhrase(seed, pubkey, c, wordCount).join(' ')
+  }
 
   // 1. Check current verification word
-  if (normalised === deriveVerificationWord(seedHex, counter)) {
+  if (normalised === verifyPhrase(seedHex, counter)) {
     return { status: 'verified' }
   }
 
   // 2. Check ALL members' duress words at current counter — collect all matches
   const currentMatches: string[] = []
   for (const pubkey of memberPubkeys) {
-    if (normalised === deriveDuressWord(seedHex, pubkey, counter)) {
+    if (normalised === duressPhrase(seedHex, pubkey, counter)) {
       currentMatches.push(pubkey)
     }
   }
@@ -50,7 +61,7 @@ export function verifyWord(
   if (counter > 0) {
     const staleMatches: string[] = []
     for (const pubkey of memberPubkeys) {
-      if (normalised === deriveDuressWord(seedHex, pubkey, counter - 1)) {
+      if (normalised === duressPhrase(seedHex, pubkey, counter - 1)) {
         staleMatches.push(pubkey)
       }
     }
@@ -60,7 +71,7 @@ export function verifyWord(
   }
 
   // 4. Check previous window's verification word (1-window lookback for sync issues)
-  if (counter > 0 && normalised === deriveVerificationWord(seedHex, counter - 1)) {
+  if (counter > 0 && normalised === verifyPhrase(seedHex, counter - 1)) {
     return { status: 'stale' }
   }
 

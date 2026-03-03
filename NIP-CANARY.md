@@ -70,9 +70,10 @@ index = uint16_be(mac[0..2]) mod 2048
 word  = wordlist[index]
 ```
 
-If the duress word collides with the verification word for the same counter, the
-deterministic multi-suffix retry algorithm from CANARY-DURESS applies (append suffix
-bytes 0x01..0xFF to the key until distinct, error if exhausted).
+If the duress word collides with any verification word within the ±1 counter
+tolerance window (counter−1, counter, counter+1), the deterministic multi-suffix
+retry algorithm from CANARY-DURESS applies (append suffix bytes 0x01..0xFF to the
+key until distinct, error if exhausted).
 
 ### Counter Derivation
 
@@ -115,6 +116,7 @@ Kind 28800  Seed Distribution         Ephemeral
 Kind 38801  Member Update             Replaceable
 Kind 28801  Re-seed                   Ephemeral
 Kind 28802  Word Used / Duress Alert  Ephemeral
+Kind 20800  Encrypted Location Beacon Ephemeral
 ```
 
 ### Kind 38800: Canary Group
@@ -214,6 +216,12 @@ Published by the group creator to record a membership change.
   adversarial, but MUST reseed if the removal is due to compromise or duress.
 - When `action` is `"add"`, the creator distributes the current seed to the new member.
 
+**Data model note:** Kind 38801 is a replaceable event keyed by group identifier. Only the
+most recent member update per group is visible to relays. Clients MUST derive the canonical
+member list from kind 38800's `p` tags, which are updated by the creator whenever membership
+changes. Kind 38801 serves as a change notification (latest-wins by design), not as an
+accumulative membership log.
+
 ### Kind 28801: Re-seed
 
 Signals that a re-seed is in progress. Individual seed deliveries follow as kind 28800
@@ -276,6 +284,62 @@ Per the CANARY protocol counter acceptance rules (see [CANARY.md](CANARY.md)):
 - `used_by` in the encrypted payload MUST equal the event signer's pubkey. Clients MUST
   reject events where `used_by` does not match the signer. If `used_by` is omitted,
   the signer is assumed to be the user who triggered the advancement.
+
+### Kind 20800: Encrypted Location Beacon
+
+Ephemeral event carrying AES-256-GCM encrypted location data. Used for periodic heartbeat
+beacons and duress location alerts. Encrypted with a beacon key derived from the group seed
+(not NIP-44).
+
+```json
+{
+  "kind": 20800,
+  "content": "<AES-256-GCM encrypted payload>",
+  "tags": [
+    ["h", "<group-identifier>"]
+  ]
+}
+```
+
+The `h` tag identifies the group. The encrypted payload varies by type:
+
+**Normal beacon payload:**
+
+```json
+{
+  "geohash": "<geohash string>",
+  "precision": 6,
+  "timestamp": 1709510400
+}
+```
+
+**Duress alert payload:**
+
+```json
+{
+  "type": "duress",
+  "member": "<pubkey of member under duress>",
+  "geohash": "<geohash string>",
+  "precision": 11,
+  "locationSource": "beacon",
+  "timestamp": 1709510400
+}
+```
+
+| Field            | Required | Description                                                    |
+|------------------|----------|----------------------------------------------------------------|
+| `type`           | MUST     | `"duress"` — distinguishes from normal beacons                |
+| `member`         | MUST     | Pubkey of the member who is under duress                       |
+| `geohash`        | MUST     | Location geohash (empty string if unavailable)                 |
+| `precision`      | MUST     | Geohash precision (0 if unavailable, 11 for high-precision duress) |
+| `locationSource` | MUST     | `"beacon"`, `"verifier"`, or `"none"`                         |
+| `timestamp`      | MUST     | Unix timestamp of the alert                                    |
+
+Duress alert beacons SHOULD use maximum geohash precision (11) to aid emergency response.
+The `locationSource` indicates where the location came from: the member's own beacon, the
+verifier's location, or unavailable.
+
+Beacon key derivation: `HMAC-SHA256(key=seed, data=utf8("canary:beacon:key"))`.
 
 ## Group Lifecycle
 

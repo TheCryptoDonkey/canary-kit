@@ -179,7 +179,7 @@ export function verifyToken(
   const matches: string[] = []
   for (const identity of identities) {
     for (let c = lo; c <= hi; c++) {
-      if (normalised === deriveDuressToken(secret, context, identity, c, encoding)) {
+      if (normalised === deriveDuressToken(secret, context, identity, c, encoding, tolerance)) {
         matches.push(identity)
         break // found match for this identity, move to next
       }

@@ -396,4 +396,20 @@ describe('cross-counter collision avoidance', () => {
     expect(result.status).toBe('duress')
     expect(result.identities).toEqual([IDENTITY_A])
   })
+
+  it('verifyToken passes tolerance as maxTolerance to deriveDuressToken', () => {
+    // With tolerance=2, duress tokens should be collision-free within ±2.
+    // If verifyToken doesn't pass tolerance as maxTolerance, a duress token
+    // derived with default maxTolerance=1 could collide with normal at ±2.
+    const tolerance = 2
+
+    for (let c = 2; c < 100; c++) {
+      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, c, undefined, tolerance)
+      const result = verifyToken(SECRET_1, 'test', c, duress, [IDENTITY_A], { tolerance })
+      expect(
+        result.status,
+        `counter=${c}: duress token "${duress}" classified as "${result.status}" with tolerance=${tolerance}`,
+      ).toBe('duress')
+    }
+  })
 })

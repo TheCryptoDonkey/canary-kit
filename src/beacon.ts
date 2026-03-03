@@ -100,7 +100,7 @@ export async function decryptBeacon(
 // Duress Alert
 // ---------------------------------------------------------------------------
 
-/** Decrypted content of an enhanced kind 28802 duress alert event. */
+/** Decrypted content of a duress alert beacon (kind 20800, AES-GCM encrypted). */
 export interface DuressAlert {
   type: 'duress'
   member: string
