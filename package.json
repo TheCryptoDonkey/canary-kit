@@ -21,6 +21,14 @@
     "./beacon": {
       "types": "./dist/beacon.d.ts",
       "default": "./dist/beacon.js"
+    },
+    "./token": {
+      "types": "./dist/token.d.ts",
+      "default": "./dist/token.js"
+    },
+    "./encoding": {
+      "types": "./dist/encoding.d.ts",
+      "default": "./dist/encoding.js"
     }
   },
   "files": [

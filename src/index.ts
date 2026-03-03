@@ -48,3 +48,24 @@ export {
   type DuressAlert,
   type DuressLocation,
 } from './beacon.js'
+
+// --- CANARY Protocol (universal API) ---
+export {
+  deriveTokenBytes,
+  deriveToken,
+  deriveDuressTokenBytes,
+  deriveDuressToken,
+  verifyToken,
+  deriveLivenessToken,
+  type TokenVerifyResult,
+  type VerifyOptions,
+} from './token.js'
+
+export {
+  encodeAsWords,
+  encodeAsPin,
+  encodeAsHex,
+  encodeToken,
+  type TokenEncoding,
+  DEFAULT_ENCODING,
+} from './encoding.js'
