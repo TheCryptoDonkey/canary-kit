@@ -37,6 +37,10 @@
     "./session": {
       "types": "./dist/session.d.ts",
       "import": "./dist/session.js"
+    },
+    "./sync": {
+      "types": "./dist/sync.d.ts",
+      "import": "./dist/sync.js"
     }
   },
   "files": [
