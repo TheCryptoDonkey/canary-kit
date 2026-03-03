@@ -162,12 +162,14 @@ Each identity has a unique duress token, derived independently from the verifica
 token:
 
 ```
-duress_bytes = HMAC-SHA256(secret, utf8(context + ":duress") || utf8(identity) || counter_be32)
+duress_bytes = HMAC-SHA256(secret, utf8(context + ":duress") || 0x00 || utf8(identity) || counter_be32)
 ```
 
 Where:
 
 - `context + ":duress"` — the verification context with `":duress"` appended
+- `0x00` — a null-byte separator preventing concatenation ambiguity between the context
+  suffix and the identity string
 - `identity` — UTF-8 encoded identifier (pubkey, username, employee ID)
 - Same `counter` as the verification token
 
@@ -182,7 +184,7 @@ counter, the implementation MUST re-derive by appending the byte `0x01` to the H
 data:
 
 ```
-duress_bytes = HMAC-SHA256(secret, utf8(context + ":duress") || utf8(identity) || counter_be32 || 0x01)
+duress_bytes = HMAC-SHA256(secret, utf8(context + ":duress") || 0x00 || utf8(identity) || counter_be32 || 0x01)
 ```
 
 Collision avoidance operates at the encoding level, not the byte level, because different
@@ -236,7 +238,7 @@ the shared secret:
 The protocol defines a liveness token for heartbeat-based absence detection:
 
 ```
-liveness_bytes = HMAC-SHA256(secret, utf8(context + ":alive") || utf8(identity) || counter_be32)
+liveness_bytes = HMAC-SHA256(secret, utf8(context + ":alive") || 0x00 || utf8(identity) || counter_be32)
 ```
 
 The liveness token proves both identity and knowledge of the secret — not just a ping.
@@ -705,10 +707,10 @@ CANARY-DERIVE:
   token_bytes = HMAC-SHA256(hex_to_bytes(SECRET), utf8(CONTEXT) || counter_be32)
 
 CANARY-DURESS:
-  duress_bytes = HMAC-SHA256(hex_to_bytes(SECRET), utf8(CONTEXT + ":duress") || utf8(IDENTITY) || counter_be32)
+  duress_bytes = HMAC-SHA256(hex_to_bytes(SECRET), utf8(CONTEXT + ":duress") || 0x00 || utf8(IDENTITY) || counter_be32)
 
 Liveness:
-  liveness_bytes = HMAC-SHA256(hex_to_bytes(SECRET), utf8(CONTEXT + ":alive") || utf8(IDENTITY) || counter_be32)
+  liveness_bytes = HMAC-SHA256(hex_to_bytes(SECRET), utf8(CONTEXT + ":alive") || 0x00 || utf8(IDENTITY) || counter_be32)
 ```
 
 **Vector Table:**
@@ -720,18 +722,18 @@ Liveness:
 | 3  | deriveToken        | `canary:verify`  | —          | 1       | 1 word      | `famous`                                                           |
 | 4  | deriveToken        | `trott:handoff`  | —          | 0       | 4-digit PIN | `2796`                                                             |
 | 5  | deriveToken        | `signet:verify`  | —          | 0       | 3 words     | `throw drafter category`                                           |
-| 6  | deriveDuressToken  | `canary:verify`  | `alice`    | 0       | 1 word      | `galley`                                                           |
-| 7  | deriveDuressToken  | `trott:handoff`  | `rider123` | 0       | 4-digit PIN | `2269`                                                             |
+| 6  | deriveDuressToken  | `canary:verify`  | `alice`    | 0       | 1 word      | `airport`                                                          |
+| 7  | deriveDuressToken  | `trott:handoff`  | `rider123` | 0       | 4-digit PIN | `0325`                                                             |
 | 8  | verifyToken        | `canary:verify`  | `alice`    | 0       | input: `net`   | `{ status: 'valid' }`                                           |
-| 9  | verifyToken        | `canary:verify`  | `alice`    | 0       | input: `galley`| `{ status: 'duress', identity: 'alice' }`                       |
-| 10 | deriveLivenessToken| `canary:verify`  | `alice`    | 0       | raw hex     | `bb36c42d8bd4c2a5bb48747d38414b672b55629c03e59757b9f73688d7ece82e` |
+| 9  | verifyToken        | `canary:verify`  | `alice`    | 0       | input: `airport`| `{ status: 'duress', identity: 'alice' }`                      |
+| 10 | deriveLivenessToken| `canary:verify`  | `alice`    | 0       | raw hex     | `b38a10676ea8d4e716ad606e0b2ae7d9678e47ff44b0920a68ed6cb02e9bb858` |
 
 Notes:
 
 - Vector 5 uses context `signet:verify`, demonstrating that the same secret derives
   independent tokens per context.
-- Vector 6: `galley` is distinct from `net` — no collision re-derivation needed.
-- Vector 7: `2269` is distinct from `2796` — no collision re-derivation needed.
+- Vector 6: `airport` is distinct from `net` — no collision re-derivation needed.
+- Vector 7: `0325` is distinct from `2796` — no collision re-derivation needed.
 - Vectors 8–9: Round-trip verification confirms correct classification of normal tokens
   as `valid` and duress tokens as `duress` with the correct identity.
 

@@ -187,6 +187,40 @@ describe('verifyToken', () => {
   })
 })
 
+describe('counterBe32 guards', () => {
+  it('throws on negative counter', () => {
+    expect(() => deriveTokenBytes(SECRET_1, 'ctx', -1)).toThrow(RangeError)
+  })
+
+  it('throws on counter exceeding uint32 max', () => {
+    expect(() => deriveTokenBytes(SECRET_1, 'ctx', 0xFFFFFFFF + 1)).toThrow(RangeError)
+  })
+
+  it('throws on fractional counter', () => {
+    expect(() => deriveTokenBytes(SECRET_1, 'ctx', 1.5)).toThrow(RangeError)
+  })
+})
+
+describe('tolerance window', () => {
+  it('tolerance window does not wrap at counter=0', () => {
+    const token = deriveToken(SECRET_1, 'ctx', 0xFFFFFFFF)
+    const result = verifyToken(SECRET_1, 'ctx', 0, token, [], { tolerance: 1 })
+    expect(result.status).toBe('invalid')
+  })
+
+  it('throws on negative tolerance', () => {
+    expect(() => verifyToken(SECRET_1, 'ctx', 0, 'test', [], { tolerance: -1 })).toThrow(RangeError)
+  })
+})
+
+describe('concatenation ambiguity', () => {
+  it('concatenation ambiguity is resolved by null-byte separator', () => {
+    const a = deriveDuressToken(SECRET_1, 'x:duress', '', 0)
+    const b = deriveDuressToken(SECRET_1, 'x', ':duress', 0)
+    expect(a).not.toBe(b)
+  })
+})
+
 describe('deriveLivenessToken', () => {
   it('returns 32 bytes', () => {
     const bytes = deriveLivenessToken(SECRET_1, 'test', IDENTITY_A, 0)

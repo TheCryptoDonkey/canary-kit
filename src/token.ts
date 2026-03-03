@@ -8,9 +8,12 @@ function utf8(str: string): Uint8Array {
 }
 
 function counterBe32(counter: number): Uint8Array {
+  if (!Number.isInteger(counter) || counter < 0 || counter > 0xFFFFFFFF) {
+    throw new RangeError(`Counter must be an integer 0–${0xFFFFFFFF}, got ${counter}`)
+  }
   const buf = new Uint8Array(4)
   const view = new DataView(buf.buffer)
-  view.setUint32(0, counter >>> 0, false)
+  view.setUint32(0, counter, false)
   return buf
 }
 
@@ -50,7 +53,10 @@ export function deriveToken(
 /**
  * CANARY-DURESS: Derive raw duress token bytes for a specific identity.
  *
- * Algorithm: HMAC-SHA256(secret, utf8(context + ":duress") || utf8(identity) || counter_be32)
+ * Algorithm: HMAC-SHA256(secret, utf8(context + ":duress") || 0x00 || utf8(identity) || counter_be32)
+ *
+ * The null-byte separator between the context suffix and identity prevents concatenation
+ * ambiguity (e.g. context="x:duress" + identity="" vs context="x" + identity=":duress").
  *
  * NOTE: Returns raw bytes without collision avoidance. Use deriveDuressToken()
  * for encoded output with guaranteed non-collision against the normal token.
@@ -62,7 +68,7 @@ export function deriveDuressTokenBytes(
   counter: number,
 ): Uint8Array {
   const key = normaliseSecret(secret)
-  const data = concatBytes(utf8(context + ':duress'), utf8(identity), counterBe32(counter))
+  const data = concatBytes(utf8(context + ':duress'), new Uint8Array([0x00]), utf8(identity), counterBe32(counter))
   return hmacSha256(key, data)
 }
 
@@ -81,7 +87,7 @@ export function deriveDuressToken(
 ): string {
   const normalToken = deriveToken(secret, context, counter, encoding)
   const key = normaliseSecret(secret)
-  const baseData = concatBytes(utf8(context + ':duress'), utf8(identity), counterBe32(counter))
+  const baseData = concatBytes(utf8(context + ':duress'), new Uint8Array([0x00]), utf8(identity), counterBe32(counter))
 
   let bytes = hmacSha256(key, baseData)
   let token = encodeToken(bytes, encoding)
@@ -129,10 +135,15 @@ export function verifyToken(
 ): TokenVerifyResult {
   const encoding = options?.encoding ?? DEFAULT_ENCODING
   const tolerance = options?.tolerance ?? 0
+  if (!Number.isInteger(tolerance) || tolerance < 0) {
+    throw new RangeError('Tolerance must be a non-negative integer')
+  }
   const normalised = input.toLowerCase().trim()
 
-  // 1. Check normal token within tolerance window
-  for (let c = counter - tolerance; c <= counter + tolerance; c++) {
+  // 1. Check normal token within tolerance window (clamped to valid counter range)
+  const lo = Math.max(0, counter - tolerance)
+  const hi = Math.min(0xFFFFFFFF, counter + tolerance)
+  for (let c = lo; c <= hi; c++) {
     if (normalised === deriveToken(secret, context, c, encoding)) {
       return { status: 'valid' }
     }
@@ -140,7 +151,7 @@ export function verifyToken(
 
   // 2. Check duress tokens for each identity
   for (const identity of identities) {
-    for (let c = counter - tolerance; c <= counter + tolerance; c++) {
+    for (let c = lo; c <= hi; c++) {
       if (normalised === deriveDuressToken(secret, context, identity, c, encoding)) {
         return { status: 'duress', identity }
       }
@@ -154,7 +165,10 @@ export function verifyToken(
 /**
  * CANARY-DURESS: Derive a liveness heartbeat token for dead man's switch.
  *
- * Algorithm: HMAC-SHA256(secret, utf8(context + ":alive") || utf8(identity) || counter_be32)
+ * Algorithm: HMAC-SHA256(secret, utf8(context + ":alive") || 0x00 || utf8(identity) || counter_be32)
+ *
+ * The null-byte separator between the context suffix and identity prevents concatenation
+ * ambiguity.
  *
  * The liveness token proves both identity and knowledge of the secret.
  * If heartbeats stop arriving, the implementation triggers its DMS response.
@@ -166,6 +180,6 @@ export function deriveLivenessToken(
   counter: number,
 ): Uint8Array {
   const key = normaliseSecret(secret)
-  const data = concatBytes(utf8(context + ':alive'), utf8(identity), counterBe32(counter))
+  const data = concatBytes(utf8(context + ':alive'), new Uint8Array([0x00]), utf8(identity), counterBe32(counter))
   return hmacSha256(key, data)
 }

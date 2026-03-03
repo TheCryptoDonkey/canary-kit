@@ -18,7 +18,7 @@ import { bytesToHex } from './crypto.js'
  *   HMAC-SHA256(secret, utf8(context) || counter_be32)
  *
  * Algorithm (CANARY-DURESS):
- *   HMAC-SHA256(secret, utf8(context + ":duress") || utf8(identity) || counter_be32)
+ *   HMAC-SHA256(secret, utf8(context + ":duress") || 0x00 || utf8(identity) || counter_be32)
  *   Re-derived with 0x01 suffix if encoded output collides with normal token.
  */
 
@@ -54,14 +54,14 @@ describe('CANARY-DURESS protocol vectors', () => {
     const word = deriveDuressToken(SECRET, CONTEXT, IDENTITY, 0)
     const normal = deriveToken(SECRET, CONTEXT, 0)
     expect(word).not.toBe(normal)
-    expect(word).toBe('galley')
+    expect(word).toBe('airport')
   })
 
   it('vector 7: duress PIN — context="trott:handoff", identity="rider123"', () => {
     const pin = deriveDuressToken(SECRET, 'trott:handoff', 'rider123', 0, { format: 'pin', digits: 4 })
     const normal = deriveToken(SECRET, 'trott:handoff', 0, { format: 'pin', digits: 4 })
     expect(pin).not.toBe(normal)
-    expect(pin).toBe('2269')
+    expect(pin).toBe('0325')
   })
 
   it('vector 8: verification round-trip — valid', () => {
@@ -79,6 +79,6 @@ describe('CANARY-DURESS protocol vectors', () => {
 
   it('vector 10: liveness token', () => {
     const hex = bytesToHex(deriveLivenessToken(SECRET, CONTEXT, IDENTITY, 0))
-    expect(hex).toBe('bb36c42d8bd4c2a5bb48747d38414b672b55629c03e59757b9f73688d7ece82e')
+    expect(hex).toBe('b38a10676ea8d4e716ad606e0b2ae7d9678e47ff44b0920a68ed6cb02e9bb858')
   })
 })
