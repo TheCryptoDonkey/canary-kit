@@ -19,7 +19,7 @@ import { bytesToHex } from './crypto.js'
  *
  * Algorithm (CANARY-DURESS):
  *   HMAC-SHA256(secret, utf8(context + ":duress") || 0x00 || utf8(identity) || counter_be32)
- *   Re-derived with 0x01 suffix if encoded output collides with normal token.
+ *   Re-derived with incrementing suffix (0x01..0xFF) if encoded output collides with normal token.
  */
 
 const SECRET = '0000000000000000000000000000000000000000000000000000000000000001'

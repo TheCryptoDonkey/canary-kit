@@ -1154,13 +1154,13 @@ function handleVerify(e) {
     case 'duress': {
       resultEl.classList.add('verify-result--duress')
       iconEl.textContent = '⚠'
-      const firstMember = result.members?.[0]
-      const memberName = firstMember
-        ? getMemberName(firstMember, state.activeGroupId === 'demo')
-        : 'someone'
-      textEl.textContent = `Duress — ${memberName} may be under coercion.`
-      if (firstMember) {
-        showDuressAlert(firstMember)
+      const members = result.members ?? []
+      const isDemo = state.activeGroupId === 'demo'
+      const names = members.map(m => getMemberName(m, isDemo))
+      const label = names.length > 0 ? names.join(', ') : 'someone'
+      textEl.textContent = `Duress — ${label} may be under coercion.`
+      for (const member of members) {
+        showDuressAlert(member)
       }
       break
     }

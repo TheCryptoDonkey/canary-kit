@@ -146,8 +146,8 @@ re-sync messages) MUST enforce the following rules:
    `new_counter <= local_counter`. This provides replay protection and prevents
    counter rollback.
 
-3. **Bounded jumps:** Implementations SHOULD reject counter updates where
-   `new_counter > time_based_counter + max_offset`. The RECOMMENDED `max_offset` is
+3. **Bounded jumps:** Implementations MUST reject counter updates where
+   `new_counter > time_based_counter + max_offset`. The default `max_offset` is
    100. This bounds the damage from a compromised sender attempting to desynchronise
    the group by jumping the counter far ahead.
 
@@ -204,8 +204,10 @@ Coercion resistance and liveness monitoring. The differentiator from existing st
 
 ### Active Duress — Token Derivation
 
-Each identity has a unique duress token, derived independently from the verification
-token:
+Each identity has a distinct duress token, derived independently from the verification
+token. In finite output spaces (e.g. 2048-word wordlist), two identities may derive
+the same duress token — this is expected and handled by multi-match attribution (see
+Verification Flow).
 
 ```
 duress_bytes = HMAC-SHA256(secret, utf8(context + ":duress") || 0x00 || utf8(identity) || counter_be32)

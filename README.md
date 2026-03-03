@@ -83,7 +83,7 @@ import {
 |---|---|---|
 | `deriveVerificationWord` | `(seedHex: string, counter: number) => string` | Derives the single verification word for all group members |
 | `deriveVerificationPhrase` | `(seedHex: string, counter: number, wordCount: 1 \| 2 \| 3) => string[]` | Derives a multi-word verification phrase |
-| `deriveDuressWord` | `(seedHex: string, memberPubkeyHex: string, counter: number) => string` | Derives a member's unique duress word; guaranteed not to collide with the verification word |
+| `deriveDuressWord` | `(seedHex: string, memberPubkeyHex: string, counter: number) => string` | Derives a member's duress word; guaranteed distinct from the verification word via multi-suffix retry |
 | `deriveDuressPhrase` | `(seedHex: string, memberPubkeyHex: string, counter: number, wordCount: 1 \| 2 \| 3) => string[]` | Derives a member's multi-word duress phrase |
 
 ### CANARY Protocol (Universal)

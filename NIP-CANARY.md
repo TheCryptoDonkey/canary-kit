@@ -58,8 +58,9 @@ Different 2-byte slices MAY produce the same index; this is a valid output, not 
 
 #### Duress Word
 
-Each member has a unique duress word derived per the CANARY-DURESS collision avoidance
-algorithm (see [CANARY.md](CANARY.md)). The member's Nostr public key (32-byte hex) is
+Each member has a distinct duress word derived per the CANARY-DURESS collision avoidance
+algorithm (see [CANARY.md](CANARY.md)). In finite wordlist spaces, two members may
+derive the same duress word — this is handled by multi-match attribution. The member's Nostr public key (32-byte hex) is
 used as the identity parameter, and the group seed is used as the shared secret:
 
 ```
@@ -269,9 +270,9 @@ Per the CANARY protocol counter acceptance rules (see [CANARY.md](CANARY.md)):
   (kind 38800). Clients MUST reject events from non-members.
 - `new_counter` in the encrypted payload MUST be greater than the client's current
   counter. Clients MUST reject `new_counter <= local_counter` (replay protection).
-- `new_counter` SHOULD NOT exceed `time_based_counter + 100`. Clients SHOULD reject
+- `new_counter` MUST NOT exceed `time_based_counter + 100`. Clients MUST reject
   larger jumps to bound counter drift from compromised senders.
-- Clients SHOULD deduplicate events by event ID.
+- Clients MUST deduplicate events by event ID.
 
 ## Group Lifecycle
 
