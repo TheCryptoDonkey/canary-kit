@@ -1,0 +1,206 @@
+// app/panels/members.ts — Members panel: list members and generate invites
+
+import { getState } from '../state.js'
+import { removeGroupMember } from '../actions/groups.js'
+import { createInvite } from '../invite.js'
+import { generateQR } from '../components/qr.js'
+
+// ── Helpers ────────────────────────────────────────────────────
+
+/**
+ * Format a pubkey for display: first 8 chars + ellipsis + last 4 chars.
+ */
+function formatPubkey(pubkey: string): string {
+  return `${pubkey.slice(0, 8)}\u2026${pubkey.slice(-4)}`
+}
+
+// ── Invite modal ───────────────────────────────────────────────
+
+/**
+ * Open the invite modal with QR and Paste tabs.
+ * Uses a plain <dialog> element rather than the shared modal helper so
+ * we can manage two tabs without a form submit workflow.
+ */
+function showInviteModal(payload: string, confirmCode: string): void {
+  const svgMarkup = generateQR(payload)
+
+  // Reuse or create an invite-specific dialog.
+  let dialog = document.getElementById('invite-modal') as HTMLDialogElement | null
+  if (!dialog) {
+    dialog = document.createElement('dialog')
+    dialog.id = 'invite-modal'
+    dialog.className = 'modal'
+    document.body.appendChild(dialog)
+  }
+
+  dialog.innerHTML = `
+    <div class="modal__form">
+      <h2 class="modal__title">Invite Member</h2>
+
+      <div class="invite-tabs">
+        <button class="invite-tab invite-tab--active" data-tab="qr" type="button">QR Code</button>
+        <button class="invite-tab" data-tab="paste" type="button">Paste Link</button>
+      </div>
+
+      <div class="invite-content" id="invite-content-qr">
+        <div class="qr-container">
+          ${svgMarkup}
+        </div>
+        <p class="invite-hint">Scan this QR code to join the group.</p>
+        <div class="confirm-code">
+          <span class="confirm-code__label">Confirm code</span>
+          <span class="confirm-code__value">${confirmCode}</span>
+        </div>
+      </div>
+
+      <div class="invite-content" id="invite-content-paste" hidden>
+        <textarea
+          class="input invite-string"
+          id="invite-string-textarea"
+          readonly
+          rows="5"
+          spellcheck="false"
+        >${payload}</textarea>
+        <div class="members-actions">
+          <button class="btn btn--sm" id="copy-invite-btn" type="button">Copy</button>
+        </div>
+        <div class="confirm-code">
+          <span class="confirm-code__label">Confirm code</span>
+          <span class="confirm-code__value">${confirmCode}</span>
+        </div>
+      </div>
+
+      <div class="modal__actions">
+        <button class="btn" id="invite-close-btn" type="button">Close</button>
+      </div>
+    </div>
+  `
+
+  // Close on backdrop click.
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) dialog!.close()
+  })
+
+  // Close button.
+  dialog.querySelector<HTMLButtonElement>('#invite-close-btn')?.addEventListener('click', () => {
+    dialog!.close()
+  })
+
+  // Tab switching.
+  const tabBar = dialog.querySelector<HTMLElement>('.invite-tabs')
+  const qrPane = dialog.querySelector<HTMLElement>('#invite-content-qr')
+  const pastePane = dialog.querySelector<HTMLElement>('#invite-content-paste')
+
+  tabBar?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-tab]')
+    if (!btn) return
+    const tab = btn.dataset.tab
+
+    // Update active tab button.
+    tabBar.querySelectorAll<HTMLButtonElement>('.invite-tab').forEach((t) => {
+      t.classList.toggle('invite-tab--active', t.dataset.tab === tab)
+    })
+
+    // Show/hide panes.
+    if (qrPane) qrPane.hidden = tab !== 'qr'
+    if (pastePane) pastePane.hidden = tab !== 'paste'
+  })
+
+  // Copy button.
+  dialog.querySelector<HTMLButtonElement>('#copy-invite-btn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget as HTMLButtonElement
+    try {
+      await navigator.clipboard.writeText(payload)
+      btn.textContent = 'Copied!'
+      setTimeout(() => {
+        btn.textContent = 'Copy'
+      }, 2000)
+    } catch {
+      // Fallback: select the textarea.
+      const textarea = dialog!.querySelector<HTMLTextAreaElement>('#invite-string-textarea')
+      textarea?.select()
+    }
+  })
+
+  dialog.showModal()
+}
+
+// ── Render ─────────────────────────────────────────────────────
+
+/**
+ * Render the members panel into the given container.
+ * Clears and returns early when no group is active.
+ */
+export function renderMembers(container: HTMLElement): void {
+  const { groups, activeGroupId } = getState()
+
+  if (!activeGroupId) {
+    container.innerHTML = ''
+    return
+  }
+
+  const group = groups[activeGroupId]
+  if (!group) {
+    container.innerHTML = ''
+    return
+  }
+
+  const memberItems =
+    group.members.length > 0
+      ? group.members
+          .map(
+            (pubkey) => `
+          <li class="member-item" data-pubkey="${pubkey}">
+            <span class="member-item__pubkey">${formatPubkey(pubkey)}</span>
+            <button
+              class="btn btn--sm member-item__remove"
+              data-pubkey="${pubkey}"
+              type="button"
+              aria-label="Remove member"
+            >\u2715</button>
+          </li>`,
+          )
+          .join('')
+      : `<li class="member-item member-item--empty">No members yet.</li>`
+
+  container.innerHTML = `
+    <section class="panel members-panel">
+      <h2 class="panel__title">Members</h2>
+      <ul class="member-list">
+        ${memberItems}
+      </ul>
+      <div class="members-actions">
+        <button class="btn btn--sm" id="invite-btn" type="button">+ Invite</button>
+      </div>
+    </section>
+  `
+
+  // ── Remove member handlers ────────────────────────────────
+
+  container.querySelector<HTMLElement>('.member-list')?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.member-item__remove')
+    if (!btn) return
+    const pubkey = btn.dataset.pubkey
+    if (!pubkey) return
+
+    if (!confirm(`Remove member ${formatPubkey(pubkey)} from the group?\n\nThe group secret will be rotated automatically.`)) {
+      return
+    }
+
+    const { activeGroupId: currentGroupId } = getState()
+    if (!currentGroupId) return
+    removeGroupMember(currentGroupId, pubkey)
+  })
+
+  // ── Invite button ─────────────────────────────────────────
+
+  container.querySelector<HTMLButtonElement>('#invite-btn')?.addEventListener('click', () => {
+    const { groups: currentGroups, activeGroupId: currentGroupId } = getState()
+    if (!currentGroupId) return
+    const currentGroup = currentGroups[currentGroupId]
+    if (!currentGroup) return
+
+    const { payload, confirmCode } = createInvite(currentGroup)
+    showInviteModal(payload, confirmCode)
+  })
+}

@@ -1,0 +1,56 @@
+/* ============================================================
+   CANARY — Design Tokens
+   Ported from docs/style.css — single source of truth for
+   colours, typography, layout, and motion.
+   ============================================================ */
+
+:root {
+  /* Backgrounds — deep slate, not pure black */
+  --bg-deep:    #0a0e17;
+  --bg-surface: #111827;
+  --bg-raised:  #1a2235;
+  --bg-hover:   #222d42;
+
+  /* Amber accent — warm, trustworthy, signal */
+  --amber-50:  #fffbeb;
+  --amber-100: #fef3c7;
+  --amber-200: #fde68a;
+  --amber-300: #fcd34d;
+  --amber-400: #fbbf24;
+  --amber-500: #f59e0b;
+  --amber-600: #d97706;
+  --amber-700: #b45309;
+
+  /* Semantic status */
+  --verified:    #34d399;
+  --verified-bg: rgba(52, 211, 153, 0.08);
+  --duress:      #fbbf24;
+  --duress-bg:   rgba(251, 191, 36, 0.10);
+  --stale:       #fcd34d;
+  --stale-bg:    rgba(252, 211, 77, 0.08);
+  --failed:      #f87171;
+  --failed-bg:   rgba(248, 113, 113, 0.08);
+
+  /* Text */
+  --text-primary:   #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted:     #64748b;
+  --text-bright:    #f8fafc;
+
+  /* Borders */
+  --border:       rgba(148, 163, 184, 0.10);
+  --border-amber: rgba(245, 158, 11, 0.40);
+
+  /* Typography */
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-mono:    'IBM Plex Mono', 'Courier New', monospace;
+  --font-body:    'IBM Plex Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
+
+  /* Layout */
+  --sidebar-width: 320px;
+  --header-height: 56px;
+  --content-max:   860px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
