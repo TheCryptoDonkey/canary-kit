@@ -17,6 +17,10 @@
     "./nostr": {
       "types": "./dist/nostr.d.ts",
       "default": "./dist/nostr.js"
+    },
+    "./beacon": {
+      "types": "./dist/beacon.d.ts",
+      "default": "./dist/beacon.js"
     }
   },
   "files": [

@@ -14,6 +14,10 @@ export interface GroupConfig {
   rotationInterval?: number
   wordCount?: 1 | 2 | 3
   wordlist?: string
+  /** Beacon broadcast interval in seconds (default: 300 = 5 minutes). */
+  beaconInterval?: number
+  /** Geohash precision for normal beacons, 1–11 (default: 6 ≈ 1.2km). */
+  beaconPrecision?: number
 }
 
 /** Persistent state for a canary group. All fields are serialisable. */
@@ -29,6 +33,10 @@ export interface GroupState {
   /** Burn-after-use offset applied on top of the time-based counter. */
   usageOffset: number
   createdAt: number
+  /** Beacon broadcast interval in seconds. */
+  beaconInterval: number
+  /** Geohash precision for normal beacons (1–11). */
+  beaconPrecision: number
 }
 
 /** Generate a cryptographically secure 32-byte seed as a hex string. */
@@ -58,6 +66,8 @@ export function createGroup(config: GroupConfig): GroupState {
     counter: getCounter(now, interval),
     usageOffset: 0,
     createdAt: now,
+    beaconInterval: config.beaconInterval ?? 300,
+    beaconPrecision: config.beaconPrecision ?? 6,
   }
 }
 

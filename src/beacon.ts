@@ -32,10 +32,10 @@ export function deriveBeaconKey(seedHex: string): Uint8Array {
 async function aesGcmEncrypt(key: Uint8Array, plaintext: Uint8Array): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const cryptoKey = await crypto.subtle.importKey(
-    'raw', key, { name: 'AES-GCM' }, false, ['encrypt'],
+    'raw', key as Uint8Array<ArrayBuffer>, { name: 'AES-GCM' }, false, ['encrypt'],
   )
   const ciphertext = new Uint8Array(
-    await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, plaintext),
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, plaintext as Uint8Array<ArrayBuffer>),
   )
   // Prepend 12-byte IV to ciphertext, then base64
   const combined = new Uint8Array(12 + ciphertext.length)
@@ -49,10 +49,10 @@ async function aesGcmDecrypt(key: Uint8Array, content: string): Promise<Uint8Arr
   const iv = combined.slice(0, 12)
   const ciphertext = combined.slice(12)
   const cryptoKey = await crypto.subtle.importKey(
-    'raw', key, { name: 'AES-GCM' }, false, ['decrypt'],
+    'raw', key as Uint8Array<ArrayBuffer>, { name: 'AES-GCM' }, false, ['decrypt'],
   )
   return new Uint8Array(
-    await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, cryptoKey, ciphertext),
+    await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, cryptoKey, ciphertext as Uint8Array<ArrayBuffer>),
   )
 }
 

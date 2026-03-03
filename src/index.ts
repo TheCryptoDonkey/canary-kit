@@ -36,3 +36,15 @@ export {
   type GroupConfig,
   type GroupState,
 } from './group.js'
+
+export {
+  deriveBeaconKey,
+  encryptBeacon,
+  decryptBeacon,
+  buildDuressAlert,
+  encryptDuressAlert,
+  decryptDuressAlert,
+  type BeaconPayload,
+  type DuressAlert,
+  type DuressLocation,
+} from './beacon.js'
