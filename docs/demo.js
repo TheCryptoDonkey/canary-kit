@@ -638,7 +638,7 @@ function showDuressAlert(memberPubkeys) {
     )
   }
 
-  duressAlertActive = { member: memberPubkeys[0], timestamp: Date.now() }
+  duressAlertActive = { members: memberPubkeys, timestamp: Date.now() }
 }
 
 function dismissDuressAlert() {
