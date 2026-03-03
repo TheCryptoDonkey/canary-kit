@@ -1349,6 +1349,45 @@ input::placeholder {
   min-width: 0;
 }
 
+.share-dm-section {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+  margin-top: 0.5rem;
+}
+
+.share-dm-section[hidden] {
+  display: none;
+}
+
+.share-dm-label {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.share-dm-status {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+}
+
+.share-dm-status[hidden] {
+  display: none;
+}
+
+.share-dm-status--ok {
+  color: var(--verified);
+  background: var(--verified-bg);
+}
+
+.share-dm-status--err {
+  color: var(--failed);
+  background: var(--failed-bg);
+}
+
 /* ============================================================
    18. ANIMATIONS
    ============================================================ */

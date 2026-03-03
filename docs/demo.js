@@ -1075,7 +1075,76 @@ function showShareModal(groupId) {
   })
   qrContainer.appendChild(canvas)
 
+  // Show DM section only if we have an identity (can sign)
+  const dmSection = document.getElementById('share-dm-section')
+  dmSection.hidden = !state.identity
+  document.getElementById('share-dm-input').value = ''
+  const dmStatus = document.getElementById('share-dm-status')
+  dmStatus.hidden = true
+
+  // Store active group for DM handler
+  dmSection.dataset.groupId = groupId
+
   document.getElementById('share-modal').showModal()
+}
+
+async function sendInviteDM(groupId, recipientPubkey) {
+  if (!state.identity || !pool || !nostrTools) {
+    throw new Error('Not signed in or Nostr tools unavailable')
+  }
+
+  const payload = buildInvitePayload(groupId)
+  if (!payload) throw new Error('Group not found')
+  payload.groupId = groupId
+
+  const plaintext = JSON.stringify(payload)
+  let content
+
+  // Encrypt with NIP-44
+  if (window.nostr?.nip44?.encrypt) {
+    content = await window.nostr.nip44.encrypt(recipientPubkey, plaintext)
+  } else if (state.identity.privkey) {
+    const nip44 = await import('https://esm.sh/nostr-tools@latest/nip44')
+    const skBytes = new Uint8Array(
+      state.identity.privkey.match(/.{2}/g).map(b => parseInt(b, 16))
+    )
+    const conversationKey = nip44.v2.utils.getConversationKey(skBytes, recipientPubkey)
+    content = nip44.v2.encrypt(plaintext, conversationKey)
+  } else {
+    throw new Error('Cannot encrypt — no private key or NIP-07 extension')
+  }
+
+  const event = {
+    kind: 28800,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [['p', recipientPubkey]],
+    content,
+  }
+
+  const result = await publishEvent(event)
+  if (!result) throw new Error('Failed to publish event')
+  return result
+}
+
+async function resolvePubkey(input) {
+  const raw = input.trim()
+  if (/^[0-9a-f]{64}$/i.test(raw)) return raw.toLowerCase()
+
+  if (raw.startsWith('npub1')) {
+    let nip19 = nostrTools?.nip19
+    if (!nip19) {
+      try {
+        nip19 = await import('https://esm.sh/nostr-tools@latest/nip19')
+      } catch {
+        throw new Error('Cannot decode npub — nostr-tools unavailable')
+      }
+    }
+    const decoded = nip19.decode(raw)
+    if (decoded.type !== 'npub') throw new Error('Not a valid npub')
+    return decoded.data
+  }
+
+  throw new Error('Enter a hex pubkey or npub')
 }
 
 function checkInviteFragment() {
@@ -1150,6 +1219,36 @@ function setupShareModal() {
       }, 2000)
     } catch {
       input.select()
+    }
+  })
+
+  document.getElementById('share-dm-btn').addEventListener('click', async () => {
+    const dmInput = document.getElementById('share-dm-input')
+    const dmStatus = document.getElementById('share-dm-status')
+    const dmBtn = document.getElementById('share-dm-btn')
+    const groupId = document.getElementById('share-dm-section').dataset.groupId
+
+    const raw = dmInput.value.trim()
+    if (!raw) return
+
+    dmBtn.disabled = true
+    dmBtn.textContent = 'Sending…'
+    dmStatus.hidden = true
+
+    try {
+      const pubkey = await resolvePubkey(raw)
+      await sendInviteDM(groupId, pubkey)
+      dmStatus.textContent = 'Encrypted invite sent!'
+      dmStatus.className = 'share-dm-status share-dm-status--ok'
+      dmStatus.hidden = false
+      dmInput.value = ''
+    } catch (err) {
+      dmStatus.textContent = err.message
+      dmStatus.className = 'share-dm-status share-dm-status--err'
+      dmStatus.hidden = false
+    } finally {
+      dmBtn.disabled = false
+      dmBtn.textContent = 'Send'
     }
   })
 }

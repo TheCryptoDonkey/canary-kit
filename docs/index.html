@@ -244,6 +244,14 @@
       <input id="share-link-input" class="modal-input share-link-input" type="text" readonly />
       <button id="share-copy-btn" class="modal-btn modal-btn--primary">Copy</button>
     </div>
+    <div id="share-dm-section" class="share-dm-section" hidden>
+      <p class="share-dm-label">Or send an encrypted Nostr DM:</p>
+      <div class="share-link-row">
+        <input id="share-dm-input" class="modal-input" type="text" placeholder="npub or hex pubkey…" autocomplete="off" />
+        <button id="share-dm-btn" class="modal-btn modal-btn--primary">Send</button>
+      </div>
+      <div id="share-dm-status" class="share-dm-status" hidden></div>
+    </div>
     <div class="modal-actions">
       <button id="share-close-btn" class="modal-btn modal-btn--cancel">Done</button>
     </div>
