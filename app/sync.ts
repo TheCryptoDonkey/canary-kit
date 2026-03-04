@@ -30,13 +30,13 @@ export function getTransport(): SyncTransport | null {
  */
 export async function ensureTransport(relays: string[], groupId?: string): Promise<void> {
   const { identity } = getState()
-  if (!identity || relays.length === 0) return
+  if (!identity || !identity.privkey || relays.length === 0) return
 
   try {
     connectRelays(relays)
 
     if (!_transport) {
-      initSync(new NostrSyncTransport(relays, identity.pubkey))
+      initSync(new NostrSyncTransport(relays, identity.pubkey, identity.privkey))
     }
 
     if (groupId) {
@@ -79,7 +79,7 @@ export function reRegisterGroup(groupId: string): void {
 
   _transport.unregisterGroup(groupId)
   const signer = new GroupSigner(group.seed, identity.privkey)
-  _transport.registerGroup(groupId, group.seed, signer)
+  _transport.registerGroup(groupId, group.seed, signer, group.members)
 }
 
 /**
@@ -97,7 +97,7 @@ export function subscribeToGroup(groupId: string): void {
     const group = groups[groupId]
     if (identity?.privkey && group?.seed) {
       const signer = new GroupSigner(group.seed, identity.privkey)
-      ;(_transport as NostrSyncTransport).registerGroup(groupId, group.seed, signer)
+      ;(_transport as NostrSyncTransport).registerGroup(groupId, group.seed, signer, group.members)
     }
   }
 
@@ -106,9 +106,17 @@ export function subscribeToGroup(groupId: string): void {
     const group = groups[groupId]
     if (!group) return
 
-    const updated = applySyncMessage(group, msg)
+    const updated = applySyncMessage(group, msg, undefined, sender)
     if (updated !== group) {
       updateGroup(groupId, updated)
+    }
+
+    if (
+      msg.type === 'member-join' ||
+      msg.type === 'member-leave' ||
+      msg.type === 'reseed'
+    ) {
+      reRegisterGroup(groupId)
     }
 
     // Toast notifications for important sync events
@@ -116,13 +124,11 @@ export function subscribeToGroup(groupId: string): void {
       showToast('New member joined the group', 'success')
     } else if (msg.type === 'reseed') {
       showToast('Group secret was rotated', 'warning')
-    } else if (msg.type === 'state-snapshot') {
-      showToast('Group state synced', 'info')
     }
 
     // Record incoming liveness check-ins
     if (msg.type === 'liveness-checkin') {
-      recordCheckin(groupId, msg.pubkey, msg.timestamp)
+      recordCheckin(groupId, sender, msg.timestamp)
     }
 
     // Flash sync indicator
