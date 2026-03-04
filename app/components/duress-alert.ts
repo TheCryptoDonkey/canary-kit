@@ -1,6 +1,7 @@
 // app/components/duress-alert.ts — Full-screen duress alert overlay
 
 import { getState } from '../state.js'
+import { escapeHtml } from '../utils/escape.js'
 
 const MEMBER_NAMES = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry']
 
@@ -39,7 +40,7 @@ export function showDuressAlert(
   overlay.innerHTML = `
     <div class="duress-overlay__content">
       <div class="duress-overlay__icon" aria-hidden="true">!</div>
-      <h1 class="duress-overlay__title">${name}</h1>
+      <h1 class="duress-overlay__title">${escapeHtml(name)}</h1>
       <h2 class="duress-overlay__subtitle">NEEDS HELP</h2>
       ${location && (location.lat !== 0 || location.lon !== 0) ? `<p class="duress-overlay__location">Last known: ${location.lat.toFixed(4)}, ${location.lon.toFixed(4)}</p>` : ''}
       <p class="duress-overlay__time">${new Date().toLocaleTimeString()}</p>

@@ -4,6 +4,7 @@ import { getState } from '../state.js'
 import { addGroupMember, removeGroupMember } from '../actions/groups.js'
 import { createInvite } from '../invite.js'
 import { generateQR } from '../components/qr.js'
+import { escapeHtml } from '../utils/escape.js'
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -128,11 +129,11 @@ export function renderMembers(container: HTMLElement): void {
       ? group.members
           .map(
             (pubkey) => `
-          <li class="member-item" data-pubkey="${pubkey}">
-            <span class="member-item__pubkey">${formatPubkey(pubkey, group.members, activeGroupId)}</span>
+          <li class="member-item" data-pubkey="${escapeHtml(pubkey)}">
+            <span class="member-item__pubkey">${escapeHtml(formatPubkey(pubkey, group.members, activeGroupId))}</span>
             <button
               class="btn btn--sm member-item__remove"
-              data-pubkey="${pubkey}"
+              data-pubkey="${escapeHtml(pubkey)}"
               type="button"
               aria-label="Remove member"
             >\u2715</button>

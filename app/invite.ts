@@ -1,5 +1,6 @@
 // app/invite.ts — Invite creation and acceptance for CANARY groups
 
+import { hmacSha256, bytesToHex, hexToBytes } from 'canary-kit/crypto'
 import { getState, updateGroup } from './state.js'
 import type { AppGroup } from './types.js'
 
@@ -43,11 +44,18 @@ function randomNonce(): string {
 }
 
 /**
- * Derive the 6-character confirmation code from a nonce.
- * Uses the last 6 hex characters, uppercased.
+ * Derive a 6-character confirmation code that authenticates the full invite payload.
+ *
+ * Computes HMAC-SHA256 over the canonical payload content (all fields except nonce),
+ * keyed by the nonce. This means any modification to the payload fields invalidates
+ * the code, even if the nonce is unchanged.
  */
-function confirmCodeFromNonce(nonce: string): string {
-  return nonce.slice(-6).toUpperCase()
+function confirmCodeFromPayload(payload: InvitePayload): string {
+  const { nonce, ...rest } = payload
+  const data = JSON.stringify(rest)
+  const encoder = new TextEncoder()
+  const mac = hmacSha256(hexToBytes(nonce), encoder.encode(data))
+  return bytesToHex(mac).slice(0, 6).toUpperCase()
 }
 
 // ── Public API ─────────────────────────────────────────────────
@@ -84,7 +92,7 @@ export function createInvite(group: AppGroup): { payload: string; confirmCode: s
   }
 
   const payload = btoa(JSON.stringify(invitePayload))
-  const confirmCode = confirmCodeFromNonce(nonce)
+  const confirmCode = confirmCodeFromPayload(invitePayload)
 
   return { payload, confirmCode }
 }
@@ -116,7 +124,7 @@ export function acceptInvite(payload: string, confirmCode?: string): InvitePaylo
     throw new Error('Confirmation code is required — ask the sender to read it to you.')
   }
 
-  const expected = confirmCodeFromNonce(data.nonce)
+  const expected = confirmCodeFromPayload(data)
   if (confirmCode.trim().toUpperCase() !== expected) {
     throw new Error('Confirmation code does not match — invite may have been tampered with.')
   }

@@ -1,6 +1,7 @@
 // app/components/sidebar.ts — Sidebar component: identity badge, group list, create button
 
 import { getState, update } from '../state.js'
+import { escapeHtml } from '../utils/escape.js'
 import type { AppGroup } from '../types.js'
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -57,15 +58,6 @@ function renderGroupItems(
       `
     })
     .join('')
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
 
 // ── Public API ─────────────────────────────────────────────────

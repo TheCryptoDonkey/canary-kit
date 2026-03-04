@@ -38,6 +38,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   pinEnabled: false,
   autoLockMinutes: 5,
+  defaultRelays: ['wss://relay.damus.io/', 'wss://nos.lol/'],
 }
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -137,13 +138,27 @@ export async function persistState(): Promise<void> {
     try {
       groupsToWrite = await encryptSeeds(state.groups, _pinKey)
     } catch (err) {
-      console.error('[canary:storage] Failed to encrypt seeds — saving unencrypted:', err)
-      groupsToWrite = state.groups
+      // Fail closed: do NOT persist unencrypted seeds when encryption is expected
+      console.error('[canary:storage] Encryption failed — state NOT persisted:', err)
+      return
     }
   }
 
   safeWrite(KEY_GROUPS, groupsToWrite)
-  safeWrite(KEY_IDENTITY, state.identity)
+
+  // Encrypt the private key when PIN is enabled
+  if (_pinKey !== null && state.settings.pinEnabled && state.identity?.privkey) {
+    try {
+      const encryptedPrivkey = await encrypt(state.identity.privkey, _pinKey)
+      safeWrite(KEY_IDENTITY, { ...state.identity, privkey: encryptedPrivkey, _privkeyEncrypted: true })
+    } catch {
+      // Fail closed: omit privkey rather than storing it in plaintext
+      const { privkey: _, ...safeIdentity } = state.identity
+      safeWrite(KEY_IDENTITY, safeIdentity)
+    }
+  } else {
+    safeWrite(KEY_IDENTITY, state.identity)
+  }
   safeWrite(KEY_SETTINGS, state.settings)
 }
 
@@ -177,7 +192,7 @@ export async function unlockAndRestoreState(pin: string): Promise<void> {
   const key = await deriveKey(pin, salt)
 
   const rawGroups = safeRead<Record<string, AppGroup & { _seedEncrypted?: boolean }>>(KEY_GROUPS) ?? {}
-  const identity = safeRead<AppIdentity>(KEY_IDENTITY)
+  const rawIdentity = safeRead<AppIdentity & { _privkeyEncrypted?: boolean }>(KEY_IDENTITY)
   const rawSettings = safeRead<Partial<AppSettings>>(KEY_SETTINGS)
 
   const settings: AppSettings = { ...DEFAULT_SETTINGS, ...(rawSettings ?? {}) }
@@ -185,10 +200,31 @@ export async function unlockAndRestoreState(pin: string): Promise<void> {
   // This will throw if the key is wrong — AES-GCM authentication will fail.
   const groups = await decryptSeeds(rawGroups, key)
 
+  // Decrypt the identity private key if it was encrypted under PIN
+  let identity: AppIdentity | null = null
+  if (rawIdentity && typeof rawIdentity.pubkey === 'string') {
+    let privkey = rawIdentity.privkey
+    if (rawIdentity._privkeyEncrypted && privkey) {
+      try {
+        privkey = await decrypt(privkey, key)
+      } catch {
+        // If decryption fails, the privkey is lost — user will need to re-login
+        privkey = undefined
+      }
+    }
+    identity = {
+      pubkey: rawIdentity.pubkey,
+      privkey,
+      nsec: rawIdentity.nsec,
+      displayName: rawIdentity.displayName,
+      signerType: rawIdentity.signerType ?? 'local',
+    }
+  }
+
   const validGroups: Record<string, AppGroup> = {}
   for (const [id, group] of Object.entries(groups)) {
     if (group && typeof group === 'object' && typeof group.name === 'string') {
-      validGroups[id] = { ...group, id, tolerance: group.tolerance ?? 1 }
+      validGroups[id] = { ...group, id, tolerance: group.tolerance ?? 1, mode: group.mode ?? 'offline' }
     }
   }
 
@@ -196,15 +232,7 @@ export async function unlockAndRestoreState(pin: string): Promise<void> {
     view: 'groups',
     groups: validGroups,
     activeGroupId: null,
-    identity: identity && typeof identity.pubkey === 'string'
-      ? {
-          pubkey: identity.pubkey,
-          privkey: identity.privkey,
-          nsec: identity.nsec,
-          displayName: identity.displayName,
-          signerType: identity.signerType ?? 'local',
-        }
-      : null,
+    identity,
     settings,
   }
 
@@ -230,7 +258,7 @@ export function restoreState(): void {
   const validGroups: Record<string, AppGroup> = {}
   for (const [id, group] of Object.entries(groups)) {
     if (group && typeof group === 'object' && typeof group.name === 'string') {
-      validGroups[id] = { ...group, id, tolerance: group.tolerance ?? 1 }
+      validGroups[id] = { ...group, id, tolerance: group.tolerance ?? 1, mode: group.mode ?? 'offline' }
     }
   }
 

@@ -38,6 +38,7 @@ import { decode as nip19decode } from 'nostr-tools/nip19'
 import { getPublicKey } from 'nostr-tools/pure'
 import { broadcastAction, ensureTransport, subscribeToAllGroups, teardownSync } from './sync.js'
 import { showDuressAlert } from './components/duress-alert.js'
+import { escapeHtml } from './utils/escape.js'
 import type { AppIdentity } from './types.js'
 
 // ── Storage bootstrap ──────────────────────────────────────────
@@ -281,11 +282,30 @@ function render(): void {
     const members = document.getElementById('members-container')
     if (members) renderMembers(members)
 
+    const activeGroup = getState().groups[getState().activeGroupId ?? '']
+    const isOnline = activeGroup?.mode === 'online'
+
     const beacons = document.getElementById('beacon-container')
-    if (beacons) void renderBeacons(beacons)
+    if (beacons) {
+      if (isOnline) {
+        beacons.hidden = false
+        void renderBeacons(beacons)
+      } else {
+        beacons.hidden = true
+        beacons.innerHTML = ''
+      }
+    }
 
     const liveness = document.getElementById('liveness-container')
-    if (liveness) renderLiveness(liveness)
+    if (liveness) {
+      if (isOnline) {
+        liveness.hidden = false
+        renderLiveness(liveness)
+      } else {
+        liveness.hidden = true
+        liveness.innerHTML = ''
+      }
+    }
 
     const settings = document.getElementById('settings-container')
     if (settings) renderSettings(settings)
@@ -326,6 +346,12 @@ function showCreateGroupModal(): void {
     </label>
     ` : ''}
     <fieldset class="segmented" style="margin-top: 0.5rem;">
+      <legend class="input-label__text" style="margin-bottom: 0.25rem;">Mode</legend>
+      <button type="button" class="segmented__btn segmented__btn--active" data-mode="offline">Offline</button>
+      <button type="button" class="segmented__btn" data-mode="online">Online</button>
+    </fieldset>
+    <p class="settings-hint" id="mode-hint">No network needed. Verification words work locally.</p>
+    <fieldset class="segmented" style="margin-top: 0.5rem;">
       <legend class="input-label__text" style="margin-bottom: 0.25rem;">Preset</legend>
       <button type="button" class="segmented__btn segmented__btn--active" data-preset="family">Family</button>
       <button type="button" class="segmented__btn" data-preset="field-ops">Field Ops</button>
@@ -342,9 +368,11 @@ function showCreateGroupModal(): void {
     const name = (formData.get('name') as string | null)?.trim() ?? ''
     if (!name) return
     const myName = knownName || (formData.get('myname') as string | null)?.trim() || ''
-    const activeBtn = document.querySelector<HTMLButtonElement>('.segmented__btn.segmented__btn--active[data-preset]')
-    const preset = (activeBtn?.dataset.preset ?? 'family') as 'family' | 'field-ops' | 'enterprise' | 'event'
-    const groupId = createNewGroup(name, preset, identity?.pubkey)
+    const activePresetBtn = document.querySelector<HTMLButtonElement>('.segmented__btn.segmented__btn--active[data-preset]')
+    const preset = (activePresetBtn?.dataset.preset ?? 'family') as 'family' | 'field-ops' | 'enterprise' | 'event'
+    const activeModeBtn = document.querySelector<HTMLButtonElement>('.segmented__btn.segmented__btn--active[data-mode]')
+    const mode = (activeModeBtn?.dataset.mode ?? 'offline') as 'offline' | 'online'
+    const groupId = createNewGroup(name, preset, identity?.pubkey, mode)
     if (myName && identity?.pubkey) {
       const group = getState().groups[groupId]
       if (group) {
@@ -352,7 +380,7 @@ function showCreateGroupModal(): void {
       }
     }
     const newGroup = getState().groups[groupId]
-    if (newGroup?.relays?.length) {
+    if (newGroup?.mode === 'online' && newGroup?.relays?.length) {
       void ensureTransport(newGroup.relays, groupId)
     }
   })
@@ -360,6 +388,19 @@ function showCreateGroupModal(): void {
   requestAnimationFrame(() => {
     document.getElementById('modal-cancel-btn')?.addEventListener('click', () => {
       (document.getElementById('app-modal') as HTMLDialogElement | null)?.close()
+    })
+    // Mode segmented control
+    const modeHint = document.getElementById('mode-hint')
+    const MODE_HINTS: Record<string, string> = {
+      offline: 'No network needed. Verification words work locally.',
+      online: 'Sync via Nostr relays. Enables live map, liveness beacons, and remote alerts.',
+    }
+    document.querySelectorAll<HTMLButtonElement>('.segmented__btn[data-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.segmented__btn[data-mode]').forEach(b => b.classList.remove('segmented__btn--active'))
+        btn.classList.add('segmented__btn--active')
+        if (modeHint) modeHint.textContent = MODE_HINTS[btn.dataset.mode!] ?? ''
+      })
     })
     // Preset segmented control
     document.querySelectorAll<HTMLButtonElement>('.segmented__btn[data-preset]').forEach(btn => {
@@ -404,7 +445,7 @@ function wireGlobalEvents(): void {
     showModal(`
       <h2 class="modal__title">Join Group</h2>
       <label class="input-label">Invite String
-        <textarea name="payload" class="input" rows="3" placeholder="Paste the invite string here" required>${prefill}</textarea>
+        <textarea name="payload" class="input" rows="3" placeholder="Paste the invite string here" required></textarea>
       </label>
       ${!joinKnownName ? `
       <label class="input-label">Your name
@@ -441,17 +482,27 @@ function wireGlobalEvents(): void {
           memberNames[identity.pubkey] = myName
         }
 
+        // Whitelist known fields only — never spread untrusted invite data into state
         const appGroup = {
-          ...data,
           id,
           name: data.groupName,
+          seed: data.seed,
           members,
           memberNames,
+          mode: (hasRelays ? 'online' : 'offline') as 'offline' | 'online',
           nostrEnabled: hasRelays,
           relays: data.relays ?? [],
+          wordlist: data.wordlist ?? 'en-v1',
+          wordCount: data.wordCount ?? 2,
+          counter: data.counter ?? 0,
+          usageOffset: data.usageOffset ?? 0,
+          rotationInterval: data.rotationInterval ?? 86400,
           encodingFormat: (data.encodingFormat ?? 'words') as 'words' | 'pin' | 'hex',
           usedInvites: [data.nonce],
-          livenessInterval: data.rotationInterval,
+          beaconInterval: data.beaconInterval ?? 60,
+          beaconPrecision: data.beaconPrecision ?? 6,
+          duressMode: 'immediate' as const,
+          livenessInterval: data.rotationInterval ?? 86400,
           livenessCheckins: {},
           tolerance: data.tolerance ?? 1,
           createdAt: Math.floor(Date.now() / 1000),
@@ -479,6 +530,11 @@ function wireGlobalEvents(): void {
     })
 
     requestAnimationFrame(() => {
+      // Set prefill value safely (avoids innerHTML XSS via URL hash)
+      if (prefill) {
+        const textarea = document.querySelector<HTMLTextAreaElement>('[name="payload"]')
+        if (textarea) textarea.value = prefill
+      }
       document.getElementById('modal-cancel-btn')?.addEventListener('click', () => {
         const dialog = document.getElementById('app-modal') as HTMLDialogElement | null
         dialog?.close()
@@ -595,8 +651,8 @@ function showLoginScreen(): void {
   const app = document.getElementById('app')!
 
   const demoButtons = DEMO_ACCOUNTS.map(a => `
-    <button class="btn login-screen__demo" data-nsec="${a.nsec}" data-name="${a.name}" type="button">
-      <strong>${a.name}</strong> <span style="color: var(--text-muted); font-weight: 400;">${a.bio}</span>
+    <button class="btn login-screen__demo" data-nsec="${escapeHtml(a.nsec)}" data-name="${escapeHtml(a.name)}" type="button">
+      <strong>${escapeHtml(a.name)}</strong> <span style="color: var(--text-muted); font-weight: 400;">${escapeHtml(a.bio)}</span>
     </button>
   `).join('')
 
@@ -628,6 +684,24 @@ function showLoginScreen(): void {
           ${hasNip07() ? `
             <button class="btn" id="login-nip07" type="button" style="width: 100%; margin-top: 0.5rem;">Use Browser Extension</button>
           ` : ''}
+
+          <details style="margin-top: 0.75rem;">
+            <summary class="settings-hint" style="cursor: pointer; user-select: none;">Relays</summary>
+            <div style="margin-top: 0.375rem;">
+              <ul id="login-relay-list" style="list-style: none; padding: 0; margin: 0 0 0.375rem 0;">
+                ${getState().settings.defaultRelays.map((url, i) => `
+                  <li style="display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.25rem;">
+                    <span class="settings-hint" style="flex: 1; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0;">${escapeHtml(url)}</span>
+                    <button class="btn btn--ghost btn--sm login-relay-remove" data-relay-index="${i}" type="button" style="padding: 0 0.25rem; font-size: 0.7rem;">✕</button>
+                  </li>
+                `).join('')}
+              </ul>
+              <div style="display: flex; gap: 0.25rem;">
+                <input class="input" type="url" id="login-relay-input" placeholder="wss://relay.example.com" style="flex: 1; font-size: 0.75rem; padding: 0.375rem;" />
+                <button class="btn btn--ghost btn--sm" id="login-relay-add" type="button">Add</button>
+              </div>
+            </div>
+          </details>
         </div>
 
         <div style="border-top: 1px solid var(--border); margin: 1rem 0; padding-top: 0.75rem;">
@@ -689,6 +763,54 @@ function showLoginScreen(): void {
       update({ identity: { pubkey, signerType: 'nip07', displayName: 'You' } })
       await bootApp()
     } catch { alert('Extension rejected the request.') }
+  })
+
+  // ── Relay list editor on login screen ─────────────────────────
+  function rerenderRelayList(): void {
+    const list = app.querySelector<HTMLUListElement>('#login-relay-list')
+    if (!list) return
+    const relays = getState().settings.defaultRelays
+    list.innerHTML = relays.map((url, i) => `
+      <li style="display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.25rem;">
+        <span class="settings-hint" style="flex: 1; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0;">${escapeHtml(url)}</span>
+        <button class="btn btn--ghost btn--sm login-relay-remove" data-relay-index="${i}" type="button" style="padding: 0 0.25rem; font-size: 0.7rem;">✕</button>
+      </li>
+    `).join('')
+    wireRelayRemoveButtons()
+  }
+
+  function wireRelayRemoveButtons(): void {
+    app.querySelectorAll<HTMLButtonElement>('.login-relay-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.relayIndex)
+        const relays = [...getState().settings.defaultRelays]
+        relays.splice(idx, 1)
+        update({ settings: { ...getState().settings, defaultRelays: relays } })
+        rerenderRelayList()
+      })
+    })
+  }
+
+  wireRelayRemoveButtons()
+
+  app.querySelector('#login-relay-add')?.addEventListener('click', () => {
+    const input = app.querySelector<HTMLInputElement>('#login-relay-input')
+    const url = input?.value.trim()
+    if (!url || !url.startsWith('wss://')) return
+    const relays = [...getState().settings.defaultRelays]
+    if (!relays.includes(url)) {
+      relays.push(url)
+      update({ settings: { ...getState().settings, defaultRelays: relays } })
+      rerenderRelayList()
+    }
+    if (input) input.value = ''
+  })
+
+  app.querySelector('#login-relay-input')?.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter') {
+      e.preventDefault()
+      app.querySelector<HTMLButtonElement>('#login-relay-add')?.click()
+    }
   })
 
 }

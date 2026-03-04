@@ -2,6 +2,7 @@
 
 import { createSession } from 'canary-kit/session'
 import { getState } from '../state.js'
+import { escapeHtml } from '../utils/escape.js'
 
 const MEMBER_NAMES = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry']
 
@@ -55,7 +56,7 @@ export function showCallVerify(groupId: string, theirPubkey: string): void {
 
   overlay.innerHTML = `
     <div class="call-verify__content">
-      <h2 class="call-verify__title">Call with ${theirName}</h2>
+      <h2 class="call-verify__title">Call with ${escapeHtml(theirName)}</h2>
       <p class="call-verify__instruction">Speak your word. Listen for theirs. If it matches, the call is verified.</p>
 
       <div class="call-verify__section call-verify__section--say">
@@ -89,9 +90,24 @@ export function showCallVerify(groupId: string, theirPubkey: string): void {
     if (e.key === 'Escape') dismiss()
   }
 
-  document.getElementById('cv-match')?.addEventListener('click', dismiss)
-  document.getElementById('cv-close')?.addEventListener('click', dismiss)
-  document.getElementById('cv-mismatch')?.addEventListener('click', () => {
+  document.body.appendChild(overlay)
+  requestAnimationFrame(() => overlay.classList.add('call-verify--visible'))
+  document.addEventListener('keydown', onEscape)
+
+  overlay.querySelector('#cv-match')?.addEventListener('click', () => {
+    overlay.innerHTML = `
+      <div class="call-verify__content">
+        <h2 class="call-verify__title" style="color: var(--clr-success, #27ae60);">Call Verified</h2>
+        <p class="call-verify__warning" style="color: var(--text-secondary);">${escapeHtml(theirName)} is who they say they are. The call is authenticated.</p>
+        <div class="call-verify__actions">
+          <button class="btn btn--primary call-verify__btn" id="cv-dismiss-ok">Done</button>
+        </div>
+      </div>
+    `
+    overlay.querySelector('#cv-dismiss-ok')?.addEventListener('click', dismiss)
+  })
+  overlay.querySelector('#cv-close')?.addEventListener('click', dismiss)
+  overlay.querySelector('#cv-mismatch')?.addEventListener('click', () => {
     overlay.innerHTML = `
       <div class="call-verify__content">
         <h2 class="call-verify__title" style="color: var(--clr-danger, #e74c3c);">Verification Failed</h2>
@@ -101,10 +117,7 @@ export function showCallVerify(groupId: string, theirPubkey: string): void {
         </div>
       </div>
     `
-    document.getElementById('cv-dismiss-fail')?.addEventListener('click', dismiss)
+    overlay.querySelector('#cv-dismiss-fail')?.addEventListener('click', dismiss)
   })
 
-  document.body.appendChild(overlay)
-  requestAnimationFrame(() => overlay.classList.add('call-verify--visible'))
-  document.addEventListener('keydown', onEscape)
 }

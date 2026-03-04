@@ -54,11 +54,68 @@ export function decodeSyncMessage(payload: string): SyncMessage {
     throw new Error(`Invalid sync message type: ${String(type)}`)
   }
 
-  if (type === 'reseed') {
-    if (typeof parsed.seed !== 'string') {
-      throw new Error('Invalid sync message: reseed.seed must be a hex string')
-    }
-    return { ...parsed, seed: hexToBytes(parsed.seed) } as SyncMessage
+  // Per-type field validation
+  const ts = parsed.timestamp
+  if (typeof ts !== 'number' || ts < 0) {
+    throw new Error(`Invalid sync message: missing or invalid timestamp`)
+  }
+
+  switch (type) {
+    case 'member-join':
+    case 'member-leave':
+    case 'liveness-checkin':
+      if (typeof parsed.pubkey !== 'string' || parsed.pubkey.length === 0) {
+        throw new Error(`Invalid sync message: ${type} requires a non-empty pubkey string`)
+      }
+      break
+
+    case 'counter-advance':
+      if (typeof parsed.counter !== 'number' || parsed.counter < 0) {
+        throw new Error('Invalid sync message: counter-advance requires a non-negative counter')
+      }
+      if (typeof parsed.usageOffset !== 'number' || parsed.usageOffset < 0) {
+        throw new Error('Invalid sync message: counter-advance requires a non-negative usageOffset')
+      }
+      break
+
+    case 'reseed':
+      if (typeof parsed.seed !== 'string') {
+        throw new Error('Invalid sync message: reseed.seed must be a hex string')
+      }
+      if (typeof parsed.counter !== 'number' || parsed.counter < 0) {
+        throw new Error('Invalid sync message: reseed requires a non-negative counter')
+      }
+      return { type, seed: hexToBytes(parsed.seed), counter: parsed.counter, timestamp: ts }
+
+    case 'beacon':
+      if (typeof parsed.lat !== 'number' || typeof parsed.lon !== 'number') {
+        throw new Error('Invalid sync message: beacon requires numeric lat and lon')
+      }
+      if (typeof parsed.accuracy !== 'number' || parsed.accuracy < 0) {
+        throw new Error('Invalid sync message: beacon requires a non-negative accuracy')
+      }
+      break
+
+    case 'duress-alert':
+      if (typeof parsed.lat !== 'number' || typeof parsed.lon !== 'number') {
+        throw new Error('Invalid sync message: duress-alert requires numeric lat and lon')
+      }
+      break
+
+    case 'state-snapshot':
+      if (typeof parsed.seed !== 'string' || parsed.seed.length === 0) {
+        throw new Error('Invalid sync message: state-snapshot requires a non-empty seed string')
+      }
+      if (typeof parsed.counter !== 'number' || parsed.counter < 0) {
+        throw new Error('Invalid sync message: state-snapshot requires a non-negative counter')
+      }
+      if (typeof parsed.usageOffset !== 'number' || parsed.usageOffset < 0) {
+        throw new Error('Invalid sync message: state-snapshot requires a non-negative usageOffset')
+      }
+      if (!Array.isArray(parsed.members) || !parsed.members.every((m: unknown) => typeof m === 'string')) {
+        throw new Error('Invalid sync message: state-snapshot requires a string array of members')
+      }
+      break
   }
 
   return parsed as SyncMessage

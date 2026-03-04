@@ -6,6 +6,7 @@ import { showToast } from '../components/toast.js'
 import { disconnectRelays, isConnected, getRelayCount } from '../nostr/connect.js'
 import { ensureTransport, teardownSync } from '../sync.js'
 import { updateRelayStatus } from '../components/header.js'
+import { escapeHtml } from '../utils/escape.js'
 
 // ── Drawer state persistence across re-renders ─────────────────
 // The settings panel is re-rendered on every state change, which would
@@ -33,7 +34,7 @@ export function renderSettings(container: HTMLElement): void {
       <div class="settings-body" id="settings-body"${_drawerOpen ? '' : ' hidden'}>
         <!-- Group Name -->
         <label class="input-label">Name
-          <input class="input" id="settings-name" value="${group.name}">
+          <input class="input" id="settings-name" value="${escapeHtml(group.name)}">
         </label>
 
         <!-- Rotation Interval -->
@@ -95,8 +96,8 @@ export function renderSettings(container: HTMLElement): void {
           <p class="settings-hint">Immediate alerts members now. Dead drop records silently for later retrieval.</p>
         </div>
 
-        <!-- Nostr Sync Toggle -->
-        <div class="settings-section">
+        <!-- Nostr Sync Toggle (online mode only) -->
+        <div class="settings-section"${group.mode === 'offline' ? ' hidden' : ''}>
           <label class="toggle-label">
             <input type="checkbox" id="nostr-toggle" ${group.nostrEnabled ? 'checked' : ''}>
             <span>Nostr Sync</span>
@@ -113,7 +114,7 @@ export function renderSettings(container: HTMLElement): void {
               <ul class="relay-list" id="relay-list">
                 ${(group.relays ?? []).map((url, i) => `
                   <li class="relay-item">
-                    <span class="relay-url">${url}</span>
+                    <span class="relay-url">${escapeHtml(url)}</span>
                     <button class="btn btn--ghost btn--sm relay-remove" data-relay-index="${i}" aria-label="Remove relay">✕</button>
                   </li>
                 `).join('')}
@@ -321,20 +322,36 @@ export function renderSettings(container: HTMLElement): void {
       try {
         const text = await file.text()
         const imported = JSON.parse(text)
-        if (!imported.seed || !imported.name || !imported.members) {
+        if (typeof imported.seed !== 'string' || !imported.seed ||
+            typeof imported.name !== 'string' || !imported.name ||
+            !Array.isArray(imported.members)) {
           throw new Error('Invalid group file')
         }
         const id = crypto.randomUUID()
+        // Whitelist known fields only — never spread untrusted JSON into state
         const appGroup = {
-          ...imported,
           id,
+          name: String(imported.name),
+          seed: String(imported.seed),
+          members: imported.members.filter((m: unknown) => typeof m === 'string'),
+          memberNames: {} as Record<string, string>,
+          mode: (imported.mode === 'online' ? 'online' : 'offline') as 'offline' | 'online',
           nostrEnabled: false,
-          relays: [],
-          encodingFormat: imported.encodingFormat ?? 'words',
-          usedInvites: [],
-          livenessInterval: imported.rotationInterval,
-          livenessCheckins: {},
-          tolerance: imported.tolerance ?? 1,
+          relays: [] as string[],
+          wordlist: typeof imported.wordlist === 'string' ? imported.wordlist : 'en-v1',
+          wordCount: ([1, 2, 3] as const).includes(imported.wordCount) ? imported.wordCount : 2,
+          counter: typeof imported.counter === 'number' && imported.counter >= 0 ? imported.counter : 0,
+          usageOffset: typeof imported.usageOffset === 'number' && imported.usageOffset >= 0 ? imported.usageOffset : 0,
+          rotationInterval: typeof imported.rotationInterval === 'number' && imported.rotationInterval > 0 ? imported.rotationInterval : 86400,
+          encodingFormat: (['words', 'pin', 'hex'] as const).includes(imported.encodingFormat) ? imported.encodingFormat : 'words',
+          usedInvites: [] as string[],
+          livenessInterval: typeof imported.rotationInterval === 'number' && imported.rotationInterval > 0 ? imported.rotationInterval : 86400,
+          livenessCheckins: {} as Record<string, number>,
+          tolerance: typeof imported.tolerance === 'number' && imported.tolerance >= 0 ? imported.tolerance : 1,
+          beaconInterval: typeof imported.beaconInterval === 'number' && imported.beaconInterval > 0 ? imported.beaconInterval : 60,
+          beaconPrecision: typeof imported.beaconPrecision === 'number' && imported.beaconPrecision > 0 ? imported.beaconPrecision : 6,
+          duressMode: (['immediate', 'dead-drop', 'both'] as const).includes(imported.duressMode) ? imported.duressMode : 'immediate',
+          createdAt: typeof imported.createdAt === 'number' ? imported.createdAt : Math.floor(Date.now() / 1000),
         }
         const { groups: currentGroups } = getState()
         update({ groups: { ...currentGroups, [id]: appGroup }, activeGroupId: id })
@@ -363,7 +380,7 @@ function populateNostrIdentity(): void {
   el.innerHTML = `
     <div class="nostr-identity-row">
       <span class="input-label">Identity (Local key)</span>
-      <span class="relay-url nostr-pubkey" title="${identity.pubkey}">${shortened}</span>
+      <span class="relay-url nostr-pubkey" title="${escapeHtml(identity.pubkey)}">${escapeHtml(shortened)}</span>
     </div>
     <p class="settings-hint">Your identity is stored locally on this device.</p>
   `

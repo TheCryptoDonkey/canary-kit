@@ -59,6 +59,14 @@ export class NostrSyncTransport implements SyncTransport {
     }
   }
 
+  /** Set of pubkeys authorised to send sync messages for a group. */
+  private groupMembers = new Map<string, Set<string>>()
+
+  /** Update the authorised member set for a group. */
+  updateMembers(groupId: string, members: string[]): void {
+    this.groupMembers.set(groupId, new Set(members))
+  }
+
   subscribe(groupId: string, onMessage: (msg: SyncMessage, sender: string) => void): () => void {
     const pool = getPool()
     if (!pool) return () => {}
@@ -83,6 +91,14 @@ export class NostrSyncTransport implements SyncTransport {
           try {
             // Skip our own events
             if (event.pubkey === groupInfo.signer.pubkey) return
+
+            // Verify the sender is an authorised group member
+            const allowedMembers = this.groupMembers.get(groupId)
+            if (allowedMembers && !allowedMembers.has(event.pubkey)) {
+              console.warn(`[canary:sync] Rejected message from non-member ${event.pubkey.slice(0, 8)}…`)
+              return
+            }
+
             const decrypted = await decryptEnvelope(groupInfo.key, event.content)
             const msg = decodeSyncMessage(decrypted)
             onMessage(msg, event.pubkey)

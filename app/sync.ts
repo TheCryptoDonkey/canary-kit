@@ -76,13 +76,14 @@ export function subscribeToGroup(groupId: string): void {
   // Unsubscribe from previous subscription if any
   _unsubscribers.get(groupId)?.()
 
-  // Register group key for encryption/decryption
+  // Register group key for encryption/decryption and authorise members
   if (_transport instanceof NostrSyncTransport) {
     const { identity, groups } = getState()
     const group = groups[groupId]
     if (identity?.privkey && group?.seed) {
       const signer = new GroupSigner(group.seed, identity.privkey)
       ;(_transport as NostrSyncTransport).registerGroup(groupId, group.seed, signer)
+      ;(_transport as NostrSyncTransport).updateMembers(groupId, group.members)
     }
   }
 
@@ -94,6 +95,14 @@ export function subscribeToGroup(groupId: string): void {
     const updated = applySyncMessage(group, msg)
     if (updated !== group) {
       updateGroup(groupId, updated)
+    }
+
+    // Update authorised member list after membership changes
+    if (_transport instanceof NostrSyncTransport && (msg.type === 'member-join' || msg.type === 'member-leave' || msg.type === 'state-snapshot')) {
+      const refreshed = getState().groups[groupId]
+      if (refreshed) {
+        ;(_transport as NostrSyncTransport).updateMembers(groupId, refreshed.members)
+      }
     }
 
     // Toast notifications for important sync events
