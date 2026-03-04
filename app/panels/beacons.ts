@@ -88,21 +88,29 @@ export async function renderBeacons(container: HTMLElement): Promise<void> {
       <h3 class="panel__title">Location</h3>
       <p class="settings-hint" style="margin-bottom: 0.5rem;">Approximate location of group members. Circles show the geohash area — your exact position is never shared, only which neighbourhood you're in. Circles turn <span style="color: #f87171; font-weight: 500;">red</span> when a duress signal is active.</p>
       <div class="beacon-map" id="beacon-map" style="height: 500px; border-radius: 8px;"></div>
-      ${geoWatchId === null ? '<button class="btn btn--primary" id="beacon-share-btn" type="button" style="margin-top: 0.5rem;">Share Location</button>' : ''}
+      <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem;">
+        <button class="btn ${geoWatchId !== null ? 'btn--primary' : ''}" id="beacon-toggle-btn" type="button">
+          ${geoWatchId !== null ? 'Sharing Location' : 'Share Location'}
+        </button>
+        ${geoWatchId !== null ? '<span class="settings-hint" style="margin: 0;">Your approximate area is visible to group members</span>' : ''}
+      </div>
       <div class="beacon-list" id="beacon-list"></div>
     </section>
   `
 
-  container.querySelector<HTMLButtonElement>('#beacon-share-btn')?.addEventListener('click', () => {
-    startBeaconWatch()
-    const btn = container.querySelector<HTMLButtonElement>('#beacon-share-btn')
-    if (btn) btn.remove()
+  container.querySelector<HTMLButtonElement>('#beacon-toggle-btn')?.addEventListener('click', () => {
+    if (geoWatchId !== null) {
+      stopBeaconWatch()
+    } else {
+      startBeaconWatch()
+    }
+    // Re-render to update button state
+    void renderBeacons(container)
   })
 
   try {
     await loadMapLibre()
     initMap()
-    startBeaconWatch()
   } catch {
     container.querySelector('.beacon-map')!.innerHTML =
       '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">Map unavailable offline</p>'
@@ -168,6 +176,25 @@ function refreshCircles(): void {
 
 // ── Beacon watch ──────────────────────────────────────────────
 
+function stopBeaconWatch(): void {
+  if (geoWatchId !== null) {
+    navigator.geolocation.clearWatch(geoWatchId)
+    geoWatchId = null
+  }
+  // Remove own position from map
+  const { identity } = getState()
+  if (identity?.pubkey) {
+    delete positions[identity.pubkey]
+    delete encryptedPayloads[identity.pubkey]
+    if (markers[identity.pubkey]) {
+      markers[identity.pubkey].remove()
+      delete markers[identity.pubkey]
+    }
+    refreshCircles()
+    updateBeaconList()
+  }
+}
+
 function startBeaconWatch(): void {
   if (geoWatchId !== null) return
   if (!('geolocation' in navigator)) return
@@ -178,8 +205,8 @@ function startBeaconWatch(): void {
   const group = groups[activeGroupId]
   const beaconKey = deriveBeaconKey(group.seed)
 
-  // Town-level precision (5 ≈ 2.4 km cell radius) — never share exact GPS
-  const geohashPrecision = group.beaconPrecision || 5
+  // City-level precision (4 ≈ 20 km cell radius) — deliberately coarse
+  const geohashPrecision = group.beaconPrecision || 4
 
   geoWatchId = navigator.geolocation.watchPosition(
     async (pos) => {
