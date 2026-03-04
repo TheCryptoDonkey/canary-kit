@@ -10,14 +10,14 @@ import { addMember, removeMember } from './group.js'
 
 /** A typed, serialisable description of a group state change. */
 export type SyncMessage =
-  | { type: 'member-join'; pubkey: string; timestamp: number; epoch: number; opId: string }
-  | { type: 'member-leave'; pubkey: string; timestamp: number; epoch?: number; opId?: string }
-  | { type: 'counter-advance'; counter: number; usageOffset: number; timestamp: number }
-  | { type: 'reseed'; seed: Uint8Array; counter: number; timestamp: number; epoch: number; opId: string; admins: string[]; members: string[] }
-  | { type: 'beacon'; lat: number; lon: number; accuracy: number; timestamp: number }
-  | { type: 'duress-alert'; lat: number; lon: number; timestamp: number }
-  | { type: 'liveness-checkin'; pubkey: string; timestamp: number }
-  | { type: 'state-snapshot'; seed: string; counter: number; usageOffset: number; members: string[]; timestamp: number }
+  | { type: 'member-join'; pubkey: string; timestamp: number; epoch: number; opId: string; protocolVersion?: number }
+  | { type: 'member-leave'; pubkey: string; timestamp: number; epoch?: number; opId?: string; protocolVersion?: number }
+  | { type: 'counter-advance'; counter: number; usageOffset: number; timestamp: number; protocolVersion?: number }
+  | { type: 'reseed'; seed: Uint8Array; counter: number; timestamp: number; epoch: number; opId: string; admins: string[]; members: string[]; protocolVersion?: number }
+  | { type: 'beacon'; lat: number; lon: number; accuracy: number; timestamp: number; protocolVersion?: number }
+  | { type: 'duress-alert'; lat: number; lon: number; timestamp: number; protocolVersion?: number }
+  | { type: 'liveness-checkin'; pubkey: string; timestamp: number; protocolVersion?: number }
+  | { type: 'state-snapshot'; seed: string; counter: number; usageOffset: number; members: string[]; timestamp: number; protocolVersion?: number }
 
 const VALID_TYPES = new Set<string>([
   'member-join', 'member-leave', 'counter-advance',
@@ -28,6 +28,9 @@ const VALID_TYPES = new Set<string>([
 const HEX_64_RE = /^[0-9a-f]{64}$/
 const MAX_COUNTER_ADVANCE_OFFSET = 100
 const MAX_BEACON_ACCURACY_METERS = 20_000_000
+
+/** Current protocol version. Bump on any breaking wire format change. */
+export const PROTOCOL_VERSION = 1
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
@@ -44,10 +47,12 @@ function isNonNegativeInt(value: unknown): value is number {
  * Binary fields (seed) are hex-encoded for safe JSON round-tripping.
  */
 export function encodeSyncMessage(msg: SyncMessage): string {
+  const versioned = { ...msg, protocolVersion: PROTOCOL_VERSION }
   if (msg.type === 'reseed') {
-    return JSON.stringify({ ...msg, seed: bytesToHex(msg.seed) })
+    const { seed, ...rest } = versioned as typeof msg & { protocolVersion: number }
+    return JSON.stringify({ ...rest, seed: bytesToHex(msg.seed) })
   }
-  return JSON.stringify(msg)
+  return JSON.stringify(versioned)
 }
 
 /**
@@ -71,6 +76,15 @@ export function decodeSyncMessage(payload: string): SyncMessage {
   const ts = parsed.timestamp
   if (!isNonNegativeInt(ts)) {
     throw new Error(`Invalid sync message: missing or invalid timestamp`)
+  }
+
+  // Protocol version check (H1: hard cutover, exact match only)
+  const version = parsed.protocolVersion
+  if (version === undefined || version === null) {
+    throw new Error('Invalid sync message: protocolVersion is required')
+  }
+  if (version !== PROTOCOL_VERSION) {
+    throw new Error(`Unsupported protocol version: ${version} (expected: ${PROTOCOL_VERSION})`)
   }
 
   switch (type) {

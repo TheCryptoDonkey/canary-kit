@@ -10,7 +10,7 @@ import { bytesToHex } from './crypto.js'
 
 describe('sync message serialisation', () => {
   it('round-trips a member-join message', () => {
-    const msg: SyncMessage = { type: 'member-join', pubkey: 'a'.repeat(64), timestamp: 1700000000, epoch: 0, opId: 'test-join-1' }
+    const msg: SyncMessage = { type: 'member-join', pubkey: 'a'.repeat(64), timestamp: 1700000000, epoch: 0, opId: 'test-join-1', protocolVersion: 1 }
     const encoded = encodeSyncMessage(msg)
     expect(typeof encoded).toBe('string')
     const decoded = decodeSyncMessage(encoded)
@@ -18,12 +18,12 @@ describe('sync message serialisation', () => {
   })
 
   it('round-trips a member-leave message', () => {
-    const msg: SyncMessage = { type: 'member-leave', pubkey: 'a'.repeat(64), timestamp: 1700000000 }
+    const msg: SyncMessage = { type: 'member-leave', pubkey: 'a'.repeat(64), timestamp: 1700000000, protocolVersion: 1 }
     expect(decodeSyncMessage(encodeSyncMessage(msg))).toEqual(msg)
   })
 
   it('round-trips a counter-advance message', () => {
-    const msg: SyncMessage = { type: 'counter-advance', counter: 42, usageOffset: 3, timestamp: 1700000000 }
+    const msg: SyncMessage = { type: 'counter-advance', counter: 42, usageOffset: 3, timestamp: 1700000000, protocolVersion: 1 }
     expect(decodeSyncMessage(encodeSyncMessage(msg))).toEqual(msg)
   })
 
@@ -48,12 +48,12 @@ describe('sync message serialisation', () => {
   })
 
   it('round-trips a beacon message', () => {
-    const msg: SyncMessage = { type: 'beacon', lat: 51.5074, lon: -0.1278, accuracy: 10, timestamp: 1700000000 }
+    const msg: SyncMessage = { type: 'beacon', lat: 51.5074, lon: -0.1278, accuracy: 10, timestamp: 1700000000, protocolVersion: 1 }
     expect(decodeSyncMessage(encodeSyncMessage(msg))).toEqual(msg)
   })
 
   it('round-trips a duress-alert message', () => {
-    const msg: SyncMessage = { type: 'duress-alert', lat: 51.5074, lon: -0.1278, timestamp: 1700000000 }
+    const msg: SyncMessage = { type: 'duress-alert', lat: 51.5074, lon: -0.1278, timestamp: 1700000000, protocolVersion: 1 }
     expect(decodeSyncMessage(encodeSyncMessage(msg))).toEqual(msg)
   })
 
@@ -62,7 +62,7 @@ describe('sync message serialisation', () => {
   })
 
   it('throws on unknown message type', () => {
-    expect(() => decodeSyncMessage(JSON.stringify({ type: 'unknown', timestamp: 0 }))).toThrow()
+    expect(() => decodeSyncMessage(JSON.stringify({ type: 'unknown', timestamp: 0, protocolVersion: 1 }))).toThrow()
   })
 })
 
@@ -167,6 +167,7 @@ describe('state-snapshot', () => {
       usageOffset: 3,
       members: ['b'.repeat(64), 'c'.repeat(64)],
       timestamp: 1700000000,
+      protocolVersion: 1,
     }
     const encoded = encodeSyncMessage(msg)
     const decoded = decodeSyncMessage(encoded)
@@ -213,6 +214,7 @@ describe('liveness-checkin', () => {
       type: 'liveness-checkin',
       pubkey: 'a'.repeat(64),
       timestamp: 1700000000,
+      protocolVersion: 1,
     }
     const encoded = encodeSyncMessage(msg)
     const decoded = decodeSyncMessage(encoded)
@@ -495,7 +497,7 @@ describe('authority model serialisation', () => {
   it('round-trips a member-join with epoch and opId', () => {
     const msg: SyncMessage = {
       type: 'member-join', pubkey: PUBKEY_AAA, timestamp: 1700000000,
-      epoch: 2, opId: 'join-op',
+      epoch: 2, opId: 'join-op', protocolVersion: 1,
     }
     const decoded = decodeSyncMessage(encodeSyncMessage(msg))
     expect(decoded).toEqual(msg)
@@ -504,7 +506,7 @@ describe('authority model serialisation', () => {
   it('round-trips a member-leave with epoch and opId', () => {
     const msg: SyncMessage = {
       type: 'member-leave', pubkey: PUBKEY_AAA, timestamp: 1700000000,
-      epoch: 2, opId: 'leave-op',
+      epoch: 2, opId: 'leave-op', protocolVersion: 1,
     }
     const decoded = decodeSyncMessage(encodeSyncMessage(msg))
     expect(decoded).toEqual(msg)
@@ -512,14 +514,14 @@ describe('authority model serialisation', () => {
 
   it('rejects reseed without required epoch', () => {
     const payload = JSON.stringify({
-      type: 'reseed', seed: 'a'.repeat(64), counter: 0, timestamp: 1700000000,
+      type: 'reseed', seed: 'a'.repeat(64), counter: 0, timestamp: 1700000000, protocolVersion: 1,
     })
     expect(() => decodeSyncMessage(payload)).toThrow('epoch')
   })
 
   it('rejects member-join without required epoch', () => {
     const payload = JSON.stringify({
-      type: 'member-join', pubkey: 'a'.repeat(64), timestamp: 1700000000,
+      type: 'member-join', pubkey: 'a'.repeat(64), timestamp: 1700000000, protocolVersion: 1,
     })
     expect(() => decodeSyncMessage(payload)).toThrow('epoch')
   })
@@ -529,7 +531,36 @@ describe('authority model serialisation', () => {
       type: 'reseed', seed: 'a'.repeat(64), counter: 0, timestamp: 1700000000,
       epoch: 1, opId: 'x'.repeat(129),
       admins: ['a'.repeat(64)], members: ['a'.repeat(64)],
+      protocolVersion: 1,
     })
     expect(() => decodeSyncMessage(payload)).toThrow('opId')
+  })
+})
+
+describe('protocol version (H1)', () => {
+  it('encodeSyncMessage injects protocolVersion', () => {
+    const msg: SyncMessage = { type: 'counter-advance', counter: 0, usageOffset: 0, timestamp: 0 }
+    const encoded = JSON.parse(encodeSyncMessage(msg))
+    expect(encoded.protocolVersion).toBe(1)
+  })
+
+  it('decodeSyncMessage accepts current version', () => {
+    const payload = JSON.stringify({ type: 'counter-advance', counter: 0, usageOffset: 0, timestamp: 0, protocolVersion: 1 })
+    expect(() => decodeSyncMessage(payload)).not.toThrow()
+  })
+
+  it('decodeSyncMessage rejects future version', () => {
+    const payload = JSON.stringify({ type: 'counter-advance', counter: 0, usageOffset: 0, timestamp: 0, protocolVersion: 99 })
+    expect(() => decodeSyncMessage(payload)).toThrow('Unsupported protocol version')
+  })
+
+  it('decodeSyncMessage rejects past version (version 0)', () => {
+    const payload = JSON.stringify({ type: 'counter-advance', counter: 0, usageOffset: 0, timestamp: 0, protocolVersion: 0 })
+    expect(() => decodeSyncMessage(payload)).toThrow('Unsupported protocol version')
+  })
+
+  it('decodeSyncMessage rejects missing version (hard cutover)', () => {
+    const payload = JSON.stringify({ type: 'counter-advance', counter: 0, usageOffset: 0, timestamp: 0 })
+    expect(() => decodeSyncMessage(payload)).toThrow('protocolVersion is required')
   })
 })

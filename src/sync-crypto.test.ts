@@ -150,6 +150,7 @@ describe('integration: encrypt sync message → decrypt → apply', () => {
       counter: 100,
       usageOffset: 5,
       timestamp: Math.floor(Date.now() / 1000),
+      protocolVersion: 1,
     }
 
     const encoded = encodeSyncMessage(msg)
@@ -171,6 +172,7 @@ describe('integration: encrypt sync message → decrypt → apply', () => {
       usageOffset: 3,
       members: ['b'.repeat(64)],
       timestamp: Math.floor(Date.now() / 1000),
+      protocolVersion: 1,
     }
 
     const encoded = encodeSyncMessage(msg)
@@ -208,6 +210,7 @@ describe('integration: encrypt sync message → decrypt → apply', () => {
       timestamp: Math.floor(Date.now() / 1000),
       epoch: 0,
       opId: 'test-join-crypto-1',
+      protocolVersion: 1,
     }
 
     const encoded = encodeSyncMessage(msg)
@@ -227,6 +230,7 @@ describe('integration: encrypt sync message → decrypt → apply', () => {
       lat: 51.5074,
       lon: -0.1278,
       timestamp: Math.floor(Date.now() / 1000),
+      protocolVersion: 1,
     }
 
     const encoded = encodeSyncMessage(msg)

@@ -1,6 +1,7 @@
 // app/invite.ts — Invite creation and acceptance for CANARY groups
 
 import { hmacSha256, bytesToHex, hexToBytes } from 'canary-kit/crypto'
+import { PROTOCOL_VERSION } from 'canary-kit/sync'
 import { getState, updateGroup } from './state.js'
 import type { AppGroup } from './types.js'
 
@@ -36,6 +37,8 @@ export interface InvitePayload {
   epoch: number
   /** Admin pubkeys at invite creation. */
   admins: string[]
+  /** Protocol version at invite creation. */
+  protocolVersion: number
 }
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -124,6 +127,12 @@ function assertInvitePayload(raw: unknown): asserts raw is InvitePayload {
   if (!(data.admins as string[]).every((a) => memberSet.has(a))) {
     throw new Error('Invalid invite payload — all admins must be in members.')
   }
+  if (data.protocolVersion === undefined || data.protocolVersion === null) {
+    throw new Error('Invalid invite payload — protocolVersion is required.')
+  }
+  if (data.protocolVersion !== PROTOCOL_VERSION) {
+    throw new Error(`Unsupported invite protocol version: ${data.protocolVersion} (expected: ${PROTOCOL_VERSION})`)
+  }
 }
 
 /**
@@ -180,6 +189,7 @@ export function createInvite(group: AppGroup): { payload: string; confirmCode: s
     expiresAt: issuedAt + INVITE_MAX_AGE_SEC,
     epoch: group.epoch ?? 0,
     admins: [...(group.admins ?? [])],
+    protocolVersion: 1,
   }
 
   const payload = btoa(JSON.stringify(invitePayload))
@@ -226,6 +236,7 @@ export function acceptInvite(payload: string, confirmCode?: string): InvitePaylo
     expiresAt: raw.expiresAt,
     epoch: raw.epoch,
     admins: [...raw.admins],
+    protocolVersion: raw.protocolVersion,
   }
 
   if (!confirmCode?.trim()) {
