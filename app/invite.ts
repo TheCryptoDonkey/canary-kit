@@ -93,7 +93,7 @@ export function createInvite(group: AppGroup): { payload: string; confirmCode: s
  * Accept and decode an invite payload.
  *
  * @param payload     Base64-encoded JSON invite string.
- * @param confirmCode Optional 6-char confirmation code for verification.
+ * @param confirmCode 6-char confirmation code for verification.
  * @throws            If the payload is invalid or the confirmation code does not match.
  */
 export function acceptInvite(payload: string, confirmCode?: string): InvitePayload {
@@ -112,11 +112,13 @@ export function acceptInvite(payload: string, confirmCode?: string): InvitePaylo
     throw new Error('Invalid invite payload — missing required fields.')
   }
 
-  if (confirmCode !== undefined) {
-    const expected = confirmCodeFromNonce(data.nonce)
-    if (confirmCode.toUpperCase() !== expected) {
-      throw new Error('Confirmation code does not match — invite may be tampered.')
-    }
+  if (!confirmCode?.trim()) {
+    throw new Error('Confirmation code is required — ask the sender to read it to you.')
+  }
+
+  const expected = confirmCodeFromNonce(data.nonce)
+  if (confirmCode.trim().toUpperCase() !== expected) {
+    throw new Error('Confirmation code does not match — invite may have been tampered with.')
   }
 
   return data

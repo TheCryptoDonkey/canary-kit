@@ -55,9 +55,9 @@ export function showInviteModal(payload: string, confirmCode: string): void {
         <span class="confirm-code__label">Verification code</span>
         <span class="confirm-code__value">${confirmCode}</span>
       </div>
-      <p class="invite-hint">Optional security check — ask the recipient to confirm this code</p>
+      <p class="invite-hint">Read this code to the recipient — they'll need it to join</p>
 
-      <p class="invite-hint" style="color: var(--failed); font-weight: 500;">This invite contains the group secret. Share it privately.</p>
+      <p class="invite-hint" style="color: var(--duress); font-weight: 500;">Share via a private channel — WhatsApp, Signal, or in person. The confirmation code verifies it wasn't tampered with.</p>
 
       <div class="invite-share__actions">
         <button class="btn btn--primary" id="invite-copy-link" type="button">Copy Link</button>

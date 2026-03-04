@@ -383,8 +383,8 @@ function wireGlobalEvents(): void {
       <label class="input-label">Your name
         <input name="myname" class="input" placeholder="e.g. Alice">
       </label>
-      <label class="input-label">Confirmation Code (optional)
-        <input name="code" class="input" placeholder="6-character code" maxlength="6">
+      <label class="input-label">Confirmation Code
+        <input name="code" class="input" placeholder="6-character code" maxlength="6" required>
       </label>
       <div class="modal__actions">
         <button type="button" class="btn" id="modal-cancel-btn">Cancel</button>
