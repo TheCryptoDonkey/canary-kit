@@ -1,6 +1,7 @@
 // app/main.ts — CANARY demo app entry point
 // Renders the app shell: header + sidebar + main content area.
 
+import './styles/fonts.css'
 import './styles/tokens.css'
 import './styles/theme.css'
 import './styles/layout.css'
@@ -107,7 +108,7 @@ function showLockScreen(): void {
         maxlength="8"
         autofocus
         autocomplete="off"
-        placeholder="••••"
+        placeholder="••••••"
       >
       <p class="lock-screen__error" id="pin-error" hidden>Incorrect PIN. Try again.</p>
       <button class="btn btn--primary lock-screen__btn" id="pin-submit">Unlock</button>
@@ -118,10 +119,13 @@ function showLockScreen(): void {
   const pinError = document.getElementById('pin-error') as HTMLParagraphElement
   const pinSubmit = document.getElementById('pin-submit') as HTMLButtonElement
 
+  let _failCount = 0
+  const DELAYS = [0, 1000, 2000, 5000, 15000, 30000]
+
   async function attemptUnlock(): Promise<void> {
     const pin = pinInput.value.trim()
-    if (pin.length < 4) {
-      pinError.textContent = 'PIN must be at least 4 digits.'
+    if (pin.length < 6) {
+      pinError.textContent = 'PIN must be at least 6 digits.'
       pinError.hidden = false
       pinInput.focus()
       return
@@ -147,12 +151,24 @@ function showLockScreen(): void {
       wireGlobalEvents()
       void bootSync()
     } catch {
-      pinError.textContent = 'Incorrect PIN. Try again.'
+      _failCount++
+      const delay = DELAYS[Math.min(_failCount, DELAYS.length - 1)]
+      pinError.textContent = delay > 0
+        ? `Incorrect PIN. Wait ${delay / 1000}s before retrying.`
+        : 'Incorrect PIN. Try again.'
       pinError.hidden = false
       pinInput.value = ''
-      pinInput.focus()
-      pinSubmit.disabled = false
+      pinSubmit.disabled = true
       pinSubmit.textContent = 'Unlock'
+      if (delay > 0) {
+        setTimeout(() => {
+          pinSubmit.disabled = false
+          pinInput.focus()
+        }, delay)
+      } else {
+        pinSubmit.disabled = false
+        pinInput.focus()
+      }
     }
   }
 
@@ -565,7 +581,7 @@ function wireGlobalEvents(): void {
   // Fired by the settings panel PIN toggle.
   document.addEventListener('canary:pin-enable', (evt) => {
     const pin = (evt as CustomEvent<{ pin: string }>).detail?.pin
-    if (!pin) return
+    if (!pin || pin.length < 6) return
     void enablePin(pin).then(() => {
       update({ settings: { ...getState().settings, pinEnabled: true } })
       startAutoLock()
