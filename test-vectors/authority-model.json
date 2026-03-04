@@ -1,0 +1,406 @@
+{
+  "description": "Sync-layer authority model conformance vectors for CANARY protocol v1",
+  "version": 1,
+  "vectors": [
+    {
+      "id": "I1-reseed-from-admin",
+      "invariant": "I1",
+      "description": "Reseed from admin sender is accepted",
+      "initialGroup": {
+        "name": "test",
+        "seed": "0000000000000000000000000000000000000000000000000000000000000001",
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "rotationInterval": 604800,
+        "wordCount": 1,
+        "wordlist": "en-v1",
+        "counter": 0,
+        "usageOffset": 0,
+        "createdAt": 1700000000,
+        "beaconInterval": 300,
+        "beaconPrecision": 6,
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "epoch": 3,
+        "consumedOps": []
+      },
+      "message": {
+        "type": "reseed",
+        "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "counter": 0,
+        "timestamp": 1700001000,
+        "epoch": 4,
+        "opId": "op1",
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ]
+      },
+      "sender": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "accept",
+      "expectedState": {
+        "epoch": 4,
+        "consumedOps": ["op1"],
+        "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+    },
+    {
+      "id": "I1-reseed-from-non-admin",
+      "invariant": "I1",
+      "description": "Reseed from non-admin member is rejected",
+      "initialGroup": {
+        "name": "test",
+        "seed": "0000000000000000000000000000000000000000000000000000000000000001",
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "rotationInterval": 604800,
+        "wordCount": 1,
+        "wordlist": "en-v1",
+        "counter": 0,
+        "usageOffset": 0,
+        "createdAt": 1700000000,
+        "beaconInterval": 300,
+        "beaconPrecision": 6,
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "epoch": 3,
+        "consumedOps": []
+      },
+      "message": {
+        "type": "reseed",
+        "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "counter": 0,
+        "timestamp": 1700001000,
+        "epoch": 4,
+        "opId": "op1",
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ]
+      },
+      "sender": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "expected": "reject"
+    },
+    {
+      "id": "I1-no-sender-fail-closed",
+      "invariant": "I1",
+      "description": "Privileged action without sender is rejected (fail-closed)",
+      "initialGroup": {
+        "name": "test",
+        "seed": "0000000000000000000000000000000000000000000000000000000000000001",
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "rotationInterval": 604800,
+        "wordCount": 1,
+        "wordlist": "en-v1",
+        "counter": 0,
+        "usageOffset": 0,
+        "createdAt": 1700000000,
+        "beaconInterval": 300,
+        "beaconPrecision": 6,
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "epoch": 3,
+        "consumedOps": []
+      },
+      "message": {
+        "type": "member-join",
+        "pubkey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "timestamp": 1700001000,
+        "epoch": 3,
+        "opId": "op-no-sender"
+      },
+      "sender": null,
+      "expected": "reject"
+    },
+    {
+      "id": "I1-self-leave-allowed",
+      "invariant": "I1",
+      "description": "Self-leave is always allowed (not privileged)",
+      "initialGroup": {
+        "name": "test",
+        "seed": "0000000000000000000000000000000000000000000000000000000000000001",
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "rotationInterval": 604800,
+        "wordCount": 1,
+        "wordlist": "en-v1",
+        "counter": 0,
+        "usageOffset": 0,
+        "createdAt": 1700000000,
+        "beaconInterval": 300,
+        "beaconPrecision": 6,
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "epoch": 3,
+        "consumedOps": []
+      },
+      "message": {
+        "type": "member-leave",
+        "pubkey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "timestamp": 1700001000
+      },
+      "sender": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "expected": "accept",
+      "expectedState": {
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "id": "I2-replayed-opId",
+      "invariant": "I2",
+      "description": "Replayed opId in same epoch is rejected",
+      "initialGroup": {
+        "name": "test",
+        "seed": "0000000000000000000000000000000000000000000000000000000000000001",
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "rotationInterval": 604800,
+        "wordCount": 1,
+        "wordlist": "en-v1",
+        "counter": 0,
+        "usageOffset": 0,
+        "createdAt": 1700000000,
+        "beaconInterval": 300,
+        "beaconPrecision": 6,
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "epoch": 3,
+        "consumedOps": ["op1"]
+      },
+      "message": {
+        "type": "member-join",
+        "pubkey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "timestamp": 1700001000,
+        "epoch": 3,
+        "opId": "op1"
+      },
+      "sender": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "reject"
+    },
+    {
+      "id": "I2-same-opId-new-epoch",
+      "invariant": "I2",
+      "description": "Same opId in new epoch is accepted (consumedOps cleared on reseed)",
+      "initialGroup": {
+        "name": "test",
+        "seed": "0000000000000000000000000000000000000000000000000000000000000001",
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "rotationInterval": 604800,
+        "wordCount": 1,
+        "wordlist": "en-v1",
+        "counter": 0,
+        "usageOffset": 0,
+        "createdAt": 1700000000,
+        "beaconInterval": 300,
+        "beaconPrecision": 6,
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "epoch": 3,
+        "consumedOps": ["op1"]
+      },
+      "message": {
+        "type": "reseed",
+        "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "counter": 0,
+        "timestamp": 1700001000,
+        "epoch": 4,
+        "opId": "op1",
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ]
+      },
+      "sender": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "accept",
+      "expectedState": {
+        "epoch": 4,
+        "consumedOps": ["op1"]
+      }
+    },
+    {
+      "id": "I3-wrong-epoch-member-join",
+      "invariant": "I3",
+      "description": "Member-join with future epoch is rejected",
+      "initialGroup": {
+        "name": "test",
+        "seed": "0000000000000000000000000000000000000000000000000000000000000001",
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "rotationInterval": 604800,
+        "wordCount": 1,
+        "wordlist": "en-v1",
+        "counter": 0,
+        "usageOffset": 0,
+        "createdAt": 1700000000,
+        "beaconInterval": 300,
+        "beaconPrecision": 6,
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "epoch": 3,
+        "consumedOps": []
+      },
+      "message": {
+        "type": "member-join",
+        "pubkey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "timestamp": 1700001000,
+        "epoch": 5,
+        "opId": "op4"
+      },
+      "sender": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "reject"
+    },
+    {
+      "id": "I4-reseed-wrong-epoch",
+      "invariant": "I4",
+      "description": "Reseed with epoch != local + 1 is rejected",
+      "initialGroup": {
+        "name": "test",
+        "seed": "0000000000000000000000000000000000000000000000000000000000000001",
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "rotationInterval": 604800,
+        "wordCount": 1,
+        "wordlist": "en-v1",
+        "counter": 0,
+        "usageOffset": 0,
+        "createdAt": 1700000000,
+        "beaconInterval": 300,
+        "beaconPrecision": 6,
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "epoch": 3,
+        "consumedOps": []
+      },
+      "message": {
+        "type": "reseed",
+        "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "counter": 0,
+        "timestamp": 1700001000,
+        "epoch": 3,
+        "opId": "reseed-2",
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      },
+      "sender": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "reject"
+    },
+    {
+      "id": "I4-admins-not-subset-members",
+      "invariant": "I4",
+      "description": "Reseed where admins is not a subset of members is rejected",
+      "initialGroup": {
+        "name": "test",
+        "seed": "0000000000000000000000000000000000000000000000000000000000000001",
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "rotationInterval": 604800,
+        "wordCount": 1,
+        "wordlist": "en-v1",
+        "counter": 0,
+        "usageOffset": 0,
+        "createdAt": 1700000000,
+        "beaconInterval": 300,
+        "beaconPrecision": 6,
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "epoch": 3,
+        "consumedOps": []
+      },
+      "message": {
+        "type": "reseed",
+        "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "counter": 0,
+        "timestamp": 1700001000,
+        "epoch": 4,
+        "opId": "reseed-bad",
+        "admins": [
+          "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        ],
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      },
+      "sender": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "reject"
+    },
+    {
+      "id": "I6-stale-epoch",
+      "invariant": "I6",
+      "description": "Message with epoch < local epoch is dropped",
+      "initialGroup": {
+        "name": "test",
+        "seed": "0000000000000000000000000000000000000000000000000000000000000001",
+        "members": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "rotationInterval": 604800,
+        "wordCount": 1,
+        "wordlist": "en-v1",
+        "counter": 0,
+        "usageOffset": 0,
+        "createdAt": 1700000000,
+        "beaconInterval": 300,
+        "beaconPrecision": 6,
+        "admins": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "epoch": 3,
+        "consumedOps": []
+      },
+      "message": {
+        "type": "member-join",
+        "pubkey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "timestamp": 1700001000,
+        "epoch": 2,
+        "opId": "stale-op"
+      },
+      "sender": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "reject"
+    }
+  ]
+}

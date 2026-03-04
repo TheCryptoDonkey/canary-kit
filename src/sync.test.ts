@@ -9,7 +9,9 @@ import {
   type SyncMessage,
 } from './sync.js'
 import { createGroup } from './group.js'
-import { bytesToHex } from './crypto.js'
+import type { GroupState } from './group.js'
+import { bytesToHex, hexToBytes } from './crypto.js'
+import vectors from '../test-vectors/authority-model.json'
 
 describe('sync message serialisation', () => {
   it('round-trips a member-join message', () => {
@@ -644,4 +646,33 @@ describe('canonical JSON (H2)', () => {
     const canonicalFields = Object.keys(JSON.parse(canonicaliseSyncMessage(versioned))).sort()
     expect(canonicalFields).toEqual(wireFields)
   })
+})
+
+describe('conformance vectors (H6)', () => {
+  for (const vector of vectors.vectors) {
+    it(vector.id, () => {
+      const group = vector.initialGroup as unknown as GroupState
+      let msg: SyncMessage
+      if (vector.message.type === 'reseed') {
+        msg = {
+          ...vector.message,
+          seed: hexToBytes(vector.message.seed as string),
+        } as unknown as SyncMessage
+      } else {
+        msg = vector.message as unknown as SyncMessage
+      }
+      const sender = vector.sender || undefined
+      const result = applySyncMessage(group, msg, undefined, sender)
+      if (vector.expected === 'accept') {
+        expect(result).not.toBe(group)
+        if (vector.expectedState) {
+          for (const [key, value] of Object.entries(vector.expectedState)) {
+            expect((result as Record<string, unknown>)[key]).toEqual(value)
+          }
+        }
+      } else {
+        expect(result).toBe(group)
+      }
+    })
+  }
 })
