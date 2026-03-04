@@ -18,7 +18,7 @@ import {
   disablePin,
 } from './storage.js'
 import { getState, subscribe, update, updateGroup } from './state.js'
-import { renderHeader, updateRelayStatus } from './components/header.js'
+import { renderHeader } from './components/header.js'
 import { renderSidebar } from './components/sidebar.js'
 import { showModal } from './components/modal.js'
 import { createNewGroup } from './actions/groups.js'
@@ -38,6 +38,7 @@ import { DEMO_ACCOUNTS } from './demo-accounts.js'
 import { decode as nip19decode } from 'nostr-tools/nip19'
 import { getPublicKey } from 'nostr-tools/pure'
 import { broadcastAction, ensureTransport, subscribeToAllGroups, teardownSync } from './sync.js'
+import { showToast } from './components/toast.js'
 import { showDuressAlert } from './components/duress-alert.js'
 import { escapeHtml } from './utils/escape.js'
 import type { AppIdentity } from './types.js'
@@ -94,6 +95,7 @@ function stopAutoLock(): void {
 
 function showLockScreen(): void {
   stopAutoLock()
+  teardownSync()
 
   const app = document.getElementById('app')!
   app.innerHTML = `
@@ -469,7 +471,7 @@ function wireGlobalEvents(): void {
       </label>
       ` : ''}
       <label class="input-label">Confirmation Code
-        <input name="code" class="input" placeholder="6-character code" maxlength="6" required>
+        <input name="code" class="input" placeholder="XXXX-XXXX-XXXX" maxlength="14" required>
       </label>
       <div class="modal__actions">
         <button type="button" class="btn" id="modal-cancel-btn">Cancel</button>
@@ -482,26 +484,47 @@ function wireGlobalEvents(): void {
         const myName = joinKnownName || (form.get('myname') as string | null)?.trim() || ''
         const data = acceptInvite(payload.trim(), code.trim() || undefined)
 
-        // Use the shared group ID from the invite so relay sync events match
-        const id = data.groupId ?? crypto.randomUUID()
+        // Use the invite's shared group ID so relay sync events match.
+        const id = data.groupId
+        const { groups: existingGroups, identity } = getState()
+        const existingGroup = existingGroups[id]
 
-        // Reject replayed invites — same nonce for the same group means replay
+        // Reject replayed invites for this group.
         if (isInviteConsumed(id, data.nonce)) {
           throw new Error('This invite has already been used.')
         }
 
-        const hasRelays = (data.relays?.length ?? 0) > 0
-
-        // Add our own pubkey to the members list
-        const { identity } = getState()
-        const members = [...(data.members ?? [])]
-        if (identity?.pubkey && !members.includes(identity.pubkey)) {
-          members.push(identity.pubkey)
+        // Reject stale-but-unique nonces for existing groups.
+        if (existingGroup && data.issuedAt <= (existingGroup.latestInviteIssuedAt ?? 0)) {
+          throw new Error('This invite is stale and has been rejected.')
         }
 
-        const memberNames: Record<string, string> = {}
+        // Forward-only rekey migration:
+        // if seed differs and invite is newer, accept as intentional rotation.
+        const isSeedMigration = !!(existingGroup && existingGroup.seed !== data.seed)
+        const relays = Array.from(new Set([...(existingGroup?.relays ?? []), ...data.relays]))
+        const hasRelays = relays.length > 0
+
+        // Keep anti-rollback union for same-seed updates; for rekeys, trust invite membership.
+        const memberSet = isSeedMigration
+          ? new Set<string>(data.members)
+          : new Set<string>([...(existingGroup?.members ?? []), ...data.members])
+        if (identity?.pubkey) {
+          memberSet.add(identity.pubkey)
+        }
+        const members = Array.from(memberSet)
+
+        const memberNames: Record<string, string> = { ...(existingGroup?.memberNames ?? {}) }
         if (myName && identity?.pubkey) {
           memberNames[identity.pubkey] = myName
+        }
+        for (const key of Object.keys(memberNames)) {
+          if (!memberSet.has(key)) delete memberNames[key]
+        }
+
+        const livenessCheckins = isSeedMigration ? {} : { ...(existingGroup?.livenessCheckins ?? {}) }
+        for (const key of Object.keys(livenessCheckins)) {
+          if (!memberSet.has(key)) delete livenessCheckins[key]
         }
 
         // Whitelist known fields only — never spread untrusted invite data into state
@@ -513,28 +536,41 @@ function wireGlobalEvents(): void {
           memberNames,
           mode: (hasRelays ? 'online' : 'offline') as 'offline' | 'online',
           nostrEnabled: hasRelays,
-          relays: data.relays ?? [],
-          wordlist: data.wordlist ?? 'en-v1',
-          wordCount: data.wordCount ?? 2,
-          counter: data.counter ?? 0,
-          usageOffset: data.usageOffset ?? 0,
-          rotationInterval: data.rotationInterval ?? 86400,
-          encodingFormat: (data.encodingFormat ?? 'words') as 'words' | 'pin' | 'hex',
-          usedInvites: [...(getState().groups[id]?.usedInvites ?? []), data.nonce],
-          beaconInterval: data.beaconInterval ?? 60,
-          beaconPrecision: data.beaconPrecision ?? 6,
-          duressMode: 'immediate' as const,
-          livenessInterval: data.rotationInterval ?? 86400,
-          livenessCheckins: {},
-          tolerance: data.tolerance ?? 1,
-          createdAt: Math.floor(Date.now() / 1000),
+          relays,
+          wordlist: data.wordlist,
+          wordCount: data.wordCount,
+          counter: isSeedMigration
+            ? data.counter
+            : existingGroup
+              ? Math.max(existingGroup.counter, data.counter)
+              : data.counter,
+          usageOffset: isSeedMigration
+            ? data.usageOffset
+            : existingGroup
+              ? Math.max(existingGroup.usageOffset, data.usageOffset)
+              : data.usageOffset,
+          rotationInterval: data.rotationInterval,
+          encodingFormat: data.encodingFormat,
+          usedInvites: Array.from(new Set([...(existingGroup?.usedInvites ?? []), data.nonce])),
+          latestInviteIssuedAt: data.issuedAt,
+          beaconInterval: data.beaconInterval,
+          beaconPrecision: data.beaconPrecision,
+          duressMode: existingGroup?.duressMode ?? 'immediate',
+          livenessInterval: existingGroup?.livenessInterval ?? data.rotationInterval,
+          livenessCheckins,
+          tolerance: data.tolerance,
+          createdAt: existingGroup?.createdAt ?? Math.floor(Date.now() / 1000),
         }
-        const groups = { ...getState().groups, [id]: appGroup }
+        const groups = { ...existingGroups, [id]: appGroup }
         update({ groups, activeGroupId: id })
+
+        if (isSeedMigration) {
+          showToast('Group secret rotated. Joined latest group state.', 'warning', 5000)
+        }
 
         // Boot relay sync for this group and announce ourselves
         if (hasRelays && identity) {
-          void ensureTransport(data.relays!, id).then(() => {
+          void ensureTransport(relays, id).then(() => {
             broadcastAction(id, {
               type: 'member-join',
               pubkey: identity.pubkey,

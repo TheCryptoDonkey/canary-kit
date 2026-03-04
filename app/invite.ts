@@ -28,9 +28,21 @@ export interface InvitePayload {
   encodingFormat: 'words' | 'pin' | 'hex'
   /** Tolerance window. */
   tolerance: number
+  /** Invite creation time (unix seconds). */
+  issuedAt: number
+  /** Invite expiry time (unix seconds). */
+  expiresAt: number
 }
 
 // ── Helpers ────────────────────────────────────────────────────
+
+const HEX_64_RE = /^[0-9a-f]{64}$/
+const HEX_32_RE = /^[0-9a-f]{32}$/
+const INVITE_MAX_AGE_SEC = 7 * 24 * 60 * 60
+
+function isNonNegativeInt(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}
 
 /**
  * Generate a 16-byte cryptographically random nonce as a hex string.
@@ -43,19 +55,78 @@ function randomNonce(): string {
     .join('')
 }
 
+function assertInvitePayload(raw: unknown): asserts raw is InvitePayload {
+  const data = raw as Record<string, unknown>
+  if (!data || typeof data !== 'object') {
+    throw new Error('Invalid invite payload — expected an object.')
+  }
+
+  if (typeof data.groupId !== 'string' || data.groupId.length === 0) {
+    throw new Error('Invalid invite payload — groupId is required.')
+  }
+  if (typeof data.seed !== 'string' || !HEX_64_RE.test(data.seed)) {
+    throw new Error('Invalid invite payload — seed must be 64-char hex.')
+  }
+  if (typeof data.groupName !== 'string' || data.groupName.trim().length === 0) {
+    throw new Error('Invalid invite payload — groupName is required.')
+  }
+  if (!Number.isInteger(data.rotationInterval) || (data.rotationInterval as number) <= 0) {
+    throw new Error('Invalid invite payload — rotationInterval must be > 0.')
+  }
+  if (data.wordCount !== 1 && data.wordCount !== 2 && data.wordCount !== 3) {
+    throw new Error('Invalid invite payload — wordCount must be 1, 2, or 3.')
+  }
+  if (typeof data.wordlist !== 'string' || data.wordlist.length === 0) {
+    throw new Error('Invalid invite payload — wordlist is required.')
+  }
+  if (!isNonNegativeInt(data.counter) || !isNonNegativeInt(data.usageOffset)) {
+    throw new Error('Invalid invite payload — counter and usageOffset must be non-negative integers.')
+  }
+  if (typeof data.nonce !== 'string' || !HEX_32_RE.test(data.nonce)) {
+    throw new Error('Invalid invite payload — nonce must be 32-char hex.')
+  }
+  if (!Number.isInteger(data.beaconInterval) || (data.beaconInterval as number) <= 0) {
+    throw new Error('Invalid invite payload — beaconInterval must be > 0.')
+  }
+  if (!Number.isInteger(data.beaconPrecision) || (data.beaconPrecision as number) < 1 || (data.beaconPrecision as number) > 11) {
+    throw new Error('Invalid invite payload — beaconPrecision must be 1..11.')
+  }
+  if (!Array.isArray(data.members) || !data.members.every((m) => typeof m === 'string' && HEX_64_RE.test(m))) {
+    throw new Error('Invalid invite payload — members must be 64-char hex pubkeys.')
+  }
+  if (!Array.isArray(data.relays) || !data.relays.every((r) => typeof r === 'string' && r.startsWith('wss://'))) {
+    throw new Error('Invalid invite payload — relays must be wss:// URLs.')
+  }
+  if (data.encodingFormat !== 'words' && data.encodingFormat !== 'pin' && data.encodingFormat !== 'hex') {
+    throw new Error('Invalid invite payload — encodingFormat must be words|pin|hex.')
+  }
+  if (!isNonNegativeInt(data.tolerance)) {
+    throw new Error('Invalid invite payload — tolerance must be a non-negative integer.')
+  }
+  if (!isNonNegativeInt(data.issuedAt) || !isNonNegativeInt(data.expiresAt)) {
+    throw new Error('Invalid invite payload — issuedAt/expiresAt must be unix seconds.')
+  }
+  if ((data.expiresAt as number) <= (data.issuedAt as number)) {
+    throw new Error('Invalid invite payload — expiresAt must be after issuedAt.')
+  }
+}
+
 /**
- * Derive a 6-character confirmation code that authenticates the full invite payload.
+ * Derive a 12-character confirmation code that authenticates the full invite payload.
  *
  * Computes HMAC-SHA256 over the canonical payload content (all fields except nonce),
  * keyed by the nonce. This means any modification to the payload fields invalidates
  * the code, even if the nonce is unchanged.
+ *
+ * Returns 48 bits of MAC (12 hex chars) formatted as three groups of four: XXXX-XXXX-XXXX.
  */
 function confirmCodeFromPayload(payload: InvitePayload): string {
   const { nonce, ...rest } = payload
   const data = JSON.stringify(rest)
   const encoder = new TextEncoder()
   const mac = hmacSha256(hexToBytes(nonce), encoder.encode(data))
-  return bytesToHex(mac).slice(0, 6).toUpperCase()
+  const hex = bytesToHex(mac).slice(0, 12).toUpperCase()
+  return `${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}`
 }
 
 // ── Public API ─────────────────────────────────────────────────
@@ -68,10 +139,11 @@ function confirmCodeFromPayload(payload: InvitePayload): string {
  * to prevent replay attacks.
  *
  * @returns `payload` — base64 invite string to share with the new member.
- * @returns `confirmCode` — 6-char code to read aloud for out-of-band confirmation.
+ * @returns `confirmCode` — 12-char code (XXXX-XXXX-XXXX) to read aloud for out-of-band confirmation.
  */
 export function createInvite(group: AppGroup): { payload: string; confirmCode: string } {
   const nonce = randomNonce()
+  const issuedAt = Math.floor(Date.now() / 1000)
 
   const invitePayload: InvitePayload = {
     groupId: group.id,
@@ -89,6 +161,8 @@ export function createInvite(group: AppGroup): { payload: string; confirmCode: s
     relays: [...(group.relays ?? [])],
     encodingFormat: group.encodingFormat ?? 'words',
     tolerance: group.tolerance ?? 1,
+    issuedAt,
+    expiresAt: issuedAt + INVITE_MAX_AGE_SEC,
   }
 
   const payload = btoa(JSON.stringify(invitePayload))
@@ -101,23 +175,38 @@ export function createInvite(group: AppGroup): { payload: string; confirmCode: s
  * Accept and decode an invite payload.
  *
  * @param payload     Base64-encoded JSON invite string.
- * @param confirmCode 6-char confirmation code for verification.
+ * @param confirmCode 12-char confirmation code (with or without separators) for verification.
  * @throws            If the payload is invalid or the confirmation code does not match.
  */
 export function acceptInvite(payload: string, confirmCode?: string): InvitePayload {
-  let data: InvitePayload
+  let raw: unknown
   try {
-    data = JSON.parse(atob(payload)) as InvitePayload
+    raw = JSON.parse(atob(payload))
   } catch {
     throw new Error('Invalid invite payload — could not decode.')
   }
 
-  if (
-    typeof data.seed !== 'string' ||
-    typeof data.groupName !== 'string' ||
-    typeof data.nonce !== 'string'
-  ) {
-    throw new Error('Invalid invite payload — missing required fields.')
+  assertInvitePayload(raw)
+
+  // Return an explicit whitelist copy so no unexpected fields are carried into state.
+  const data: InvitePayload = {
+    groupId: raw.groupId,
+    seed: raw.seed,
+    groupName: raw.groupName,
+    rotationInterval: raw.rotationInterval,
+    wordCount: raw.wordCount,
+    wordlist: raw.wordlist,
+    counter: raw.counter,
+    usageOffset: raw.usageOffset,
+    nonce: raw.nonce,
+    beaconInterval: raw.beaconInterval,
+    beaconPrecision: raw.beaconPrecision,
+    members: [...raw.members],
+    relays: [...raw.relays],
+    encodingFormat: raw.encodingFormat,
+    tolerance: raw.tolerance,
+    issuedAt: raw.issuedAt,
+    expiresAt: raw.expiresAt,
   }
 
   if (!confirmCode?.trim()) {
@@ -125,8 +214,15 @@ export function acceptInvite(payload: string, confirmCode?: string): InvitePaylo
   }
 
   const expected = confirmCodeFromPayload(data)
-  if (confirmCode.trim().toUpperCase() !== expected) {
+  const normalised = confirmCode.trim().replace(/[-\s]/g, '').toUpperCase()
+  const expectedRaw = expected.replace(/-/g, '')
+  if (normalised !== expectedRaw) {
     throw new Error('Confirmation code does not match — invite may have been tampered with.')
+  }
+
+  const now = Math.floor(Date.now() / 1000)
+  if (data.expiresAt <= now) {
+    throw new Error('Invite has expired. Ask for a new invite.')
   }
 
   return data
@@ -139,7 +235,7 @@ export function isInviteConsumed(groupId: string, nonce: string): boolean {
   const { groups } = getState()
   const group = groups[groupId]
   if (!group) return false
-  return group.usedInvites.includes(nonce)
+  return Array.isArray(group.usedInvites) && group.usedInvites.includes(nonce)
 }
 
 /**
@@ -155,6 +251,6 @@ export function consumeInvite(groupId: string, nonce: string): void {
   }
 
   updateGroup(groupId, {
-    usedInvites: [...group.usedInvites, nonce],
+    usedInvites: Array.from(new Set([...group.usedInvites, nonce])),
   })
 }
