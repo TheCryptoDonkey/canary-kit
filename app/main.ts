@@ -703,16 +703,9 @@ async function ensureLocalIdentity(): Promise<void> {
     update({ identity: newIdentity })
   }
 
-  // Ensure the local identity is a member of all existing groups
-  // (groups created before local identity was introduced).
-  const { groups } = getState()
-  for (const [id, group] of Object.entries(groups)) {
-    if (!group.members.includes(newIdentity.pubkey)) {
-      const members = [...group.members, newIdentity.pubkey]
-      const updated = { ...groups, [id]: { ...group, members } }
-      update({ groups: updated })
-    }
-  }
+  // Boot-time auto-insertion of local identity into groups was removed.
+  // It violated the authority model (I1) — only admins may add members.
+  // Groups missing the local identity require a fresh invite to rejoin.
 }
 
 // ── Relay sync boot ────────────────────────────────────────────
