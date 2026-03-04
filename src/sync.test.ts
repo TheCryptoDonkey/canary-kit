@@ -181,6 +181,44 @@ describe('state-snapshot', () => {
   })
 })
 
+describe('liveness-checkin', () => {
+  it('round-trips a liveness-checkin message', () => {
+    const msg: SyncMessage = {
+      type: 'liveness-checkin',
+      pubkey: 'a'.repeat(64),
+      timestamp: 1700000000,
+    }
+    const encoded = encodeSyncMessage(msg)
+    const decoded = decodeSyncMessage(encoded)
+    expect(decoded).toEqual(msg)
+  })
+
+  it('applySyncMessage does not modify group state', () => {
+    const group = {
+      name: 'Test',
+      seed: 'a'.repeat(64),
+      members: ['b'.repeat(64)],
+      rotationInterval: 604800,
+      wordCount: 1,
+      wordlist: 'en-v1',
+      counter: 50,
+      usageOffset: 2,
+      createdAt: 1700000000,
+      beaconInterval: 300,
+      beaconPrecision: 6,
+    }
+
+    const msg: SyncMessage = {
+      type: 'liveness-checkin',
+      pubkey: 'b'.repeat(64),
+      timestamp: 1700001000,
+    }
+
+    const updated = applySyncMessage(group, msg)
+    expect(updated).toEqual(group)
+  })
+})
+
 describe('full round-trip: encode → decode → apply', () => {
   function makeGroup() {
     return createGroup({ name: 'test', members: [PUBKEY_AAA], preset: 'family' })
