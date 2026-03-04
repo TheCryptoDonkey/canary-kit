@@ -31,7 +31,6 @@ import { renderLiveness } from './panels/liveness.js'
 import { renderSettings } from './panels/settings.js'
 import { renderCallSimulation, destroyCallSimulation } from './views/call-simulation.js'
 import { acceptInvite } from './invite.js'
-import type { PresetName } from 'canary-kit'
 import { resolveSigner } from './nostr/signer.js'
 import { broadcastAction, ensureTransport, subscribeToAllGroups, teardownSync } from './sync.js'
 import type { AppIdentity } from './types.js'
@@ -291,40 +290,20 @@ function render(): void {
 
 // ── Modal: create group ────────────────────────────────────────
 
-const PRESET_DESCRIPTIONS: Record<PresetName, string> = {
-  'family': 'Single word, weekly rotation. For family and friends.',
-  'field-ops': 'Two words, daily rotation. For journalism and activism.',
-  'enterprise': 'Two words, 48-hour rotation. For larger teams.',
-}
-
 function showCreateGroupModal(): void {
-  const presetOptions = (['family', 'field-ops', 'enterprise'] as PresetName[])
-    .map(
-      (p) =>
-        `<option value="${p}">${p}</option>`,
-    )
-    .join('')
-
   const content = `
     <h2 class="modal__title">New Group</h2>
     <label class="input-label">
-      <span>Group name</span>
+      <span>What's your group called?</span>
       <input
         class="input"
         type="text"
         name="name"
-        placeholder="e.g. Family, Field Team Alpha"
+        placeholder="e.g. Family, Field Team"
         required
         autofocus
       />
     </label>
-    <label class="input-label">
-      <span>Threat profile</span>
-      <select class="input" name="preset">
-        ${presetOptions}
-      </select>
-    </label>
-    <p id="preset-description" class="modal__preset-desc">${PRESET_DESCRIPTIONS['family']}</p>
     <div class="modal__actions">
       <button type="button" class="btn" id="modal-cancel-btn">Cancel</button>
       <button type="submit" class="btn btn--primary">Create</button>
@@ -333,31 +312,18 @@ function showCreateGroupModal(): void {
 
   showModal(content, (formData) => {
     const name = (formData.get('name') as string | null)?.trim() ?? ''
-    const preset = (formData.get('preset') as PresetName | null) ?? 'family'
     if (!name) return
     const { identity } = getState()
-    const groupId = createNewGroup(name, preset, identity?.pubkey)
-    // Boot sync for the new group (relay is pre-configured)
+    const groupId = createNewGroup(name, 'family', identity?.pubkey)
     const newGroup = getState().groups[groupId]
     if (newGroup?.relays?.length) {
       void ensureTransport(newGroup.relays, groupId)
     }
   })
 
-  // Wire Cancel button (after the dialog is in the DOM).
   requestAnimationFrame(() => {
-    const cancelBtn = document.getElementById('modal-cancel-btn')
-    cancelBtn?.addEventListener('click', () => {
-      const dialog = document.getElementById('app-modal') as HTMLDialogElement | null
-      dialog?.close()
-    })
-
-    // Live-update preset description when the select changes.
-    const presetSelect = document.querySelector<HTMLSelectElement>('#app-modal select[name="preset"]')
-    const descEl = document.getElementById('preset-description')
-    presetSelect?.addEventListener('change', () => {
-      const selected = presetSelect.value as PresetName
-      if (descEl) descEl.textContent = PRESET_DESCRIPTIONS[selected] ?? ''
+    document.getElementById('modal-cancel-btn')?.addEventListener('click', () => {
+      (document.getElementById('app-modal') as HTMLDialogElement | null)?.close()
     })
   })
 }
