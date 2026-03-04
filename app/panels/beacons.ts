@@ -6,7 +6,7 @@ import { deriveBeaconKey, encryptBeacon } from 'canary-kit'
 import { encode, decode, precisionToRadius } from 'geohash-kit'
 
 let map: any = null
-let maplibreLoaded = false
+let maplibregl: typeof import('maplibre-gl') | null = null
 let markers: Record<string, any> = {}
 let positions: Record<string, { lat: number; lon: number; geohash: string; precision: number; timestamp: number }> = {}
 let encryptedPayloads: Record<string, string> = {}
@@ -25,9 +25,6 @@ const PRECISION_LABELS: Record<number, string> = {
   8: '19 m — door',
   9: '2.4 m — exact',
 }
-
-const MAPLIBRE_JS = 'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js'
-const MAPLIBRE_CSS = 'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css'
 
 // ── Circle geometry helper ────────────────────────────────────
 
@@ -62,23 +59,14 @@ function buildCircleFeatures(): any {
 
 // ── MapLibre loading ──────────────────────────────────────────
 
-async function loadMapLibre(): Promise<void> {
-  if (maplibreLoaded) return
-
-  const link = document.createElement('link')
-  link.rel = 'stylesheet'
-  link.href = MAPLIBRE_CSS
-  document.head.appendChild(link)
-
-  await new Promise<void>((resolve, reject) => {
-    const script = document.createElement('script')
-    script.src = MAPLIBRE_JS
-    script.onload = () => resolve()
-    script.onerror = reject
-    document.head.appendChild(script)
-  })
-
-  maplibreLoaded = true
+async function loadMapLibre(): Promise<typeof import('maplibre-gl')> {
+  if (maplibregl) return maplibregl
+  const [ml] = await Promise.all([
+    import('maplibre-gl'),
+    import('maplibre-gl/dist/maplibre-gl.css'),
+  ])
+  maplibregl = ml
+  return ml
 }
 
 // ── Render ────────────────────────────────────────────────────
@@ -164,14 +152,14 @@ export async function renderBeacons(container: HTMLElement): Promise<void> {
 
 function initMap(): void {
   const mapEl = document.getElementById('beacon-map')
-  if (!mapEl || map) return
+  if (!mapEl || map || !maplibregl) return
 
   const isDark = document.documentElement.dataset.theme !== 'light'
   const style = isDark
     ? 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
     : 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
 
-  map = new (window as any).maplibregl.Map({
+  map = new maplibregl.Map({
     container: mapEl,
     style,
     center: [-0.1278, 51.5074], // London default
@@ -291,8 +279,7 @@ function startBeaconWatch(): void {
 // ── Markers (small center dots) ───────────────────────────────
 
 function updateMapMarker(pubkey: string, lat: number, lon: number): void {
-  if (!map) return
-  const maplibregl = (window as any).maplibregl
+  if (!map || !maplibregl) return
   const isDuress = duressMembers.has(pubkey)
 
   if (markers[pubkey]) {
