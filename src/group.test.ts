@@ -5,7 +5,6 @@ import {
   getCurrentDuressWord,
   advanceCounter,
   reseed,
-  deterministicReseed,
   addMember,
   removeMember,
   syncCounter,
@@ -232,36 +231,6 @@ describe('removeMember', () => {
     const result = removeMember(state, 'b'.repeat(64))
     expect(result.seed).toBe(state.seed)
     expect(result.members).toEqual(state.members)
-  })
-})
-
-describe('deterministicReseed', () => {
-  it('produces a new seed different from the original', () => {
-    const group = createGroup({ name: 'Test', members: [ALICE, BOB] })
-    const reseeded = deterministicReseed(group, 'some-context')
-    expect(reseeded.seed).not.toBe(group.seed)
-    expect(reseeded.seed).toHaveLength(64)
-  })
-
-  it('is deterministic — same input produces same output', () => {
-    const group = createGroup({ name: 'Test', members: [ALICE, BOB] })
-    const a = deterministicReseed(group, 'same-context')
-    const b = deterministicReseed(group, 'same-context')
-    expect(a.seed).toBe(b.seed)
-  })
-
-  it('different context produces different seed', () => {
-    const group = createGroup({ name: 'Test', members: [ALICE, BOB] })
-    const a = deterministicReseed(group, ALICE)
-    const b = deterministicReseed(group, BOB)
-    expect(a.seed).not.toBe(b.seed)
-  })
-
-  it('resets usageOffset to 0', () => {
-    const group = advanceCounter(createGroup({ name: 'Test', members: [ALICE, BOB] }))
-    expect(group.usageOffset).toBe(1)
-    const reseeded = deterministicReseed(group, 'ctx')
-    expect(reseeded.usageOffset).toBe(0)
   })
 })
 

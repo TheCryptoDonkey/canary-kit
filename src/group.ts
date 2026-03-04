@@ -180,7 +180,7 @@ export function reseed(state: GroupState): GroupState {
  *
  * @deprecated Prefer `reseed()` (random) for security-critical key rotation.
  */
-export function deterministicReseed(state: GroupState, context: string): GroupState {
+function deterministicReseed(state: GroupState, context: string): GroupState {
   const key = hexToBytes(state.seed)
   const data = new TextEncoder().encode('canary:reseed:' + context)
   const newSeed = bytesToHex(hmacSha256(key, data))
