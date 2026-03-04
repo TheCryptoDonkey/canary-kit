@@ -596,16 +596,30 @@ function showLoginScreen(): void {
       <h1 class="lock-screen__brand">CANARY</h1>
       <p class="lock-screen__hint">Deepfake-proof identity verification</p>
 
-      <div style="width: 100%; max-width: 320px; margin-top: 1.5rem;">
-        <p class="input-label__text" style="margin-bottom: 0.375rem;">Login with nsec</p>
-        <form id="nsec-login-form" autocomplete="off" style="display: flex; flex-direction: column; gap: 0.375rem;">
-          <input class="input" type="password" id="login-nsec" placeholder="nsec1..." style="width: 100%; font-size: 0.875rem; padding: 0.5rem;" />
-          <button class="btn btn--primary" type="submit">Login</button>
-        </form>
+      <div style="width: 100%; max-width: 360px; margin-top: 1.5rem;">
 
-        ${hasNip07() ? `
-          <button class="btn" id="login-nip07" type="button" style="width: 100%; margin-top: 0.5rem;">Use Browser Extension</button>
-        ` : ''}
+        <div style="background: var(--bg-raised); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+          <p class="input-label__text" style="margin-bottom: 0.5rem;">Use Offline</p>
+          <p class="settings-hint" style="margin-bottom: 0.5rem;">No account needed. Everything stays on this device.</p>
+          <form id="offline-form" autocomplete="off" style="display: flex; gap: 0.375rem;">
+            <input class="input" type="text" id="offline-name" placeholder="Your name" style="flex: 1; font-size: 0.875rem; padding: 0.5rem;" />
+            <button class="btn btn--primary" type="submit">Start</button>
+          </form>
+        </div>
+
+        <div style="background: var(--bg-raised); border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
+          <p class="input-label__text" style="margin-bottom: 0.5rem;">Connect with Nostr</p>
+          <p class="settings-hint" style="margin-bottom: 0.5rem;">Sync groups across devices via relays.</p>
+
+          <form id="nsec-login-form" autocomplete="off" style="display: flex; flex-direction: column; gap: 0.375rem;">
+            <input class="input" type="password" id="login-nsec" placeholder="nsec1..." style="width: 100%; font-size: 0.875rem; padding: 0.5rem;" />
+            <button class="btn btn--primary" type="submit">Login with nsec</button>
+          </form>
+
+          ${hasNip07() ? `
+            <button class="btn" id="login-nip07" type="button" style="width: 100%; margin-top: 0.5rem;">Use Browser Extension</button>
+          ` : ''}
+        </div>
 
         <div style="border-top: 1px solid var(--border); margin: 1rem 0; padding-top: 0.75rem;">
           <p class="input-label__text" style="margin-bottom: 0.375rem;">Demo accounts</p>
@@ -614,10 +628,19 @@ function showLoginScreen(): void {
           </div>
         </div>
 
-        <button class="btn" id="login-generate" type="button" style="width: 100%; margin-top: 0.25rem;">Generate New Key</button>
       </div>
     </div>
   `
+
+  // Offline — generate key silently, just ask for a name
+  app.querySelector<HTMLFormElement>('#offline-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const name = app.querySelector<HTMLInputElement>('#offline-name')?.value.trim() || 'You'
+    await ensureLocalIdentity()
+    const { identity } = getState()
+    if (identity) update({ identity: { ...identity, displayName: name } })
+    await bootApp()
+  })
 
   // nsec form submit
   app.querySelector<HTMLFormElement>('#nsec-login-form')?.addEventListener('submit', async (e) => {
@@ -659,11 +682,6 @@ function showLoginScreen(): void {
     } catch { alert('Extension rejected the request.') }
   })
 
-  // Generate new key
-  app.querySelector('#login-generate')?.addEventListener('click', async () => {
-    await ensureLocalIdentity()
-    await bootApp()
-  })
 }
 
 async function bootApp(): Promise<void> {
