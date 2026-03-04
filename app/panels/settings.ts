@@ -39,12 +39,15 @@ export function renderSettings(container: HTMLElement): void {
         <div class="settings-section">
           <span class="input-label">Rotation</span>
           <div class="segmented">
+            <button class="segmented__btn ${group.rotationInterval === 30 ? 'segmented__btn--active' : ''}" data-interval="30">30s</button>
             <button class="segmented__btn ${group.rotationInterval === 86400 ? 'segmented__btn--active' : ''}" data-interval="86400">24h</button>
             <button class="segmented__btn ${group.rotationInterval === 604800 ? 'segmented__btn--active' : ''}" data-interval="604800">7d</button>
             <button class="segmented__btn ${group.rotationInterval === 2592000 ? 'segmented__btn--active' : ''}" data-interval="2592000">30d</button>
           </div>
+          <p class="settings-hint">How often the verification word changes</p>
         </div>
 
+        ${group.encodingFormat === 'words' ? `
         <!-- Word Count -->
         <div class="settings-section">
           <span class="input-label">Words</span>
@@ -53,7 +56,9 @@ export function renderSettings(container: HTMLElement): void {
             <button class="segmented__btn ${group.wordCount === 2 ? 'segmented__btn--active' : ''}" data-words="2">2</button>
             <button class="segmented__btn ${group.wordCount === 3 ? 'segmented__btn--active' : ''}" data-words="3">3</button>
           </div>
+          <p class="settings-hint">More words = stronger security</p>
         </div>
+        ` : ''}
 
         <!-- Encoding Format -->
         <div class="settings-section">
@@ -63,6 +68,7 @@ export function renderSettings(container: HTMLElement): void {
             <button class="segmented__btn ${group.encodingFormat === 'pin' ? 'segmented__btn--active' : ''}" data-enc="pin">PIN</button>
             <button class="segmented__btn ${group.encodingFormat === 'hex' ? 'segmented__btn--active' : ''}" data-enc="hex">Hex</button>
           </div>
+          <p class="settings-hint">Words for voice, PINs for digital input, Hex for machine-to-machine</p>
         </div>
 
         <!-- Tolerance Window -->
@@ -74,6 +80,7 @@ export function renderSettings(container: HTMLElement): void {
             <button class="segmented__btn ${group.tolerance === 2 ? 'segmented__btn--active' : ''}" data-tolerance="2">+/-2</button>
             <button class="segmented__btn ${group.tolerance === 3 ? 'segmented__btn--active' : ''}" data-tolerance="3">+/-3</button>
           </div>
+          <p class="settings-hint">Accept words from neighbouring time windows (higher = more forgiving, less secure)</p>
         </div>
 
         <!-- Nostr Sync Toggle -->

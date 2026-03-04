@@ -87,7 +87,7 @@ export function renderVerify(container: HTMLElement): void {
     const currentGroup = currentGroups[currentGroupId]
     if (!currentGroup) return
 
-    const spokenWord = input!.value.trim().toLowerCase()
+    const spokenWord = input!.value.trim().toLowerCase().replace(/-/g, '')
     if (!spokenWord) return
 
     const nowSec = Math.floor(Date.now() / 1000)

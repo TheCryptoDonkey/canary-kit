@@ -3,7 +3,7 @@
 import { deriveDuressToken } from 'canary-kit/token'
 import { getState } from '../state.js'
 import type { AppGroup } from '../types.js'
-import { toTokenEncoding, GROUP_CONTEXT } from '../utils/encoding.js'
+import { toTokenEncoding, GROUP_CONTEXT, formatForDisplay } from '../utils/encoding.js'
 
 /**
  * Derive the duress display token using the universal CANARY token API.
@@ -79,7 +79,7 @@ export function renderDuress(container: HTMLElement): void {
     if (!currentGroup) return
 
     const duressWord = getDuressDisplayToken(currentGroup, identity.pubkey)
-    wordEl.textContent = duressWord
+    wordEl.textContent = formatForDisplay(duressWord, currentGroup.encodingFormat)
     wordEl.classList.remove('duress-word--masked')
     wordEl.classList.add('duress-word--revealed')
     ring.classList.add('duress-btn__ring--filling')
