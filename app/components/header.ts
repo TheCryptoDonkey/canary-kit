@@ -86,10 +86,11 @@ export function renderHeader(container: HTMLElement): void {
   })
 }
 
+export type SyncStatus = 'synced' | 'syncing' | 'offline'
+
 /**
- * Update the relay status indicator's visibility and appearance.
- * When connected: shows a green dot and "N relays" label.
- * When disconnected: shows a grey dot and "offline" label.
+ * Update the sync status indicator in the header.
+ * Shows: green dot + "Synced" / amber dot + "Syncing..." / red dot + "Offline"
  */
 export function updateRelayStatus(connected: boolean, count: number): void {
   const indicator = document.getElementById('relay-status')
@@ -98,18 +99,27 @@ export function updateRelayStatus(connected: boolean, count: number): void {
   const dot = indicator.querySelector<HTMLElement>('.relay-dot')
   const label = indicator.querySelector<HTMLElement>('.relay-label')
 
-  if (connected && count > 0) {
+  if (!connected || count === 0) {
     indicator.removeAttribute('hidden')
-    if (dot) dot.classList.add('relay-dot--connected')
-    if (dot) dot.classList.remove('relay-dot--offline')
-    if (label) label.textContent = `${count} relay${count === 1 ? '' : 's'}`
-  } else if (!connected) {
-    indicator.removeAttribute('hidden')
-    if (dot) dot.classList.remove('relay-dot--connected')
-    if (dot) dot.classList.add('relay-dot--offline')
-    if (label) label.textContent = 'offline'
+    dot?.setAttribute('class', 'relay-dot relay-dot--offline')
+    if (label) label.textContent = 'Offline'
+    indicator.title = 'Not connected to any relay'
   } else {
-    // connected but count === 0 — hide entirely
-    indicator.setAttribute('hidden', '')
+    indicator.removeAttribute('hidden')
+    dot?.setAttribute('class', 'relay-dot relay-dot--synced')
+    if (label) label.textContent = `Synced · ${count} relay${count === 1 ? '' : 's'}`
+    indicator.title = `Connected to ${count} relay${count === 1 ? '' : 's'}`
   }
+}
+
+/** Show a brief "syncing" state that auto-resolves to synced. */
+export function flashSyncing(): void {
+  const indicator = document.getElementById('relay-status')
+  if (!indicator) return
+  const dot = indicator.querySelector<HTMLElement>('.relay-dot')
+  const label = indicator.querySelector<HTMLElement>('.relay-label')
+
+  indicator.removeAttribute('hidden')
+  dot?.setAttribute('class', 'relay-dot relay-dot--syncing')
+  if (label) label.textContent = 'Syncing...'
 }

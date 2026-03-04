@@ -6,7 +6,8 @@ import { getState, updateGroup } from './state.js'
 import { connectRelays, isConnected, getRelayCount } from './nostr/connect.js'
 import { GroupSigner } from './nostr/signer.js'
 import { NostrSyncTransport } from './nostr/adapter.js'
-import { updateRelayStatus } from './components/header.js'
+import { updateRelayStatus, flashSyncing } from './components/header.js'
+import { showToast } from './components/toast.js'
 
 let _transport: SyncTransport | null = null
 const _unsubscribers = new Map<string, () => void>()
@@ -92,6 +93,19 @@ export function subscribeToGroup(groupId: string): void {
     if (updated !== group) {
       updateGroup(groupId, updated)
     }
+
+    // Toast notifications for important sync events
+    if (msg.type === 'member-join') {
+      showToast('New member joined the group', 'success')
+    } else if (msg.type === 'reseed') {
+      showToast('Group secret was rotated', 'warning')
+    } else if (msg.type === 'state-snapshot') {
+      showToast('Group state synced', 'info')
+    }
+
+    // Flash sync indicator
+    flashSyncing()
+    setTimeout(() => updateRelayStatus(isConnected(), getRelayCount()), 1500)
 
     // App-layer side effects for fire-and-forget messages
     if (msg.type === 'beacon' || msg.type === 'duress-alert') {
