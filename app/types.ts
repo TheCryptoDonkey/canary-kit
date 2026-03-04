@@ -6,6 +6,8 @@ import type { GroupState } from 'canary-kit'
 export interface AppGroup extends GroupState {
   /** Unique local identifier, generated with crypto.randomUUID(). */
   id: string
+  /** Group connectivity mode: offline (no network features) or online (Nostr sync, live map, liveness). */
+  mode: 'offline' | 'online'
   /** Whether Nostr relay publishing is enabled for this group. */
   nostrEnabled: boolean
   /** List of Nostr relay WebSocket URLs for this group. */
@@ -24,6 +26,8 @@ export interface AppGroup extends GroupState {
   memberNames?: Record<string, string>
   /** Silent duress response mode: immediate alert, dead-drop, or both. */
   duressMode?: 'immediate' | 'dead-drop' | 'both'
+  /** Geohash precision for location beacons (1–12, default 4 ≈ 20km). Higher = more precise. */
+  beaconPrecision?: number
 }
 
 /** The local identity (Nostr keypair) for this device. */
@@ -40,6 +44,8 @@ export interface AppSettings {
   theme: 'dark' | 'light'
   pinEnabled: boolean
   autoLockMinutes: number
+  /** Default Nostr relay URLs for new online groups. */
+  defaultRelays: string[]
 }
 
 /** Root application state. */

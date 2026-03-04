@@ -4,6 +4,7 @@ import { getCounter, deriveBeaconKey, buildDuressAlert, encryptDuressAlert } fro
 import { verifyToken } from 'canary-kit/token'
 import { getState } from '../state.js'
 import { broadcastAction } from '../sync.js'
+import { showDuressAlert } from '../components/duress-alert.js'
 import { toTokenEncoding, GROUP_CONTEXT } from '../utils/encoding.js'
 
 // ── Status display config ──────────────────────────────────
@@ -16,13 +17,24 @@ const STATUS_ICONS: Record<VerifyDisplayStatus, string> = {
   invalid: '✗',
 }
 
+function resolveName(pubkey: string): string {
+  const { groups, activeGroupId, identity } = getState()
+  if (identity?.pubkey === pubkey) return 'You'
+  if (!activeGroupId) return pubkey.slice(0, 8) + '\u2026'
+  const group = groups[activeGroupId]
+  if (!group) return pubkey.slice(0, 8) + '\u2026'
+  const name = group.memberNames?.[pubkey]
+  if (name) return name
+  return pubkey.slice(0, 8) + '\u2026'
+}
+
 function buildMessage(status: VerifyDisplayStatus, identities?: string[]): string {
   switch (status) {
     case 'valid':
       return 'Verified — token is correct.'
     case 'duress': {
       const names = identities?.length
-        ? identities.map((pk) => pk.slice(0, 8) + '…').join(', ')
+        ? identities.map(resolveName).join(', ')
         : 'unknown member'
       return `Duress — ${names} may be under coercion.`
     }
@@ -121,17 +133,18 @@ export function renderVerify(container: HTMLElement): void {
         }),
       )
 
+      // Show the full-screen duress alert for the first identified member
+      const duressMembers = result.identities ?? []
+      if (duressMembers.length > 0) {
+        showDuressAlert(duressMembers[0], currentGroupId)
+      }
+
       // Build and encrypt a duress alert for each identified member
       const beaconKey = deriveBeaconKey(currentGroup.seed)
-      for (const memberId of result.identities ?? []) {
+      for (const memberId of duressMembers) {
         const alert = buildDuressAlert(memberId, null)
         void encryptDuressAlert(beaconKey, alert).then((encrypted) => {
           console.info('[canary] Duress alert encrypted:', encrypted.slice(0, 32) + '…')
-          const alertEl = document.createElement('div')
-          alertEl.className = 'verify-alert-encrypted'
-          alertEl.textContent = `Alert encrypted (${encrypted.length}B)`
-          resultEl!.parentElement?.appendChild(alertEl)
-          setTimeout(() => alertEl.remove(), 5000)
         })
 
         // Broadcast duress alert to group members via sync transport
