@@ -206,6 +206,8 @@ describe('integration: encrypt sync message → decrypt → apply', () => {
       type: 'member-join',
       pubkey: 'f'.repeat(64),
       timestamp: Math.floor(Date.now() / 1000),
+      epoch: 0,
+      opId: 'test-join-crypto-1',
     }
 
     const encoded = encodeSyncMessage(msg)
