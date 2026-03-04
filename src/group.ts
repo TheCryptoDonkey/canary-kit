@@ -30,6 +30,8 @@ export interface GroupConfig {
   beaconInterval?: number
   /** Geohash precision for normal beacons, 1–11 (default: 6 ≈ 1.2km). */
   beaconPrecision?: number
+  /** Pubkey of the group creator. Only the creator is admin at bootstrap. Must be in `members`. */
+  creator?: string
 }
 
 /** Persistent state for a canary group. All fields are serialisable. */
@@ -49,6 +51,12 @@ export interface GroupState {
   beaconInterval: number
   /** Geohash precision for normal beacons (1–11). */
   beaconPrecision: number
+  /** Pubkeys with admin privileges (reseed, add/remove others). */
+  admins: string[]
+  /** Monotonic epoch — increments on reseed. Used for replay protection. */
+  epoch: number
+  /** Consumed operation IDs within the current epoch. Cleared on epoch bump. */
+  consumedOps: string[]
 }
 
 /**
@@ -93,6 +101,13 @@ export function createGroup(config: GroupConfig): GroupState {
     validatePubkey(pubkey)
   }
 
+  if (config.creator !== undefined) {
+    validatePubkey(config.creator)
+    if (!config.members.includes(config.creator)) {
+      throw new Error('creator must be in members')
+    }
+  }
+
   return {
     name: config.name,
     seed: randomSeed(),
@@ -105,6 +120,9 @@ export function createGroup(config: GroupConfig): GroupState {
     createdAt: now,
     beaconInterval: config.beaconInterval ?? 300,
     beaconPrecision: config.beaconPrecision ?? 6,
+    admins: config.creator ? [config.creator] : [],
+    epoch: 0,
+    consumedOps: [],
   }
 }
 

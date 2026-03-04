@@ -265,6 +265,39 @@ describe('deterministicReseed', () => {
   })
 })
 
+describe('authority model fields', () => {
+  it('createGroup with creator sets only creator as admin', () => {
+    const creator = 'a'.repeat(64)
+    const member = 'b'.repeat(64)
+    const group = createGroup({ name: 'test', members: [creator, member], preset: 'family', creator })
+    expect(group.admins).toEqual([creator])
+    expect(group.members).toEqual([creator, member])
+    expect(group.epoch).toBe(0)
+    expect(group.consumedOps).toEqual([])
+  })
+
+  it('createGroup without creator has empty admins', () => {
+    const group = createGroup({ name: 'test', members: [], preset: 'family' })
+    expect(group.admins).toEqual([])
+    expect(group.epoch).toBe(0)
+  })
+
+  it('createGroup with creator not in members throws', () => {
+    const creator = 'a'.repeat(64)
+    const member = 'b'.repeat(64)
+    expect(() => createGroup({ name: 'test', members: [member], preset: 'family', creator }))
+      .toThrow('creator must be in members')
+  })
+
+  it('reseed does not change admins or epoch (local reseed is not an epoch bump)', () => {
+    const creator = 'a'.repeat(64)
+    const group = createGroup({ name: 'test', members: [creator], preset: 'family', creator })
+    const reseeded = reseed(group)
+    expect(reseeded.admins).toEqual(group.admins)
+    expect(reseeded.epoch).toBe(group.epoch)
+  })
+})
+
 describe('syncCounter', () => {
   it('syncCounter advances counter and resets usageOffset', () => {
     const state = createGroup({ name: 'test', members: ['a'.repeat(64)] })
