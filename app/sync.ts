@@ -4,7 +4,7 @@ import type { SyncTransport, SyncMessage } from 'canary-kit/sync'
 import { applySyncMessage } from 'canary-kit/sync'
 import { getState, updateGroup } from './state.js'
 import { connectRelays, isConnected, getRelayCount } from './nostr/connect.js'
-import { resolveSigner } from './nostr/signer.js'
+import { GroupSigner } from './nostr/signer.js'
 import { NostrSyncTransport } from './nostr/adapter.js'
 import { updateRelayStatus } from './components/header.js'
 
@@ -34,11 +34,7 @@ export async function ensureTransport(relays: string[], groupId?: string): Promi
     connectRelays(relays)
 
     if (!_transport) {
-      const resolved = await resolveSigner({
-        pubkey: identity.pubkey,
-        privkey: identity.privkey,
-      })
-      const transport = new NostrSyncTransport(relays, resolved.signer)
+      const transport = new NostrSyncTransport(relays)
       initSync(transport)
     }
 
@@ -63,7 +59,7 @@ export function broadcastAction(groupId: string, message: SyncMessage): void {
   const group = getState().groups[groupId]
   if (!group) return
   // Fire-and-forget — don't await, don't block the UI
-  _transport.send(groupId, message, group.members).catch((err) => {
+  _transport.send(groupId, message).catch((err) => {
     console.warn('[canary:sync] broadcast failed:', err)
   })
 }
@@ -76,6 +72,16 @@ export function subscribeToGroup(groupId: string): void {
   if (!_transport) return
   // Unsubscribe from previous subscription if any
   _unsubscribers.get(groupId)?.()
+
+  // Register group key for encryption/decryption
+  if (_transport instanceof NostrSyncTransport) {
+    const { identity, groups } = getState()
+    const group = groups[groupId]
+    if (identity?.privkey && group?.seed) {
+      const signer = new GroupSigner(group.seed, identity.privkey)
+      ;(_transport as NostrSyncTransport).registerGroup(groupId, group.seed, signer)
+    }
+  }
 
   const unsub = _transport.subscribe(groupId, (msg, sender) => {
     const { groups } = getState()

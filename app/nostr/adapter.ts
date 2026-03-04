@@ -1,72 +1,61 @@
-// app/nostr/adapter.ts — Nostr implementation of SyncTransport
+// app/nostr/adapter.ts — Nostr implementation of SyncTransport (group key encryption)
 
-import type { SyncTransport, SyncMessage, EventSigner } from 'canary-kit/sync'
-import { encodeSyncMessage, decodeSyncMessage } from 'canary-kit/sync'
-import { KINDS } from 'canary-kit/nostr'
+import type { SyncTransport, SyncMessage } from 'canary-kit/sync'
+import { encodeSyncMessage, decodeSyncMessage, hashGroupTag, encryptEnvelope, decryptEnvelope, deriveGroupKey } from 'canary-kit/sync'
 import { getPool, isConnected, connectRelays } from './connect.js'
-import type { SimplePool } from 'nostr-tools/pool'
+import type { GroupSigner } from './signer.js'
 
-/** Map sync message types to Nostr event kinds. */
-function messageToKind(type: SyncMessage['type']): number {
-  switch (type) {
-    case 'member-join':
-    case 'member-leave':
-      return KINDS.memberUpdate
-    case 'counter-advance':
-      return KINDS.wordUsed
-    case 'reseed':
-      return KINDS.reseed
-    case 'beacon':
-    case 'duress-alert':
-      return KINDS.beacon
-  }
-}
-
-/** All kinds we subscribe to for group sync. */
-const SUBSCRIBE_KINDS = [
-  KINDS.memberUpdate,
-  KINDS.wordUsed,
-  KINDS.reseed,
-  KINDS.beacon,
-]
+/** Single event kind for all CANARY-SYNC messages (type is inside encrypted payload). */
+const SYNC_EVENT_KIND = 29_111
 
 export class NostrSyncTransport implements SyncTransport {
   private subs = new Map<string, { close(): void }>()
+  private groupKeys = new Map<string, { key: Uint8Array; signer: GroupSigner; tagHash: string }>()
 
   constructor(
     private relays: string[],
-    private signer: EventSigner,
   ) {}
 
-  async send(groupId: string, message: SyncMessage, recipients: string[]): Promise<void> {
+  /** Register a group's seed so we can encrypt/decrypt and sign for it. */
+  registerGroup(groupId: string, seedHex: string, signer: GroupSigner): void {
+    this.groupKeys.set(groupId, {
+      key: deriveGroupKey(seedHex),
+      signer,
+      tagHash: hashGroupTag(groupId),
+    })
+  }
+
+  /** Unregister a group (e.g. after removal or reseed). */
+  unregisterGroup(groupId: string): void {
+    this.groupKeys.delete(groupId)
+  }
+
+  async send(groupId: string, message: SyncMessage, _recipients?: string[]): Promise<void> {
     if (!isConnected()) connectRelays(this.relays)
     const pool = getPool()
     if (!pool) return
 
+    const groupInfo = this.groupKeys.get(groupId)
+    if (!groupInfo) {
+      console.warn('[canary:sync] No group key registered for', groupId)
+      return
+    }
+
     const payload = encodeSyncMessage(message)
-    const kind = messageToKind(message.type)
-    const created_at = Math.floor(Date.now() / 1000)
+    const encrypted = await encryptEnvelope(groupInfo.key, payload)
 
-    // Encrypt for each recipient and publish individual events
-    for (const recipientPubkey of recipients) {
-      if (recipientPubkey === this.signer.pubkey) continue // don't send to self
+    const unsigned = {
+      kind: SYNC_EVENT_KIND,
+      content: encrypted,
+      tags: [['d', groupInfo.tagHash]],
+      created_at: Math.floor(Date.now() / 1000),
+    }
 
-      try {
-        const encrypted = await this.signer.encrypt(payload, recipientPubkey)
-
-        const tags: string[][] = [
-          ['p', recipientPubkey],
-          ['e', groupId],
-        ]
-
-        const unsigned = { kind, content: encrypted, tags, created_at }
-        const signed = await this.signer.sign(unsigned)
-        console.info('[canary:sync] Publishing event:', { kind, tags, recipientPubkey: recipientPubkey.slice(0, 8) })
-        await pool.publish(this.relays, signed)
-        console.info('[canary:sync] Published OK')
-      } catch (err) {
-        console.error('[canary:sync] Publish failed for', recipientPubkey.slice(0, 8), err)
-      }
+    try {
+      const signed = await groupInfo.signer.sign(unsigned)
+      await pool.publish(this.relays, signed as any)
+    } catch (err) {
+      console.error('[canary:sync] Publish failed:', err)
     }
   }
 
@@ -74,12 +63,17 @@ export class NostrSyncTransport implements SyncTransport {
     const pool = getPool()
     if (!pool) return () => {}
 
-    const filter = {
-      kinds: SUBSCRIBE_KINDS,
-      '#e': [groupId],
-      since: Math.floor(Date.now() / 1000) - 3600, // last hour on connect
+    const groupInfo = this.groupKeys.get(groupId)
+    if (!groupInfo) {
+      console.warn('[canary:sync] No group key registered for', groupId)
+      return () => {}
     }
-    console.info('[canary:sync] Subscribing with filter:', filter)
+
+    const filter = {
+      kinds: [SYNC_EVENT_KIND],
+      '#d': [groupInfo.tagHash],
+      since: Math.floor(Date.now() / 1000) - 3600,
+    }
 
     const sub = pool.subscribeMany(
       this.relays,
@@ -87,12 +81,11 @@ export class NostrSyncTransport implements SyncTransport {
       {
         onevent: async (event: any) => {
           try {
-            const sender = event.pubkey
-            if (sender === this.signer.pubkey) return // ignore own events
-
-            const decrypted = await this.signer.decrypt(event.content, sender)
+            // Skip our own events
+            if (event.pubkey === groupInfo.signer.pubkey) return
+            const decrypted = await decryptEnvelope(groupInfo.key, event.content)
             const msg = decodeSyncMessage(decrypted)
-            onMessage(msg, sender)
+            onMessage(msg, event.pubkey)
           } catch (err) {
             console.warn('[canary:sync] Failed to process event:', err)
           }
@@ -101,16 +94,11 @@ export class NostrSyncTransport implements SyncTransport {
     )
 
     this.subs.set(groupId, sub)
-    return () => {
-      sub.close()
-      this.subs.delete(groupId)
-    }
+    return () => { sub.close(); this.subs.delete(groupId) }
   }
 
   disconnect(): void {
-    for (const [, sub] of this.subs) {
-      sub.close()
-    }
+    for (const [, sub] of this.subs) sub.close()
     this.subs.clear()
   }
 }

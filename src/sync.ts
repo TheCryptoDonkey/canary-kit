@@ -113,7 +113,7 @@ export function applySyncMessage(group: GroupState, msg: SyncMessage): GroupStat
 /** Minimal interface any sync transport must implement. */
 export interface SyncTransport {
   /** Send a sync message to all group members. */
-  send(groupId: string, message: SyncMessage, recipients: string[]): Promise<void>
+  send(groupId: string, message: SyncMessage, recipients?: string[]): Promise<void>
   /** Subscribe to incoming messages for a group. Returns an unsubscribe function. */
   subscribe(groupId: string, onMessage: (msg: SyncMessage, sender: string) => void): () => void
   /** Clean up all connections. */
