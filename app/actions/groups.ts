@@ -13,6 +13,29 @@ import { getState, update, updateGroup } from '../state.js'
 import { broadcastAction, reRegisterGroup } from '../sync.js'
 import type { AppGroup } from '../types.js'
 
+/**
+ * Return the local user's pubkey from trusted app state.
+ * Throws if no identity is available (should never happen after boot).
+ */
+function getCallerPubkey(): string {
+  const { identity } = getState()
+  if (!identity?.pubkey) {
+    throw new Error('No local identity — cannot perform privileged action.')
+  }
+  return identity.pubkey
+}
+
+/**
+ * Assert that the local user is an admin of the given group.
+ * Throws a descriptive error if not.
+ */
+function assertAdmin(group: { admins: string[]; name: string }): void {
+  const caller = getCallerPubkey()
+  if (!group.admins.includes(caller)) {
+    throw new Error(`Not authorised — you are not an admin of "${group.name}".`)
+  }
+}
+
 function hexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2)
   for (let i = 0; i < hex.length; i += 2) {
@@ -93,6 +116,8 @@ export function reseedGroup(id: string): void {
     return
   }
 
+  assertAdmin(group)
+
   const reseeded = reseed(group)
   const newEpoch = (group.epoch ?? 0) + 1
   const opId = crypto.randomUUID()
@@ -135,6 +160,8 @@ export function compromiseReseed(id: string): void {
     return
   }
 
+  assertAdmin(group)
+
   const reseeded = reseed(group)
   const newEpoch = (group.epoch ?? 0) + 1
 
@@ -159,6 +186,8 @@ export function addGroupMember(id: string, pubkey: string): void {
     console.warn(`[canary:actions] addGroupMember: unknown group id "${id}"`)
     return
   }
+
+  assertAdmin(group)
 
   const opId = crypto.randomUUID()
   const updated = addMember(group, pubkey)
@@ -195,6 +224,12 @@ export function removeGroupMember(id: string, pubkey: string): void {
   if (!group) {
     console.warn(`[canary:actions] removeGroupMember: unknown group id "${id}"`)
     return
+  }
+
+  // Self-leave is always allowed — no admin check needed
+  const caller = getCallerPubkey()
+  if (pubkey !== caller) {
+    assertAdmin(group)
   }
 
   if (!group.members.includes(pubkey)) return

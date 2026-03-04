@@ -167,6 +167,15 @@ function confirmCodeFromPayload(payload: InvitePayload): string {
  * @returns `confirmCode` — 12-char code (XXXX-XXXX-XXXX) to read aloud for out-of-band confirmation.
  */
 export function createInvite(group: AppGroup): { payload: string; confirmCode: string } {
+  // Only admins can create invites
+  const { identity } = getState()
+  if (!identity?.pubkey) {
+    throw new Error('No local identity — cannot create invite.')
+  }
+  if (!group.admins.includes(identity.pubkey)) {
+    throw new Error(`Not authorised — you are not an admin of "${group.name}".`)
+  }
+
   const nonce = randomNonce()
   const issuedAt = Math.floor(Date.now() / 1000)
 
