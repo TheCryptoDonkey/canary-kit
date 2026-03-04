@@ -46,6 +46,7 @@ export interface InvitePayload {
 const HEX_64_RE = /^[0-9a-f]{64}$/
 const HEX_32_RE = /^[0-9a-f]{32}$/
 const INVITE_MAX_AGE_SEC = 7 * 24 * 60 * 60
+const MAX_CLOCK_SKEW_SEC = 300
 
 function isNonNegativeInt(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0
@@ -253,6 +254,9 @@ export function acceptInvite(payload: string, confirmCode?: string): InvitePaylo
   const now = Math.floor(Date.now() / 1000)
   if (data.expiresAt <= now) {
     throw new Error('Invite has expired. Ask for a new invite.')
+  }
+  if (data.issuedAt > now + MAX_CLOCK_SKEW_SEC) {
+    throw new Error('Invite timestamp is too far in the future — check your device clock.')
   }
 
   return data
