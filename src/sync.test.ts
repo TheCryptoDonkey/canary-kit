@@ -80,13 +80,22 @@ describe('applySyncMessage', () => {
     expect(result.members.filter(m => m === PUBKEY_AAA)).toHaveLength(1)
   })
 
-  it('applies member-leave (reseeds)', () => {
+  it('applies member-leave (reseeds deterministically)', () => {
     const group = makeGroup()
     const withBob = applySyncMessage(group, { type: 'member-join', pubkey: PUBKEY_BBB, timestamp: 0 })
     const result = applySyncMessage(withBob, { type: 'member-leave', pubkey: PUBKEY_BBB, timestamp: 0 })
     expect(result.members).not.toContain(PUBKEY_BBB)
     // removeMember auto-reseeds — seed should differ
     expect(result.seed).not.toEqual(withBob.seed)
+  })
+
+  it('member-leave is idempotent — replayed leave for absent member returns state unchanged', () => {
+    const group = makeGroup()
+    const withBob = applySyncMessage(group, { type: 'member-join', pubkey: PUBKEY_BBB, timestamp: 0 })
+    const afterLeave = applySyncMessage(withBob, { type: 'member-leave', pubkey: PUBKEY_BBB, timestamp: 0 })
+    // Replay the same leave — should be no-op (member already gone)
+    const replayed = applySyncMessage(afterLeave, { type: 'member-leave', pubkey: PUBKEY_BBB, timestamp: 0 })
+    expect(replayed).toBe(afterLeave) // reference equality — no change
   })
 
   it('applies counter-advance (monotonic — only advances)', () => {

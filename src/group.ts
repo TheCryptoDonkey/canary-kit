@@ -1,4 +1,4 @@
-import { randomSeed } from './crypto.js'
+import { randomSeed, hmacSha256, hexToBytes, bytesToHex } from './crypto.js'
 import { getCounter, DEFAULT_ROTATION_INTERVAL } from './counter.js'
 import {
   deriveVerificationWord,
@@ -151,6 +151,20 @@ export function reseed(state: GroupState): GroupState {
 }
 
 /**
+ * Derive a new seed deterministically from the current seed and a context string.
+ * Used by removeMember() so all devices converge on the same seed after a
+ * member-leave event, without needing a separate reseed broadcast.
+ *
+ * newSeed = HMAC-SHA256(currentSeed, "canary:reseed:" + context)
+ */
+export function deterministicReseed(state: GroupState, context: string): GroupState {
+  const key = hexToBytes(state.seed)
+  const data = new TextEncoder().encode('canary:reseed:' + context)
+  const newSeed = bytesToHex(hmacSha256(key, data))
+  return { ...state, seed: newSeed, usageOffset: 0 }
+}
+
+/**
  * Add a member to the group. If the pubkey is already present, returns the
  * existing state unchanged (idempotent).
  * Returns new state — does not mutate the input.
@@ -167,7 +181,10 @@ export function addMember(state: GroupState, pubkey: string): GroupState {
  * Returns new state — does not mutate the input.
  */
 export function removeMember(state: GroupState, pubkey: string): GroupState {
-  return reseed({ ...state, members: state.members.filter((m) => m !== pubkey) })
+  return deterministicReseed(
+    { ...state, members: state.members.filter((m) => m !== pubkey) },
+    pubkey,
+  )
 }
 
 /** Refresh the counter to the current time window. Call after loading persisted state. */

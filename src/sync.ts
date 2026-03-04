@@ -137,6 +137,8 @@ export function applySyncMessage(group: GroupState, msg: SyncMessage): GroupStat
       return addMember(group, msg.pubkey)
 
     case 'member-leave':
+      // Replay guard: if the pubkey is not a current member, ignore the message
+      if (!group.members.includes(msg.pubkey)) return group
       return removeMember(group, msg.pubkey)
 
     case 'counter-advance': {

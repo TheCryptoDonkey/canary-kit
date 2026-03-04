@@ -31,6 +31,7 @@ export {
   getCurrentDuressWord,
   advanceCounter,
   reseed,
+  deterministicReseed,
   addMember,
   removeMember,
   syncCounter,
