@@ -33,7 +33,7 @@ export function createNewGroup(name: string, preset: PresetName, memberPubkey?: 
   const id = crypto.randomUUID()
 
   const members: string[] = memberPubkey ? [memberPubkey] : []
-  const sdkGroup = createGroup({ name, members, preset })
+  const sdkGroup = createGroup({ name, members, preset, creator: memberPubkey })
 
   const appGroup: AppGroup = {
     ...sdkGroup,
@@ -43,6 +43,7 @@ export function createNewGroup(name: string, preset: PresetName, memberPubkey?: 
     relays: mode === 'online' ? [...getState().settings.defaultRelays] : [],
     encodingFormat: 'words',
     usedInvites: [],
+    latestInviteIssuedAt: 0,
     livenessInterval: sdkGroup.rotationInterval,
     livenessCheckins: {},
     tolerance: 1,
@@ -57,7 +58,7 @@ export function createNewGroup(name: string, preset: PresetName, memberPubkey?: 
   })
 
   if (memberPubkey) {
-    broadcastAction(id, { type: 'member-join', pubkey: memberPubkey, timestamp: Math.floor(Date.now() / 1000) })
+    broadcastAction(id, { type: 'member-join', pubkey: memberPubkey, timestamp: Math.floor(Date.now() / 1000), epoch: 0, opId: crypto.randomUUID() })
   }
 
   return id
@@ -80,8 +81,9 @@ export function deleteGroup(id: string): void {
 }
 
 /**
- * Reseed the group's shared secret (e.g. after a suspected compromise).
- * Calls the SDK `reseed()` function and persists the new state.
+ * Routine key rotation (transition-under-old-key).
+ * Broadcasts the reseed encrypted under the OLD group key so peers can
+ * decrypt it, then rekeys locally.
  */
 export function reseedGroup(id: string): void {
   const { groups } = getState()
@@ -92,14 +94,58 @@ export function reseedGroup(id: string): void {
   }
 
   const reseeded = reseed(group)
-  updateGroup(id, reseeded)
+  const newEpoch = (group.epoch ?? 0) + 1
+  const opId = crypto.randomUUID()
+  const admins = [...(group.admins ?? [])]
 
-  // Re-register transport with new seed BEFORE broadcasting,
-  // so the reseed message is encrypted under the new key.
-  // The removed member (who has the old key) cannot decrypt it.
+  // Broadcast FIRST under old key (peers can decrypt)
+  broadcastAction(id, {
+    type: 'reseed',
+    seed: hexToBytes(reseeded.seed),
+    counter: reseeded.counter,
+    timestamp: Math.floor(Date.now() / 1000),
+    epoch: newEpoch,
+    opId,
+    admins,
+    members: [...group.members],
+  })
+
+  // Then rekey locally
+  updateGroup(id, {
+    ...reseeded,
+    epoch: newEpoch,
+    consumedOps: [opId],
+    admins,
+  })
+
+  // Re-register transport with new seed for future messages
   reRegisterGroup(id)
+}
 
-  broadcastAction(id, { type: 'reseed', seed: hexToBytes(reseeded.seed), counter: reseeded.counter, timestamp: Math.floor(Date.now() / 1000) })
+/**
+ * Emergency reseed when the old key is compromised.
+ * Fail-closed: no broadcast (old key is untrusted).
+ * All members must be reinvited.
+ */
+export function compromiseReseed(id: string): void {
+  const { groups } = getState()
+  const group = groups[id]
+  if (!group) {
+    console.warn(`[canary:actions] compromiseReseed: unknown group id "${id}"`)
+    return
+  }
+
+  const reseeded = reseed(group)
+  const newEpoch = (group.epoch ?? 0) + 1
+
+  updateGroup(id, {
+    ...reseeded,
+    epoch: newEpoch,
+    consumedOps: [],
+    admins: [...(group.admins ?? [])],
+  })
+
+  reRegisterGroup(id)
 }
 
 /**
@@ -114,17 +160,34 @@ export function addGroupMember(id: string, pubkey: string): void {
     return
   }
 
+  const opId = crypto.randomUUID()
   const updated = addMember(group, pubkey)
-  updateGroup(id, updated)
-  broadcastAction(id, { type: 'member-join', pubkey, timestamp: Math.floor(Date.now() / 1000) })
+  updateGroup(id, {
+    ...updated,
+    consumedOps: [...(group.consumedOps ?? []), opId],
+  })
+  reRegisterGroup(id)
+  broadcastAction(id, {
+    type: 'member-join',
+    pubkey,
+    timestamp: Math.floor(Date.now() / 1000),
+    epoch: group.epoch ?? 0,
+    opId,
+  })
 }
 
 /**
- * Remove a member pubkey from the group.
+ * Remove a member pubkey from the group and immediately rotate the shared seed.
  *
- * **Security note:** The removed member still possesses the old seed and can
- * derive valid words. This function only removes them from the member list.
- * For forward secrecy, create a replacement group with a fresh seed.
+ * This is a fail-closed eviction path:
+ * - No `member-leave` sync event is broadcast under the old key.
+ * - The local group key is rekeyed right away, forcing explicit re-invite/migration
+ *   for remaining members.
+ */
+/**
+ * Evict a member (fail-closed: no broadcast).
+ * Removes the member, reseeds, bumps epoch. Remaining members
+ * must be reinvited since the evicted member held the old key.
  */
 export function removeGroupMember(id: string, pubkey: string): void {
   const { groups } = getState()
@@ -134,9 +197,32 @@ export function removeGroupMember(id: string, pubkey: string): void {
     return
   }
 
-  const updated = removeMember(group, pubkey)
-  updateGroup(id, updated)
-  broadcastAction(id, { type: 'member-leave', pubkey, timestamp: Math.floor(Date.now() / 1000) })
+  if (!group.members.includes(pubkey)) return
+
+  const withoutMember = removeMember(group, pubkey)
+  const rotated = reseed(withoutMember)
+  const newEpoch = (group.epoch ?? 0) + 1
+
+  const memberNames = { ...(group.memberNames ?? {}) }
+  delete memberNames[pubkey]
+
+  const livenessCheckins = { ...(group.livenessCheckins ?? {}) }
+  delete livenessCheckins[pubkey]
+
+  // Remove from admins too
+  const admins = (group.admins ?? []).filter(a => a !== pubkey)
+
+  updateGroup(id, {
+    ...rotated,
+    memberNames,
+    livenessCheckins,
+    admins,
+    epoch: newEpoch,
+    consumedOps: [],
+  })
+
+  // Fail-closed: no broadcast. Remaining members must be reinvited.
+  reRegisterGroup(id)
 }
 
 /**
