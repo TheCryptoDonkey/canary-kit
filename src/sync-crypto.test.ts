@@ -6,6 +6,8 @@ import {
   deriveGroupSigningKey,
   hashGroupTag,
 } from './sync-crypto.js'
+import { encodeSyncMessage, decodeSyncMessage, type SyncMessage } from './sync.js'
+import { randomSeed } from './crypto.js'
 
 // ── Task 1: Group key derivation ─────────────────────────────────────────────
 
@@ -133,5 +135,103 @@ describe('hashGroupTag', () => {
     const hash1 = hashGroupTag('group-alpha')
     const hash2 = hashGroupTag('group-beta')
     expect(hash1).not.toBe(hash2)
+  })
+})
+
+// ── Task 10: Integration — end-to-end sync round-trip with group key ──────────
+
+describe('integration: encrypt sync message → decrypt → apply', () => {
+  it('counter-advance round-trips through group key encryption', async () => {
+    const seed = randomSeed()
+    const key = deriveGroupKey(seed)
+
+    const msg: SyncMessage = {
+      type: 'counter-advance',
+      counter: 100,
+      usageOffset: 5,
+      timestamp: Math.floor(Date.now() / 1000),
+    }
+
+    const encoded = encodeSyncMessage(msg)
+    const encrypted = await encryptEnvelope(key, encoded)
+    const decrypted = await decryptEnvelope(key, encrypted)
+    const decoded = decodeSyncMessage(decrypted)
+
+    expect(decoded).toEqual(msg)
+  })
+
+  it('state-snapshot round-trips through group key encryption', async () => {
+    const seed = randomSeed()
+    const key = deriveGroupKey(seed)
+
+    const msg: SyncMessage = {
+      type: 'state-snapshot',
+      seed: 'a'.repeat(64),
+      counter: 200,
+      usageOffset: 3,
+      members: ['b'.repeat(64)],
+      timestamp: Math.floor(Date.now() / 1000),
+    }
+
+    const encoded = encodeSyncMessage(msg)
+    const encrypted = await encryptEnvelope(key, encoded)
+    const decrypted = await decryptEnvelope(key, encrypted)
+    const decoded = decodeSyncMessage(decrypted)
+
+    expect(decoded).toEqual(msg)
+  })
+
+  it('two group members with same seed derive same key', () => {
+    const seed = randomSeed()
+    const key1 = deriveGroupKey(seed)
+    const key2 = deriveGroupKey(seed)
+    expect(key1).toEqual(key2)
+  })
+
+  it('after reseed, old key cannot decrypt new messages', async () => {
+    const oldSeed = randomSeed()
+    const newSeed = randomSeed()
+    const oldKey = deriveGroupKey(oldSeed)
+    const newKey = deriveGroupKey(newSeed)
+
+    const encrypted = await encryptEnvelope(newKey, 'new secret')
+    await expect(decryptEnvelope(oldKey, encrypted)).rejects.toThrow()
+  })
+
+  it('member-join round-trips through group key encryption', async () => {
+    const seed = randomSeed()
+    const key = deriveGroupKey(seed)
+
+    const msg: SyncMessage = {
+      type: 'member-join',
+      pubkey: 'f'.repeat(64),
+      timestamp: Math.floor(Date.now() / 1000),
+    }
+
+    const encoded = encodeSyncMessage(msg)
+    const encrypted = await encryptEnvelope(key, encoded)
+    const decrypted = await decryptEnvelope(key, encrypted)
+    const decoded = decodeSyncMessage(decrypted)
+
+    expect(decoded).toEqual(msg)
+  })
+
+  it('duress-alert round-trips through group key encryption', async () => {
+    const seed = randomSeed()
+    const key = deriveGroupKey(seed)
+
+    const msg: SyncMessage = {
+      type: 'duress-alert',
+      lat: 51.5074,
+      lon: -0.1278,
+      timestamp: Math.floor(Date.now() / 1000),
+    }
+
+    const encoded = encodeSyncMessage(msg)
+    const encrypted = await encryptEnvelope(key, encoded)
+    const decrypted = await decryptEnvelope(key, encrypted)
+    const decoded = decodeSyncMessage(decrypted)
+
+    expect(decoded).toEqual(msg)
   })
 })
