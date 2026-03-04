@@ -186,7 +186,8 @@ function loginWithNsec(nsec: string, displayName?: string): boolean {
       signerType: 'local',
       displayName: displayName ?? 'You',
     }
-    update({ identity: newIdentity })
+    // Clear groups from previous identity — each account has its own session
+    update({ identity: newIdentity, groups: {}, activeGroupId: null })
     updateIdentityDisplay()
     return true
   } catch {
@@ -286,7 +287,7 @@ function showIdentityPopover(anchor: HTMLElement): void {
         signerType: 'nip07',
         displayName: identity?.displayName ?? 'You',
       }
-      update({ identity: newIdentity })
+      update({ identity: newIdentity, groups: {}, activeGroupId: null })
       updateIdentityDisplay()
       popover.remove()
     } catch {
@@ -303,7 +304,7 @@ function showIdentityPopover(anchor: HTMLElement): void {
       signerType: 'local',
       displayName: identity?.displayName ?? 'You',
     }
-    update({ identity: newIdentity })
+    update({ identity: newIdentity, groups: {}, activeGroupId: null })
     updateIdentityDisplay()
     popover.remove()
   })
