@@ -51,9 +51,16 @@ export async function renderBeacons(container: HTMLElement): Promise<void> {
     <section class="panel beacon-panel">
       <h3 class="panel__title">Location</h3>
       <div class="beacon-map" id="beacon-map" style="height: 300px; border-radius: 8px;"></div>
+      ${geoWatchId === null ? '<button class="btn btn--primary" id="beacon-share-btn" type="button">Share Location</button>' : ''}
       <div class="beacon-list" id="beacon-list"></div>
     </section>
   `
+
+  container.querySelector<HTMLButtonElement>('#beacon-share-btn')?.addEventListener('click', () => {
+    startBeaconWatch()
+    const btn = container.querySelector<HTMLButtonElement>('#beacon-share-btn')
+    if (btn) btn.remove()
+  })
 
   try {
     await loadMapLibre()
@@ -135,8 +142,8 @@ function updateMapMarker(pubkey: string, lat: number, lon: number): void {
     el.style.width = '12px'
     el.style.height = '12px'
     el.style.borderRadius = '50%'
-    el.style.background = 'var(--accent)'
-    el.style.border = '2px solid var(--bg-primary)'
+    el.style.background = '#f59e0b'
+    el.style.border = '2px solid #0a0e17'
     markers[pubkey] = new maplibregl.Marker({ element: el }).setLngLat([lon, lat]).addTo(map)
   }
 }
@@ -186,7 +193,7 @@ function setMarkerDuress(pubkey: string): void {
   const m = markers[pubkey]
   if (!m) return
   const el = m.getElement()
-  el.style.background = 'var(--failed)'
+  el.style.background = '#f87171'
   el.style.width = '18px'
   el.style.height = '18px'
   el.style.boxShadow = '0 0 12px rgba(248, 113, 113, 0.6)'

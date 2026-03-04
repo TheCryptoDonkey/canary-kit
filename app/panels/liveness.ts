@@ -32,6 +32,13 @@ function formatElapsed(seconds: number, lastCheckin: number): string {
  * Shows each member's check-in status with traffic-light indicators.
  * Provides an "I'm Alive" button for the local identity.
  */
+const LIVENESS_INTERVALS: { label: string; value: number }[] = [
+  { label: '1h', value: 3600 },
+  { label: '4h', value: 14400 },
+  { label: '24h', value: 86400 },
+  { label: '7d', value: 604800 },
+]
+
 export function renderLiveness(container: HTMLElement): void {
   const { groups, activeGroupId, identity } = getState()
 
@@ -48,6 +55,9 @@ export function renderLiveness(container: HTMLElement): void {
     const lastCheckin = group.livenessCheckins[m] ?? 0
     const elapsed = lastCheckin > 0 ? now - lastCheckin : Infinity
     const status = getStatus(elapsed, interval)
+    const healthPct = lastCheckin > 0
+      ? Math.max(0, Math.min(100, (1 - elapsed / interval) * 100))
+      : 0
     const isMe = identity?.pubkey === m
     const name = isMe ? 'You' : `${m.slice(0, 8)}\u2026`
 
@@ -56,15 +66,31 @@ export function renderLiveness(container: HTMLElement): void {
         <span class="liveness-dot liveness-dot--${status}"></span>
         <span class="liveness-name">${name}</span>
         <span class="liveness-time">${lastCheckin > 0 ? formatElapsed(elapsed, lastCheckin) : 'never'}</span>
+        <div class="liveness-bar">
+          <div class="liveness-bar__fill liveness-bar__fill--${status}" style="width: ${healthPct}%"></div>
+        </div>
       </li>
     `
   }).join('')
 
   const showCheckinBtn = identity?.pubkey != null && group.members.includes(identity.pubkey)
 
+  const intervalButtons = LIVENESS_INTERVALS.map(i =>
+    `<button class="segmented__btn ${interval === i.value ? 'segmented__btn--active' : ''}" data-liveness-interval="${i.value}">${i.label}</button>`
+  ).join('')
+
   container.innerHTML = `
     <section class="panel liveness-panel">
       <h3 class="panel__title">Liveness</h3>
+
+      <div class="settings-section">
+        <span class="input-label">Check-in interval</span>
+        <div class="segmented" id="liveness-interval-picker">
+          ${intervalButtons}
+        </div>
+        <p class="settings-hint">How often members must check in</p>
+      </div>
+
       <ul class="liveness-list" id="liveness-list">
         ${memberItems}
       </ul>
@@ -74,18 +100,22 @@ export function renderLiveness(container: HTMLElement): void {
     </section>
   `
 
+  // ── Liveness interval picker ─────────────────────────────
+  container.querySelectorAll('[data-liveness-interval]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const value = Number((btn as HTMLElement).dataset.livenessInterval)
+      updateGroup(activeGroupId!, { livenessInterval: value })
+    })
+  })
+
   document.getElementById('checkin-btn')?.addEventListener('click', () => {
     if (!identity?.pubkey) return
     const counter = getCounter(now, group.rotationInterval)
-    // Derive liveness token — proves knowledge of seed + identity at this counter.
-    // The returned bytes are not transmitted in the demo; derivation itself is the proof.
     deriveLivenessToken(group.seed, 'canary:liveness', identity.pubkey, counter)
 
-    // Record check-in locally.
     const checkins = { ...group.livenessCheckins, [identity.pubkey]: now }
     updateGroup(activeGroupId!, { livenessCheckins: checkins })
 
-    // Broadcast check-in to other group members via sync
     broadcastAction(activeGroupId!, {
       type: 'liveness-checkin',
       pubkey: identity.pubkey,

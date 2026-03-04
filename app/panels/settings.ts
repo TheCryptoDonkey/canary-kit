@@ -2,6 +2,7 @@
 
 import { getState, updateGroup, update } from '../state.js'
 import { deleteGroup, reseedGroup } from '../actions/groups.js'
+import { showToast } from '../components/toast.js'
 import { disconnectRelays, isConnected, getRelayCount } from '../nostr/connect.js'
 import { ensureTransport, teardownSync } from '../sync.js'
 import { updateRelayStatus } from '../components/header.js'
@@ -263,6 +264,7 @@ export function renderSettings(container: HTMLElement): void {
   document.getElementById('reseed-btn')!.addEventListener('click', () => {
     if (confirm('Emergency reseed? This generates a new seed. All members will need new invites.')) {
       reseedGroup(activeGroupId!)
+      showToast('Emergency reseed complete. All verification words have changed. Share new invites.', 'warning', 6000)
     }
   })
 
@@ -277,6 +279,7 @@ export function renderSettings(container: HTMLElement): void {
   // ── Export ───────────────────────────────────────────────────
 
   document.getElementById('export-btn')!.addEventListener('click', () => {
+    if (!confirm('This exports the group secret in cleartext. Treat the file like a password.')) return
     const blob = new Blob([JSON.stringify(group, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -289,6 +292,7 @@ export function renderSettings(container: HTMLElement): void {
   // ── Import ───────────────────────────────────────────────────
 
   document.getElementById('import-btn')!.addEventListener('click', () => {
+    if (!confirm('Only import files from trusted sources — the file contains the group secret.')) return
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = '.json'
