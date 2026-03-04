@@ -4,7 +4,6 @@ import { getState, updateGroup, update } from '../state.js'
 import { deleteGroup, reseedGroup } from '../actions/groups.js'
 import { disconnectRelays, isConnected, getRelayCount } from '../nostr/connect.js'
 import { ensureTransport, teardownSync } from '../sync.js'
-import { hasNip07 } from '../nostr/signer.js'
 import { updateRelayStatus } from '../components/header.js'
 
 // ── Drawer state persistence across re-renders ─────────────────
@@ -330,13 +329,13 @@ function populateNostrIdentity(): void {
     return
   }
 
-  const signerLabel = hasNip07() ? 'NIP-07' : 'Local key'
   const shortened = `${identity.pubkey.slice(0, 8)}…${identity.pubkey.slice(-8)}`
   el.innerHTML = `
     <div class="nostr-identity-row">
-      <span class="input-label">Identity (${signerLabel})</span>
+      <span class="input-label">Identity (Local key)</span>
       <span class="relay-url nostr-pubkey" title="${identity.pubkey}">${shortened}</span>
     </div>
+    <p class="settings-hint">Your identity is stored locally on this device.</p>
   `
 }
 

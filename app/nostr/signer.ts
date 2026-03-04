@@ -72,25 +72,14 @@ export function hasNip07(): boolean {
 }
 
 /**
- * Resolve the best available signer.
- * Tries NIP-07 first (browser extension), falls back to local keypair.
- * Generates a new keypair if no privkey is provided and NIP-07 is unavailable.
+ * Resolve a local keypair signer.
+ * Always uses a local keypair — NIP-07 is opt-in via settings.
+ * Generates a new keypair if no privkey is provided.
  */
 export async function resolveSigner(
   identity: { pubkey: string; privkey?: string },
-): Promise<{ signer: EventSigner; signerType: 'nip07' | 'local'; pubkey: string; privkey?: string }> {
-  // Try NIP-07 first
-  if (hasNip07()) {
-    try {
-      const nip07Pubkey = await (window as any).nostr.getPublicKey()
-      return { signer: new Nip07Signer(nip07Pubkey), signerType: 'nip07', pubkey: nip07Pubkey }
-    } catch {
-      // Extension present but failed — fall through to local
-    }
-  }
-
-  // Fall back to local keypair
-  if (identity.privkey) {
+): Promise<{ signer: LocalKeySigner; signerType: 'local'; pubkey: string; privkey: string }> {
+  if (identity.privkey && identity.pubkey) {
     return {
       signer: new LocalKeySigner(identity.pubkey, identity.privkey),
       signerType: 'local',
@@ -99,7 +88,6 @@ export async function resolveSigner(
     }
   }
 
-  // Generate new keypair
   const sk = generateSecretKey()
   const pubkey = getPublicKey(sk)
   const privkey = bytesToHex(sk)

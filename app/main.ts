@@ -468,8 +468,7 @@ function wireGlobalEvents(): void {
 }
 
 // ── Local identity ────────────────────────────────────────────
-// Resolve a real Nostr keypair — NIP-07 extension if available,
-// otherwise a locally generated keypair.  Persisted via state.
+// Always generates a local keypair. NIP-07 is opt-in via settings.
 
 async function ensureLocalIdentity(): Promise<void> {
   let { identity } = getState()
@@ -483,10 +482,10 @@ async function ensureLocalIdentity(): Promise<void> {
     pubkey: resolved.pubkey,
     privkey: resolved.privkey,
     displayName: identity?.displayName ?? 'You',
-    signerType: resolved.signerType,
+    signerType: 'local',
   }
 
-  if (!identity || identity.pubkey !== newIdentity.pubkey || identity.signerType !== newIdentity.signerType) {
+  if (!identity || identity.pubkey !== newIdentity.pubkey) {
     update({ identity: newIdentity })
   }
 
