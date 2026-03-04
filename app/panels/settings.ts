@@ -8,6 +8,18 @@ import { ensureTransport, teardownSync } from '../sync.js'
 import { updateRelayStatus } from '../components/header.js'
 import { escapeHtml } from '../utils/escape.js'
 
+/** Allow wss:// relays, plus ws:// only for localhost development. */
+function isAllowedRelayUrl(url: string): boolean {
+  if (url.startsWith('wss://')) return true
+  if (url.startsWith('ws://')) {
+    try {
+      const parsed = new URL(url)
+      return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '[::1]'
+    } catch { return false }
+  }
+  return false
+}
+
 // ── Drawer state persistence across re-renders ─────────────────
 // The settings panel is re-rendered on every state change, which would
 // collapse the drawer. We persist the open/closed state here so it
@@ -249,7 +261,7 @@ export function renderSettings(container: HTMLElement): void {
   document.getElementById('relay-add-btn')!.addEventListener('click', () => {
     const input = document.getElementById('relay-add-input') as HTMLInputElement
     const url = input.value.trim()
-    if (!url.startsWith('wss://') && !url.startsWith('ws://')) {
+    if (!isAllowedRelayUrl(url)) {
       input.focus()
       return
     }
@@ -345,6 +357,7 @@ export function renderSettings(container: HTMLElement): void {
           rotationInterval: typeof imported.rotationInterval === 'number' && imported.rotationInterval > 0 ? imported.rotationInterval : 86400,
           encodingFormat: (['words', 'pin', 'hex'] as const).includes(imported.encodingFormat) ? imported.encodingFormat : 'words',
           usedInvites: [] as string[],
+          latestInviteIssuedAt: 0,
           livenessInterval: typeof imported.rotationInterval === 'number' && imported.rotationInterval > 0 ? imported.rotationInterval : 86400,
           livenessCheckins: {} as Record<string, number>,
           tolerance: typeof imported.tolerance === 'number' && imported.tolerance >= 0 ? imported.tolerance : 1,

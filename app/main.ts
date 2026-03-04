@@ -43,6 +43,18 @@ import { showDuressAlert } from './components/duress-alert.js'
 import { escapeHtml } from './utils/escape.js'
 import type { AppIdentity } from './types.js'
 
+/** Allow wss:// relays, plus ws:// only for localhost development. */
+function isAllowedRelayUrl(url: string): boolean {
+  if (url.startsWith('wss://')) return true
+  if (url.startsWith('ws://')) {
+    try {
+      const parsed = new URL(url)
+      return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '[::1]'
+    } catch { return false }
+  }
+  return false
+}
+
 // ── Storage bootstrap ──────────────────────────────────────────
 // Subscribe first (before restoring) so all state changes are persisted.
 initStorage()
@@ -854,7 +866,7 @@ function showLoginScreen(): void {
   app.querySelector('#login-relay-add')?.addEventListener('click', () => {
     const input = app.querySelector<HTMLInputElement>('#login-relay-input')
     const url = input?.value.trim()
-    if (!url || !url.startsWith('wss://')) return
+    if (!url || !isAllowedRelayUrl(url)) return
     const relays = [...getState().settings.defaultRelays]
     if (!relays.includes(url)) {
       relays.push(url)
