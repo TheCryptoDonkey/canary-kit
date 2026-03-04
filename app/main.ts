@@ -16,7 +16,7 @@ import {
   enablePin,
   disablePin,
 } from './storage.js'
-import { getState, subscribe, update } from './state.js'
+import { getState, subscribe, update, updateGroup } from './state.js'
 import { renderHeader, updateRelayStatus } from './components/header.js'
 import { renderSidebar } from './components/sidebar.js'
 import { showModal } from './components/modal.js'
@@ -307,6 +307,15 @@ function showCreateGroupModal(): void {
         autofocus
       />
     </label>
+    <label class="input-label">
+      <span>Your name</span>
+      <input
+        class="input"
+        type="text"
+        name="myname"
+        placeholder="e.g. Alice"
+      />
+    </label>
     <div class="modal__actions">
       <button type="button" class="btn" id="modal-cancel-btn">Cancel</button>
       <button type="submit" class="btn btn--primary">Create</button>
@@ -316,8 +325,15 @@ function showCreateGroupModal(): void {
   showModal(content, (formData) => {
     const name = (formData.get('name') as string | null)?.trim() ?? ''
     if (!name) return
+    const myName = (formData.get('myname') as string | null)?.trim() ?? ''
     const { identity } = getState()
     const groupId = createNewGroup(name, 'family', identity?.pubkey)
+    if (myName && identity?.pubkey) {
+      const group = getState().groups[groupId]
+      if (group) {
+        updateGroup(groupId, { memberNames: { ...group.memberNames, [identity.pubkey]: myName } })
+      }
+    }
     const newGroup = getState().groups[groupId]
     if (newGroup?.relays?.length) {
       void ensureTransport(newGroup.relays, groupId)
@@ -364,6 +380,9 @@ function wireGlobalEvents(): void {
       <label class="input-label">Invite String
         <textarea name="payload" class="input" rows="3" placeholder="Paste the invite string here" required>${prefill}</textarea>
       </label>
+      <label class="input-label">Your name
+        <input name="myname" class="input" placeholder="e.g. Alice">
+      </label>
       <label class="input-label">Confirmation Code (optional)
         <input name="code" class="input" placeholder="6-character code" maxlength="6">
       </label>
@@ -375,6 +394,7 @@ function wireGlobalEvents(): void {
       try {
         const payload = form.get('payload') as string
         const code = form.get('code') as string
+        const myName = (form.get('myname') as string | null)?.trim() ?? ''
         const data = acceptInvite(payload.trim(), code.trim() || undefined)
 
         // Use the shared group ID from the invite so relay sync events match
@@ -388,11 +408,17 @@ function wireGlobalEvents(): void {
           members.push(identity.pubkey)
         }
 
+        const memberNames: Record<string, string> = {}
+        if (myName && identity?.pubkey) {
+          memberNames[identity.pubkey] = myName
+        }
+
         const appGroup = {
           ...data,
           id,
           name: data.groupName,
           members,
+          memberNames,
           nostrEnabled: hasRelays,
           relays: data.relays ?? [],
           encodingFormat: (data.encodingFormat ?? 'words') as 'words' | 'pin' | 'hex',

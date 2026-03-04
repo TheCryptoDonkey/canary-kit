@@ -10,11 +10,17 @@ import { generateQR } from '../components/qr.js'
 const MEMBER_NAMES = ['Alice', 'Bob', 'Charlie', 'Dana', 'Eli', 'Faye', 'Gus', 'Hana']
 
 /**
- * Format a pubkey for display: "You" for local identity, friendly names for others.
+ * Format a pubkey for display: "You" for local identity, memberNames, friendly names for others.
  */
-function formatPubkey(pubkey: string, members: string[]): string {
-  const { identity } = getState()
+function formatPubkey(pubkey: string, members: string[], groupId?: string): string {
+  const { identity, groups } = getState()
   if (identity?.pubkey === pubkey) return 'You'
+  // Check memberNames first
+  if (groupId) {
+    const group = groups[groupId]
+    const name = group?.memberNames?.[pubkey]
+    if (name) return name
+  }
   const otherIndex = members.filter(m => m !== identity?.pubkey).indexOf(pubkey)
   return MEMBER_NAMES[otherIndex] ?? `${pubkey.slice(0, 8)}\u2026${pubkey.slice(-4)}`
 }
@@ -123,7 +129,7 @@ export function renderMembers(container: HTMLElement): void {
           .map(
             (pubkey) => `
           <li class="member-item" data-pubkey="${pubkey}">
-            <span class="member-item__pubkey">${formatPubkey(pubkey, group.members)}</span>
+            <span class="member-item__pubkey">${formatPubkey(pubkey, group.members, activeGroupId)}</span>
             <button
               class="btn btn--sm member-item__remove"
               data-pubkey="${pubkey}"
@@ -158,7 +164,7 @@ export function renderMembers(container: HTMLElement): void {
 
     const { groups: g } = getState()
     const currentMembers = g[activeGroupId]?.members ?? []
-    if (!confirm(`Remove ${formatPubkey(pubkey, currentMembers)} from the group?\n\nThe group secret will be rotated automatically.`)) {
+    if (!confirm(`Remove ${formatPubkey(pubkey, currentMembers, activeGroupId)} from the group?\n\nThe group secret will be rotated automatically.`)) {
       return
     }
 

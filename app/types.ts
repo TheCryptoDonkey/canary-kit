@@ -20,6 +20,8 @@ export interface AppGroup extends GroupState {
   livenessCheckins: Record<string, number>
   /** Verification tolerance window: accept tokens within +/- this many counters. */
   tolerance: number
+  /** Human-readable names for members, keyed by pubkey. */
+  memberNames?: Record<string, string>
 }
 
 /** The local identity (Nostr keypair) for this device. */

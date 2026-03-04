@@ -64,6 +64,27 @@ function secondsUntilRotation(group: AppGroup): number {
   return Math.max(0, nextRotation - nowSec)
 }
 
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * Format the rotation label.
+ * For intervals >= 24h: "rotates Wed 5 Mar at 14:00 UTC (6d 2h)"
+ * For shorter intervals: "rotates in 45s"
+ */
+function formatRotationLabel(secsLeft: number, interval: number): string {
+  if (interval >= 86400) {
+    const target = new Date(Date.now() + secsLeft * 1000)
+    const day = DAY_NAMES[target.getUTCDay()]
+    const date = target.getUTCDate()
+    const month = MONTH_NAMES[target.getUTCMonth()]
+    const hours = String(target.getUTCHours()).padStart(2, '0')
+    const mins = String(target.getUTCMinutes()).padStart(2, '0')
+    return `rotates ${day} ${date} ${month} at ${hours}:${mins} UTC (${formatCountdown(secsLeft)})`
+  }
+  return `rotates in ${formatCountdown(secsLeft)} · ${militaryTime()}`
+}
+
 // ── Display token derivation ────────────────────────────────────
 
 /**
@@ -132,7 +153,7 @@ export function renderHero(container: HTMLElement): void {
         <div class="hero__progress">
           <div class="hero__progress-bar" id="hero-progress-bar" style="width: ${progressPct}%"></div>
         </div>
-        <span class="hero__countdown-label" id="hero-countdown-label">rotates in ${formatCountdown(secsLeft)} · ${militaryTime()}</span>
+        <span class="hero__countdown-label" id="hero-countdown-label">${formatRotationLabel(secsLeft, group.rotationInterval)}</span>
       </div>
 
       <button class="btn btn--ghost" id="burn-btn" type="button">I used this word</button>
@@ -230,7 +251,7 @@ export function renderHero(container: HTMLElement): void {
     )
 
     if (progressBar) progressBar.style.width = `${pct}%`
-    if (countdownLabel) countdownLabel.textContent = `rotates in ${formatCountdown(remaining)} · ${militaryTime()}`
+    if (countdownLabel) countdownLabel.textContent = formatRotationLabel(remaining, currentGroup.rotationInterval)
 
     // When the rotation window expires, re-render to pick up the new word.
     if (remaining === 0) {
