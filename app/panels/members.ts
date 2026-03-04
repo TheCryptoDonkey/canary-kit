@@ -124,6 +124,9 @@ export function renderMembers(container: HTMLElement): void {
     return
   }
 
+  const { identity } = getState()
+  const isAdmin = !!identity?.pubkey && group.admins.includes(identity.pubkey)
+
   const memberItems =
     group.members.length > 0
       ? group.members
@@ -131,12 +134,12 @@ export function renderMembers(container: HTMLElement): void {
             (pubkey) => `
           <li class="member-item" data-pubkey="${escapeHtml(pubkey)}">
             <span class="member-item__pubkey">${escapeHtml(formatPubkey(pubkey, group.members, activeGroupId))}</span>
-            <button
+            ${isAdmin ? `<button
               class="btn btn--sm member-item__remove"
               data-pubkey="${escapeHtml(pubkey)}"
               type="button"
               aria-label="Remove member"
-            >\u2715</button>
+            >\u2715</button>` : ''}
           </li>`,
           )
           .join('')
@@ -148,10 +151,10 @@ export function renderMembers(container: HTMLElement): void {
       <ul class="member-list">
         ${memberItems}
       </ul>
-      <div class="members-actions">
+      ${isAdmin ? `<div class="members-actions">
         <button class="btn btn--sm" id="add-member-btn" type="button">+ Add Member</button>
         <button class="btn btn--sm" id="invite-btn" type="button">+ Invite</button>
-      </div>
+      </div>` : ''}
     </section>
   `
 
@@ -165,7 +168,7 @@ export function renderMembers(container: HTMLElement): void {
 
     const { groups: g } = getState()
     const currentMembers = g[activeGroupId]?.members ?? []
-    if (!confirm(`Remove ${formatPubkey(pubkey, currentMembers, activeGroupId)} from the group?\n\nWarning: The removed member still has the old group secret. For full security, create a new group without them after removal.`)) {
+    if (!confirm(`Remove ${formatPubkey(pubkey, currentMembers, activeGroupId)} from the group?\n\nThis rotates the group secret immediately. Remaining members must re-join using a fresh invite.`)) {
       return
     }
 
