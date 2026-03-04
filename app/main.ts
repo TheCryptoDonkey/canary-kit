@@ -33,6 +33,7 @@ import { renderCallSimulation, destroyCallSimulation } from './views/call-simula
 import { acceptInvite, createInvite } from './invite.js'
 import { resolveSigner } from './nostr/signer.js'
 import { broadcastAction, ensureTransport, subscribeToAllGroups, teardownSync } from './sync.js'
+import { showDuressAlert } from './components/duress-alert.js'
 import type { AppIdentity } from './types.js'
 
 // ── Storage bootstrap ──────────────────────────────────────────
@@ -462,16 +463,11 @@ function wireGlobalEvents(): void {
 
   // Handle incoming sync messages for beacon/duress side effects.
   document.addEventListener('canary:sync-message', (evt) => {
-    const { message, sender } = (evt as CustomEvent).detail
+    const { groupId, message, sender } = (evt as CustomEvent).detail
     if (message.type === 'beacon') {
       console.info(`[canary] Beacon from ${sender.slice(0, 8)}…: ${message.lat}, ${message.lon}`)
     } else if (message.type === 'duress-alert') {
-      const banner = document.getElementById('duress-alert-banner')
-      if (banner) {
-        banner.hidden = false
-        banner.className = 'call-sim__banner call-sim__banner--duress'
-        banner.textContent = `DURESS ALERT from ${sender.slice(0, 8)}…`
-      }
+      showDuressAlert(sender, groupId, message.lat != null ? { lat: message.lat, lon: message.lon } : undefined)
     }
   })
 }
