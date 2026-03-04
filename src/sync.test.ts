@@ -3,6 +3,9 @@ import {
   encodeSyncMessage,
   decodeSyncMessage,
   applySyncMessage,
+  stableStringify,
+  canonicaliseSyncMessage,
+  PROTOCOL_VERSION,
   type SyncMessage,
 } from './sync.js'
 import { createGroup } from './group.js'
@@ -562,5 +565,83 @@ describe('protocol version (H1)', () => {
   it('decodeSyncMessage rejects missing version (hard cutover)', () => {
     const payload = JSON.stringify({ type: 'counter-advance', counter: 0, usageOffset: 0, timestamp: 0 })
     expect(() => decodeSyncMessage(payload)).toThrow('protocolVersion is required')
+  })
+})
+
+describe('canonical JSON (H2)', () => {
+  it('stableStringify sorts keys recursively', () => {
+    const result = stableStringify({ z: 1, a: { c: 3, b: 2 }, m: [{ y: 1, x: 2 }] })
+    expect(result).toBe('{"a":{"b":2,"c":3},"m":[{"x":2,"y":1}],"z":1}')
+  })
+
+  it('stableStringify handles primitives', () => {
+    expect(stableStringify(null)).toBe('null')
+    expect(stableStringify(true)).toBe('true')
+    expect(stableStringify(42)).toBe('42')
+    expect(stableStringify('hello')).toBe('"hello"')
+  })
+
+  it('stableStringify handles arrays', () => {
+    expect(stableStringify([3, 1, 2])).toBe('[3,1,2]')
+    expect(stableStringify([])).toBe('[]')
+  })
+
+  it('stableStringify omits undefined values', () => {
+    expect(stableStringify({ a: 1, b: undefined, c: 3 })).toBe('{"a":1,"c":3}')
+  })
+
+  it('stableStringify rejects Uint8Array', () => {
+    expect(() => stableStringify(new Uint8Array([1]))).toThrow('Uint8Array must be hex-encoded')
+  })
+
+  it('canonicaliseSyncMessage produces deterministic output', () => {
+    const msg: SyncMessage = {
+      type: 'member-join', pubkey: PUBKEY_AAA, timestamp: 1700000000,
+      epoch: 0, opId: 'test',
+    }
+    const c1 = canonicaliseSyncMessage(msg)
+    const c2 = canonicaliseSyncMessage(msg)
+    expect(c1).toBe(c2)
+    // Keys should be sorted
+    const parsed = JSON.parse(c1)
+    const keys = Object.keys(parsed)
+    expect(keys).toEqual([...keys].sort())
+  })
+
+  it('canonicaliseSyncMessage preserves protocolVersion from input', () => {
+    const msg: SyncMessage = {
+      type: 'counter-advance', counter: 0, usageOffset: 0, timestamp: 0,
+    }
+    // Without version — field absent in canonical output
+    const noVersion = canonicaliseSyncMessage(msg)
+    expect(JSON.parse(noVersion).protocolVersion).toBeUndefined()
+    // With version — field preserved as-is
+    const versioned = { ...msg, protocolVersion: PROTOCOL_VERSION }
+    const withVersion = canonicaliseSyncMessage(versioned)
+    expect(JSON.parse(withVersion).protocolVersion).toBe(PROTOCOL_VERSION)
+  })
+
+  it('canonicaliseSyncMessage hex-encodes reseed seed', () => {
+    const seed = new Uint8Array(32).fill(42)
+    const msg: SyncMessage = {
+      type: 'reseed', seed, counter: 0, timestamp: 0,
+      epoch: 1, opId: 'op', admins: [PUBKEY_AAA], members: [PUBKEY_AAA],
+    }
+    const versioned = { ...msg, protocolVersion: PROTOCOL_VERSION }
+    const canonical = canonicaliseSyncMessage(versioned)
+    expect(canonical).toContain(bytesToHex(seed))
+    // Should not contain Uint8Array artefacts
+    expect(canonical).not.toContain('"0":')
+  })
+
+  it('canonicaliseSyncMessage matches encodeSyncMessage when given versioned input', () => {
+    const msg: SyncMessage = {
+      type: 'member-join', pubkey: PUBKEY_AAA, timestamp: 1700000000,
+      epoch: 0, opId: 'test',
+    }
+    const versioned = { ...msg, protocolVersion: PROTOCOL_VERSION }
+    const wireFields = Object.keys(JSON.parse(encodeSyncMessage(msg))).sort()
+    const canonicalFields = Object.keys(JSON.parse(canonicaliseSyncMessage(versioned))).sort()
+    expect(canonicalFields).toEqual(wireFields)
   })
 })

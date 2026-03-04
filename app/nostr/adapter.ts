@@ -1,32 +1,40 @@
 // app/nostr/adapter.ts — Nostr implementation of SyncTransport (group key encryption)
 
 import type { SyncTransport, SyncMessage } from 'canary-kit/sync'
-import { encodeSyncMessage, decodeSyncMessage, hashGroupTag, encryptEnvelope, decryptEnvelope, deriveGroupKey } from 'canary-kit/sync'
+import { encodeSyncMessage, decodeSyncMessage, hashGroupTag, encryptEnvelope, decryptEnvelope, deriveGroupKey, canonicaliseSyncMessage, PROTOCOL_VERSION } from 'canary-kit/sync'
+import { bytesToHex, hexToBytes, sha256 } from 'canary-kit/crypto'
+import { schnorr } from '@noble/curves/secp256k1.js'
 import { getPool, isConnected, connectRelays } from './connect.js'
-import type { GroupSigner } from './signer.js'
+import { verifyEvent } from 'nostr-tools/pure'
 
 /** Single event kind for all CANARY-SYNC messages (type is inside encrypted payload). */
 const SYNC_EVENT_KIND = 29_111
+const HEX_64_RE = /^[0-9a-f]{64}$/
+const HEX_128_RE = /^[0-9a-f]{128}$/
+const ENCODER = new TextEncoder()
+
+interface EventSignerLike {
+  pubkey: string
+  sign(event: unknown): Promise<unknown>
+}
 
 export class NostrSyncTransport implements SyncTransport {
   private subs = new Map<string, { close(): void }>()
-  private groupKeys = new Map<string, { key: Uint8Array; signer: GroupSigner; tagHash: string }>()
-  /** Personal pubkey bound inside every encrypted envelope for sender identity. */
-  private personalPubkey: string
+  private groupKeys = new Map<string, { key: Uint8Array; signer: EventSignerLike; tagHash: string; members: Set<string> }>()
 
   constructor(
     private relays: string[],
-    personalPubkey: string,
-  ) {
-    this.personalPubkey = personalPubkey
-  }
+    private personalPubkey: string,
+    private personalPrivkey: string,
+  ) {}
 
   /** Register a group's seed so we can encrypt/decrypt and sign for it. */
-  registerGroup(groupId: string, seedHex: string, signer: GroupSigner): void {
+  registerGroup(groupId: string, seedHex: string, signer: EventSignerLike, members: string[]): void {
     this.groupKeys.set(groupId, {
       key: deriveGroupKey(seedHex),
       signer,
       tagHash: hashGroupTag(groupId),
+      members: new Set(members),
     })
   }
 
@@ -46,8 +54,14 @@ export class NostrSyncTransport implements SyncTransport {
       return
     }
 
-    // Bind sender identity inside the encrypted envelope: { s: personalPubkey, p: syncPayload }
-    const envelope = JSON.stringify({ s: this.personalPubkey, p: encodeSyncMessage(message) })
+    // encodeSyncMessage injects PROTOCOL_VERSION and returns wire JSON
+    const payload = encodeSyncMessage(message)
+    // Canonicalise a versioned copy for signing (must match what decode+canonicalise produces on receive)
+    const versioned = { ...message, protocolVersion: PROTOCOL_VERSION }
+    const canonical = canonicaliseSyncMessage(versioned)
+    const payloadHash = sha256(ENCODER.encode(canonical))
+    const innerSig = bytesToHex(schnorr.sign(payloadHash, hexToBytes(this.personalPrivkey)))
+    const envelope = JSON.stringify({ s: this.personalPubkey, sig: innerSig, p: payload })
     const encrypted = await encryptEnvelope(groupInfo.key, envelope)
 
     const unsigned = {
@@ -87,20 +101,61 @@ export class NostrSyncTransport implements SyncTransport {
       {
         onevent: async (event: any) => {
           try {
+            if (!event || typeof event !== 'object') return
+            if (typeof event.pubkey !== 'string' || typeof event.content !== 'string') return
+
             // Skip our own events
             if (event.pubkey === groupInfo.signer.pubkey) return
 
-            // Decrypt and extract sender identity binding.
-            // Envelope format: AES-256-GCM({ s: personalPubkey, p: syncPayload })
-            const decrypted = await decryptEnvelope(groupInfo.key, event.content)
-            const parsed = JSON.parse(decrypted)
-            if (typeof parsed?.s !== 'string' || typeof parsed?.p !== 'string') {
-              console.warn('[canary:sync] Rejected envelope without sender binding')
+            // Verify relay event signature before trusting event.pubkey.
+            if (!verifyEvent(event)) {
+              console.warn('[canary:sync] Rejected event with invalid signature')
               return
             }
 
-            const msg = decodeSyncMessage(parsed.p)
-            onMessage(msg, parsed.s)
+            // Decrypt and verify authenticated inner envelope.
+            // Format: { s: personalPubkey, sig: schnorr(sig over payload), p: syncPayload }
+            const decrypted = await decryptEnvelope(groupInfo.key, event.content)
+            const parsed = JSON.parse(decrypted) as unknown
+            if (!parsed || typeof parsed !== 'object') {
+              console.warn('[canary:sync] Rejected malformed envelope')
+              return
+            }
+
+            const sender = (parsed as Record<string, unknown>).s
+            const sig = (parsed as Record<string, unknown>).sig
+            const payload = (parsed as Record<string, unknown>).p
+            if (typeof sender !== 'string' || typeof sig !== 'string' || typeof payload !== 'string') {
+              console.warn('[canary:sync] Rejected envelope with missing sender proof fields')
+              return
+            }
+            if (!HEX_64_RE.test(sender) || !HEX_128_RE.test(sig)) {
+              console.warn('[canary:sync] Rejected envelope with invalid sender proof encoding')
+              return
+            }
+
+            // Enforce sender membership using personal identity key (inside envelope).
+            if (!groupInfo.members.has(sender)) {
+              console.warn('[canary:sync] Rejected message from non-member pubkey')
+              return
+            }
+
+            const msg = decodeSyncMessage(payload)
+            const canonical = canonicaliseSyncMessage(msg)
+            const payloadHash = sha256(ENCODER.encode(canonical))
+            const isValidInnerSig = schnorr.verify(hexToBytes(sig), payloadHash, hexToBytes(sender))
+            if (!isValidInnerSig) {
+              console.warn('[canary:sync] Rejected envelope with invalid sender proof')
+              return
+            }
+
+            // Liveness check-ins must be self-authored.
+            if (msg.type === 'liveness-checkin' && msg.pubkey !== sender) {
+              console.warn('[canary:sync] Rejected liveness-checkin with mismatched sender')
+              return
+            }
+
+            onMessage(msg, sender)
           } catch (err) {
             console.warn('[canary:sync] Failed to process event:', err)
           }

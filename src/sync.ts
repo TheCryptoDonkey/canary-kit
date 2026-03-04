@@ -56,6 +56,48 @@ export function encodeSyncMessage(msg: SyncMessage): string {
 }
 
 /**
+ * Recursively produce a JSON string with sorted keys and no whitespace.
+ * Handles nested objects, arrays (elements stringified recursively), and
+ * all JSON-safe primitives. Used for deterministic signing (H2).
+ */
+export function stableStringify(value: unknown): string {
+  if (value === null || value === undefined) return 'null'
+  if (typeof value === 'boolean' || typeof value === 'number') return JSON.stringify(value)
+  if (typeof value === 'string') return JSON.stringify(value)
+  if (Array.isArray(value)) {
+    return '[' + value.map(stableStringify).join(',') + ']'
+  }
+  if (value instanceof Uint8Array) {
+    throw new Error('stableStringify: Uint8Array must be hex-encoded before serialisation')
+  }
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    const keys = Object.keys(obj).sort()
+    const pairs = keys
+      .filter(k => obj[k] !== undefined)
+      .map(k => JSON.stringify(k) + ':' + stableStringify(obj[k]))
+    return '{' + pairs.join(',') + '}'
+  }
+  throw new Error(`stableStringify: unsupported type ${typeof value}`)
+}
+
+/**
+ * Return the canonical string representation of a sync message for signing.
+ * Keys are sorted recursively, no whitespace. Binary fields are hex-encoded.
+ * The message's protocolVersion field is preserved as-is — the send side
+ * (encodeSyncMessage) is responsible for injecting PROTOCOL_VERSION before
+ * both encode and sign, so the canonical bytes always reflect the actual
+ * wire value. This is the format that inner signatures are computed over (H2).
+ */
+export function canonicaliseSyncMessage(msg: SyncMessage): string {
+  if (msg.type === 'reseed') {
+    const { seed, ...rest } = msg
+    return stableStringify({ ...rest, seed: bytesToHex(seed) })
+  }
+  return stableStringify(msg)
+}
+
+/**
  * Decode a sync message from a JSON string.
  * Throws on invalid or unrecognised messages.
  */
