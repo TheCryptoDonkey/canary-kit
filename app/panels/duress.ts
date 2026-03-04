@@ -45,8 +45,9 @@ export function renderDuress(container: HTMLElement): void {
   const isMember = !!(identity?.pubkey && group.members.includes(identity.pubkey))
 
   container.innerHTML = `
-    <section class="duress-section">
-      <p class="duress-section__hint">Your personal distress signal — hold to reveal</p>
+    <section class="panel duress-section">
+      <h3 class="panel__title">Duress Signal</h3>
+      <p class="duress-section__hint">If you are forced to verify under coercion, speak this word instead. It appears valid but silently alerts your group.</p>
 
       <button
         class="btn duress-btn"
