@@ -56,6 +56,7 @@ export function renderVerify(container: HTMLElement): void {
   container.innerHTML = `
     <section class="panel verify-panel">
       <h2 class="panel__title">Verify Someone</h2>
+      <p class="settings-hint">Someone told you a word? Type it here to check if it's valid, expired, or a duress signal.</p>
 
       <div class="verify-form">
         <input
@@ -87,7 +88,7 @@ export function renderVerify(container: HTMLElement): void {
     const currentGroup = currentGroups[currentGroupId]
     if (!currentGroup) return
 
-    const spokenWord = input!.value.trim().toLowerCase()
+    const spokenWord = input!.value.trim().toLowerCase().replace(/-/g, '')
     if (!spokenWord) return
 
     const nowSec = Math.floor(Date.now() / 1000)

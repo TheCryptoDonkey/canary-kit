@@ -4,7 +4,7 @@ import { advanceCounter, syncCounter, getCounter } from 'canary-kit'
 import { deriveToken } from 'canary-kit/token'
 import { getState, updateGroup } from '../state.js'
 import type { AppGroup } from '../types.js'
-import { toTokenEncoding, GROUP_CONTEXT } from '../utils/encoding.js'
+import { toTokenEncoding, GROUP_CONTEXT, formatForDisplay } from '../utils/encoding.js'
 
 // ── Tick interval management ───────────────────────────────────
 
@@ -64,15 +64,26 @@ function secondsUntilRotation(group: AppGroup): number {
   return Math.max(0, nextRotation - nowSec)
 }
 
-// ── Encoding label map ─────────────────────────────────────────
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-const ENCODING_LABELS: Record<AppGroup['encodingFormat'], string> = {
-  words: 'Word',
-  pin: 'PIN',
-  hex: 'Hex',
+/**
+ * Format the rotation label.
+ * For intervals >= 24h: "rotates Wed 5 Mar at 14:00 UTC (6d 2h)"
+ * For shorter intervals: "rotates in 45s"
+ */
+function formatRotationLabel(secsLeft: number, interval: number): string {
+  if (interval >= 86400) {
+    const target = new Date(Date.now() + secsLeft * 1000)
+    const day = DAY_NAMES[target.getUTCDay()]
+    const date = target.getUTCDate()
+    const month = MONTH_NAMES[target.getUTCMonth()]
+    const hours = String(target.getUTCHours()).padStart(2, '0')
+    const mins = String(target.getUTCMinutes()).padStart(2, '0')
+    return `rotates ${day} ${date} ${month} at ${hours}:${mins} UTC (${formatCountdown(secsLeft)})`
+  }
+  return `rotates in ${formatCountdown(secsLeft)} · ${militaryTime()}`
 }
-
-const ENCODING_VALUES: AppGroup['encodingFormat'][] = ['words', 'pin', 'hex']
 
 // ── Display token derivation ────────────────────────────────────
 
@@ -116,7 +127,8 @@ export function renderHero(container: HTMLElement): void {
     return
   }
 
-  const word = getDisplayToken(group)
+  const rawWord = getDisplayToken(group)
+  const word = formatForDisplay(rawWord, group.encodingFormat)
   const masked = maskWord(word)
   const secsLeft = secondsUntilRotation(group)
   const progressPct = Math.min(
@@ -141,18 +153,7 @@ export function renderHero(container: HTMLElement): void {
         <div class="hero__progress">
           <div class="hero__progress-bar" id="hero-progress-bar" style="width: ${progressPct}%"></div>
         </div>
-        <span class="hero__countdown-label" id="hero-countdown-label">rotates in ${formatCountdown(secsLeft)} · ${militaryTime()}</span>
-      </div>
-
-      <div class="hero__encoding" id="hero-encoding">
-        ${ENCODING_VALUES.map(
-          (enc) =>
-            `<button
-              class="encoding-btn${group.encodingFormat === enc ? ' encoding-btn--active' : ''}"
-              data-encoding="${enc}"
-              type="button"
-            >${ENCODING_LABELS[enc]}</button>`,
-        ).join('')}
+        <span class="hero__countdown-label" id="hero-countdown-label">${formatRotationLabel(secsLeft, group.rotationInterval)}</span>
       </div>
 
       <button class="btn btn--ghost" id="burn-btn" type="button">I used this word</button>
@@ -190,17 +191,6 @@ export function renderHero(container: HTMLElement): void {
     revealBtn.addEventListener('pointerleave', hideWord)
     revealBtn.addEventListener('pointercancel', hideWord)
   }
-
-  // ── Encoding picker ────────────────────────────────────────
-
-  const encodingRow = container.querySelector<HTMLElement>('#hero-encoding')
-  encodingRow?.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-encoding]')
-    if (!btn) return
-    const enc = btn.dataset.encoding as AppGroup['encodingFormat']
-    if (!enc || enc === group.encodingFormat) return
-    updateGroup(activeGroupId, { encodingFormat: enc })
-  })
 
   // ── Burn button ────────────────────────────────────────────
 
@@ -261,7 +251,7 @@ export function renderHero(container: HTMLElement): void {
     )
 
     if (progressBar) progressBar.style.width = `${pct}%`
-    if (countdownLabel) countdownLabel.textContent = `rotates in ${formatCountdown(remaining)} · ${militaryTime()}`
+    if (countdownLabel) countdownLabel.textContent = formatRotationLabel(remaining, currentGroup.rotationInterval)
 
     // When the rotation window expires, re-render to pick up the new word.
     if (remaining === 0) {

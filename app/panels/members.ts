@@ -10,11 +10,17 @@ import { generateQR } from '../components/qr.js'
 const MEMBER_NAMES = ['Alice', 'Bob', 'Charlie', 'Dana', 'Eli', 'Faye', 'Gus', 'Hana']
 
 /**
- * Format a pubkey for display: "You" for local identity, friendly names for others.
+ * Format a pubkey for display: "You" for local identity, memberNames, friendly names for others.
  */
-function formatPubkey(pubkey: string, members: string[]): string {
-  const { identity } = getState()
+function formatPubkey(pubkey: string, members: string[], groupId?: string): string {
+  const { identity, groups } = getState()
   if (identity?.pubkey === pubkey) return 'You'
+  // Check memberNames first
+  if (groupId) {
+    const group = groups[groupId]
+    const name = group?.memberNames?.[pubkey]
+    if (name) return name
+  }
   const otherIndex = members.filter(m => m !== identity?.pubkey).indexOf(pubkey)
   return MEMBER_NAMES[otherIndex] ?? `${pubkey.slice(0, 8)}\u2026${pubkey.slice(-4)}`
 }
@@ -43,12 +49,15 @@ export function showInviteModal(payload: string, confirmCode: string): void {
       <h2 class="modal__title">Invite to Group</h2>
 
       <div class="qr-container">${svgMarkup}</div>
+      <p class="invite-hint">Scan with your phone camera to join</p>
 
       <div class="confirm-code">
         <span class="confirm-code__label">Verification code</span>
         <span class="confirm-code__value">${confirmCode}</span>
       </div>
-      <p class="invite-hint">Read this code aloud to verify the invite wasn't tampered with</p>
+      <p class="invite-hint">Optional security check — ask the recipient to confirm this code</p>
+
+      <p class="invite-hint" style="color: var(--failed); font-weight: 500;">This invite contains the group secret. Share it privately.</p>
 
       <div class="invite-share__actions">
         <button class="btn btn--primary" id="invite-copy-link" type="button">Copy Link</button>
@@ -75,8 +84,9 @@ export function showInviteModal(payload: string, confirmCode: string): void {
     const btn = e.currentTarget as HTMLButtonElement
     try {
       await navigator.clipboard.writeText(joinUrl)
-      btn.textContent = 'Copied!'
-      setTimeout(() => { btn.textContent = 'Copy Link' }, 2000)
+      btn.textContent = 'Link Copied!'
+      btn.classList.add('btn--copied')
+      setTimeout(() => { btn.textContent = 'Copy Link'; btn.classList.remove('btn--copied') }, 2000)
     } catch { /* clipboard may be blocked */ }
   })
 
@@ -84,8 +94,9 @@ export function showInviteModal(payload: string, confirmCode: string): void {
     const btn = e.currentTarget as HTMLButtonElement
     try {
       await navigator.clipboard.writeText(payload)
-      btn.textContent = 'Copied!'
-      setTimeout(() => { btn.textContent = 'Copy Invite Text' }, 2000)
+      btn.textContent = 'Text Copied!'
+      btn.classList.add('btn--copied')
+      setTimeout(() => { btn.textContent = 'Copy Invite Text'; btn.classList.remove('btn--copied') }, 2000)
     } catch { /* clipboard may be blocked */ }
   })
 
@@ -118,7 +129,7 @@ export function renderMembers(container: HTMLElement): void {
           .map(
             (pubkey) => `
           <li class="member-item" data-pubkey="${pubkey}">
-            <span class="member-item__pubkey">${formatPubkey(pubkey, group.members)}</span>
+            <span class="member-item__pubkey">${formatPubkey(pubkey, group.members, activeGroupId)}</span>
             <button
               class="btn btn--sm member-item__remove"
               data-pubkey="${pubkey}"
@@ -153,7 +164,7 @@ export function renderMembers(container: HTMLElement): void {
 
     const { groups: g } = getState()
     const currentMembers = g[activeGroupId]?.members ?? []
-    if (!confirm(`Remove ${formatPubkey(pubkey, currentMembers)} from the group?\n\nThe group secret will be rotated automatically.`)) {
+    if (!confirm(`Remove ${formatPubkey(pubkey, currentMembers, activeGroupId)} from the group?\n\nThe group secret will be rotated automatically.`)) {
       return
     }
 

@@ -2,6 +2,7 @@
 
 import { getState, updateGroup, update } from '../state.js'
 import { deleteGroup, reseedGroup } from '../actions/groups.js'
+import { showToast } from '../components/toast.js'
 import { disconnectRelays, isConnected, getRelayCount } from '../nostr/connect.js'
 import { ensureTransport, teardownSync } from '../sync.js'
 import { updateRelayStatus } from '../components/header.js'
@@ -39,12 +40,15 @@ export function renderSettings(container: HTMLElement): void {
         <div class="settings-section">
           <span class="input-label">Rotation</span>
           <div class="segmented">
+            <button class="segmented__btn ${group.rotationInterval === 30 ? 'segmented__btn--active' : ''}" data-interval="30">30s</button>
             <button class="segmented__btn ${group.rotationInterval === 86400 ? 'segmented__btn--active' : ''}" data-interval="86400">24h</button>
             <button class="segmented__btn ${group.rotationInterval === 604800 ? 'segmented__btn--active' : ''}" data-interval="604800">7d</button>
             <button class="segmented__btn ${group.rotationInterval === 2592000 ? 'segmented__btn--active' : ''}" data-interval="2592000">30d</button>
           </div>
+          <p class="settings-hint">How often the verification word changes</p>
         </div>
 
+        ${group.encodingFormat === 'words' ? `
         <!-- Word Count -->
         <div class="settings-section">
           <span class="input-label">Words</span>
@@ -53,7 +57,9 @@ export function renderSettings(container: HTMLElement): void {
             <button class="segmented__btn ${group.wordCount === 2 ? 'segmented__btn--active' : ''}" data-words="2">2</button>
             <button class="segmented__btn ${group.wordCount === 3 ? 'segmented__btn--active' : ''}" data-words="3">3</button>
           </div>
+          <p class="settings-hint">More words = stronger security</p>
         </div>
+        ` : ''}
 
         <!-- Encoding Format -->
         <div class="settings-section">
@@ -63,6 +69,7 @@ export function renderSettings(container: HTMLElement): void {
             <button class="segmented__btn ${group.encodingFormat === 'pin' ? 'segmented__btn--active' : ''}" data-enc="pin">PIN</button>
             <button class="segmented__btn ${group.encodingFormat === 'hex' ? 'segmented__btn--active' : ''}" data-enc="hex">Hex</button>
           </div>
+          <p class="settings-hint">Words for voice, PINs for digital input, Hex for machine-to-machine</p>
         </div>
 
         <!-- Tolerance Window -->
@@ -74,6 +81,18 @@ export function renderSettings(container: HTMLElement): void {
             <button class="segmented__btn ${group.tolerance === 2 ? 'segmented__btn--active' : ''}" data-tolerance="2">+/-2</button>
             <button class="segmented__btn ${group.tolerance === 3 ? 'segmented__btn--active' : ''}" data-tolerance="3">+/-3</button>
           </div>
+          <p class="settings-hint">Accept words from neighbouring time windows (higher = more forgiving, less secure)</p>
+        </div>
+
+        <!-- Duress Mode -->
+        <div class="settings-section">
+          <span class="input-label">Duress Response</span>
+          <div class="segmented">
+            <button class="segmented__btn ${group.duressMode === 'immediate' || !group.duressMode ? 'segmented__btn--active' : ''}" data-duress-mode="immediate">Immediate</button>
+            <button class="segmented__btn ${group.duressMode === 'dead-drop' ? 'segmented__btn--active' : ''}" data-duress-mode="dead-drop">Dead Drop</button>
+            <button class="segmented__btn ${group.duressMode === 'both' ? 'segmented__btn--active' : ''}" data-duress-mode="both">Both</button>
+          </div>
+          <p class="settings-hint">Immediate alerts members now. Dead drop records silently for later retrieval.</p>
         </div>
 
         <!-- Nostr Sync Toggle -->
@@ -179,6 +198,14 @@ export function renderSettings(container: HTMLElement): void {
     })
   })
 
+  // ── Duress mode ─────────────────────────────────────────────
+
+  container.querySelectorAll('[data-duress-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      updateGroup(activeGroupId!, { duressMode: (btn as HTMLElement).dataset.duressMode as 'immediate' | 'dead-drop' | 'both' })
+    })
+  })
+
   // ── Nostr toggle ─────────────────────────────────────────────
 
   document.getElementById('nostr-toggle')!.addEventListener('change', (e) => {
@@ -256,6 +283,7 @@ export function renderSettings(container: HTMLElement): void {
   document.getElementById('reseed-btn')!.addEventListener('click', () => {
     if (confirm('Emergency reseed? This generates a new seed. All members will need new invites.')) {
       reseedGroup(activeGroupId!)
+      showToast('Emergency reseed complete. All verification words have changed. Share new invites.', 'warning', 6000)
     }
   })
 
@@ -270,6 +298,7 @@ export function renderSettings(container: HTMLElement): void {
   // ── Export ───────────────────────────────────────────────────
 
   document.getElementById('export-btn')!.addEventListener('click', () => {
+    if (!confirm('This exports the group secret in cleartext. Treat the file like a password.')) return
     const blob = new Blob([JSON.stringify(group, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -282,6 +311,7 @@ export function renderSettings(container: HTMLElement): void {
   // ── Import ───────────────────────────────────────────────────
 
   document.getElementById('import-btn')!.addEventListener('click', () => {
+    if (!confirm('Only import files from trusted sources — the file contains the group secret.')) return
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = '.json'

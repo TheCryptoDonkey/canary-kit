@@ -9,6 +9,8 @@ function memberName(pubkey: string, groupId: string): string {
   if (!group) return pubkey.slice(0, 8)
   const { identity } = getState()
   if (identity?.pubkey === pubkey) return 'You'
+  const name = group.memberNames?.[pubkey]
+  if (name) return name
   const others = group.members.filter(m => m !== identity?.pubkey)
   const idx = others.indexOf(pubkey)
   return idx >= 0 && idx < MEMBER_NAMES.length ? MEMBER_NAMES[idx] : pubkey.slice(0, 8)

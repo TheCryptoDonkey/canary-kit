@@ -15,3 +15,19 @@ export function toTokenEncoding(group: AppGroup): TokenEncoding {
     default: return { format: 'words', count: group.wordCount }
   }
 }
+
+/**
+ * Format a token for display with dashes for readability.
+ * PIN: "123456" → "123-456"
+ * Hex: "a618123f" → "a618-123f"
+ * Words: returned unchanged.
+ */
+export function formatForDisplay(token: string, format: AppGroup['encodingFormat']): string {
+  if (format === 'pin' && token.length === 6) {
+    return `${token.slice(0, 3)}-${token.slice(3)}`
+  }
+  if (format === 'hex' && token.length === 8) {
+    return `${token.slice(0, 4)}-${token.slice(4)}`
+  }
+  return token
+}
