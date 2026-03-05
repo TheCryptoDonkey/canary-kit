@@ -401,6 +401,139 @@
       },
       "sender": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "expected": "reject"
+    },
+    {
+      "id": "F1-duress-alert-missing-opId",
+      "invariant": "F1",
+      "description": "Fire-and-forget duress-alert without opId is rejected at decode",
+      "rawMessage": "{\"type\":\"duress-alert\",\"lat\":51.5,\"lon\":-0.1,\"timestamp\":1700000000,\"protocolVersion\":1}",
+      "expected": "decode-error",
+      "expectedError": "opId"
+    },
+    {
+      "id": "F1-beacon-missing-opId",
+      "invariant": "F1",
+      "description": "Fire-and-forget beacon without opId is rejected at decode",
+      "rawMessage": "{\"type\":\"beacon\",\"lat\":51.5,\"lon\":-0.1,\"accuracy\":100,\"timestamp\":1700000000,\"protocolVersion\":1}",
+      "expected": "decode-error",
+      "expectedError": "opId"
+    },
+    {
+      "id": "F1-liveness-checkin-missing-opId",
+      "invariant": "F1",
+      "description": "Fire-and-forget liveness-checkin without opId is rejected at decode",
+      "rawMessage": "{\"type\":\"liveness-checkin\",\"pubkey\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":1700000000,\"protocolVersion\":1}",
+      "expected": "decode-error",
+      "expectedError": "opId"
+    },
+    {
+      "id": "F1-duress-alert-empty-opId",
+      "invariant": "F1",
+      "description": "Fire-and-forget duress-alert with empty opId is rejected at decode",
+      "rawMessage": "{\"type\":\"duress-alert\",\"lat\":51.5,\"lon\":-0.1,\"timestamp\":1700000000,\"opId\":\"\",\"protocolVersion\":1}",
+      "expected": "decode-error",
+      "expectedError": "opId"
+    },
+    {
+      "id": "F2-duress-alert-stale",
+      "invariant": "F2",
+      "description": "Fire-and-forget duress-alert older than freshness window is dropped",
+      "initialGroup": {
+        "name": "test",
+        "seed": "0000000000000000000000000000000000000000000000000000000000000001",
+        "members": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+        "rotationInterval": 604800,
+        "wordCount": 1,
+        "wordlist": "en-v1",
+        "counter": 0,
+        "usageOffset": 0,
+        "createdAt": 1700000000,
+        "beaconInterval": 300,
+        "beaconPrecision": 6,
+        "admins": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+        "epoch": 0,
+        "consumedOps": []
+      },
+      "message": {
+        "type": "duress-alert",
+        "lat": 51.5,
+        "lon": -0.1,
+        "timestamp": 1699999699,
+        "opId": "stale-duress",
+        "protocolVersion": 1
+      },
+      "nowSec": 1700000000,
+      "sender": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "reject",
+      "note": "timestamp is 301s behind nowSec, exceeding FIRE_AND_FORGET_FRESHNESS_SEC (300)"
+    },
+    {
+      "id": "F2-beacon-future-skew",
+      "invariant": "F2",
+      "description": "Fire-and-forget beacon with future timestamp beyond MAX_FUTURE_SKEW_SEC is dropped",
+      "initialGroup": {
+        "name": "test",
+        "seed": "0000000000000000000000000000000000000000000000000000000000000001",
+        "members": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+        "rotationInterval": 604800,
+        "wordCount": 1,
+        "wordlist": "en-v1",
+        "counter": 0,
+        "usageOffset": 0,
+        "createdAt": 1700000000,
+        "beaconInterval": 300,
+        "beaconPrecision": 6,
+        "admins": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+        "epoch": 0,
+        "consumedOps": []
+      },
+      "message": {
+        "type": "beacon",
+        "lat": 51.5,
+        "lon": -0.1,
+        "accuracy": 100,
+        "timestamp": 1700000061,
+        "opId": "future-beacon",
+        "protocolVersion": 1
+      },
+      "nowSec": 1700000000,
+      "sender": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "reject",
+      "note": "timestamp is 61s ahead of nowSec, exceeding MAX_FUTURE_SKEW_SEC (60)"
+    },
+    {
+      "id": "F2-duress-alert-within-freshness",
+      "invariant": "F2",
+      "description": "Fire-and-forget duress-alert within freshness window is accepted",
+      "initialGroup": {
+        "name": "test",
+        "seed": "0000000000000000000000000000000000000000000000000000000000000001",
+        "members": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+        "rotationInterval": 604800,
+        "wordCount": 1,
+        "wordlist": "en-v1",
+        "counter": 0,
+        "usageOffset": 0,
+        "createdAt": 1700000000,
+        "beaconInterval": 300,
+        "beaconPrecision": 6,
+        "admins": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+        "epoch": 0,
+        "consumedOps": []
+      },
+      "message": {
+        "type": "duress-alert",
+        "lat": 51.5,
+        "lon": -0.1,
+        "timestamp": 1699999800,
+        "opId": "fresh-duress",
+        "protocolVersion": 1
+      },
+      "nowSec": 1700000000,
+      "sender": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "accept",
+      "fireAndForget": true,
+      "note": "timestamp is 200s behind nowSec, within FIRE_AND_FORGET_FRESHNESS_SEC (300). Fire-and-forget returns group unchanged but is accepted."
     }
   ]
 }

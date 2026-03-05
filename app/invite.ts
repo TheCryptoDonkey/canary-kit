@@ -69,7 +69,8 @@ function randomNonce(): string {
     .join('')
 }
 
-function assertInvitePayload(raw: unknown): asserts raw is InvitePayload {
+/** @internal Exported for contract testing — not part of the public API. */
+export function assertInvitePayload(raw: unknown): asserts raw is InvitePayload {
   const data = raw as Record<string, unknown>
   if (!data || typeof data !== 'object') {
     throw new Error('Invalid invite payload — expected an object.')
@@ -157,7 +158,8 @@ function assertInvitePayload(raw: unknown): asserts raw is InvitePayload {
  * Excludes inviterSig (the field being computed) but includes all other fields.
  * Keys are sorted for deterministic output.
  */
-function inviteCanonicalBytes(payload: InvitePayload): Uint8Array {
+/** @internal Exported for contract testing — not part of the public API. */
+export function inviteCanonicalBytes(payload: InvitePayload): Uint8Array {
   const { inviterSig: _sig, ...rest } = payload
   const sorted = Object.keys(rest).sort().reduce((acc, key) => {
     acc[key] = (rest as Record<string, unknown>)[key]
@@ -171,7 +173,8 @@ function inviteCanonicalBytes(payload: InvitePayload): Uint8Array {
  * Proves the invite was created by someone who controls the admin private key,
  * not merely someone who knows the group seed.
  */
-function signInvite(payload: InvitePayload, privkey: string): string {
+/** @internal Exported for contract testing — not part of the public API. */
+export function signInvite(payload: InvitePayload, privkey: string): string {
   const canonical = inviteCanonicalBytes(payload)
   const hash = sha256(canonical)
   return bytesToHex(schnorr.sign(hash, hexToBytes(privkey)))
@@ -180,7 +183,8 @@ function signInvite(payload: InvitePayload, privkey: string): string {
 /**
  * Verify the invite signature against the claimed inviter pubkey.
  */
-function verifyInviteSig(payload: InvitePayload): boolean {
+/** @internal Exported for contract testing — not part of the public API. */
+export function verifyInviteSig(payload: InvitePayload): boolean {
   const canonical = inviteCanonicalBytes(payload)
   const hash = sha256(canonical)
   return schnorr.verify(hexToBytes(payload.inviterSig), hash, hexToBytes(payload.inviterPubkey))
@@ -195,7 +199,8 @@ function verifyInviteSig(payload: InvitePayload): boolean {
  *
  * Returns 48 bits of MAC (12 hex chars) formatted as three groups of four: XXXX-XXXX-XXXX.
  */
-function confirmCodeFromPayload(payload: InvitePayload): string {
+/** @internal Exported for contract testing — not part of the public API. */
+export function confirmCodeFromPayload(payload: InvitePayload): string {
   const { nonce, ...rest } = payload
   const data = JSON.stringify(rest)
   const encoder = new TextEncoder()
