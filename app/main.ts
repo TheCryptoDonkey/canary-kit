@@ -157,12 +157,13 @@ function showLockScreen(): void {
       const header = document.getElementById('header')
       if (header) renderHeader(header)
       wireSidebarToggle()
-      checkInviteFragment()
-      window.addEventListener('hashchange', () => checkInviteFragment())
       render()
       subscribe(render)
       startAutoLock()
       wireGlobalEvents()
+      // Must come AFTER wireGlobalEvents so the 'canary:join-group' listener is registered
+      checkInviteFragment()
+      window.addEventListener('hashchange', () => checkInviteFragment())
       void bootSync()
     } catch {
       _failCount++
@@ -916,9 +917,6 @@ async function bootApp(): Promise<void> {
     update({ view: 'call-demo' })
   }
 
-  checkInviteFragment()
-  window.addEventListener('hashchange', () => checkInviteFragment())
-
   const header = document.getElementById('header')
   if (header) renderHeader(header)
 
@@ -926,6 +924,11 @@ async function bootApp(): Promise<void> {
   render()
   subscribe(render)
   wireGlobalEvents()
+
+  // Must come AFTER wireGlobalEvents so the 'canary:join-group' listener is registered
+  checkInviteFragment()
+  window.addEventListener('hashchange', () => checkInviteFragment())
+
   void bootSync()
 }
 

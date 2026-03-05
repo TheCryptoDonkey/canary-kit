@@ -89,15 +89,9 @@ export async function createInvite(page: Page): Promise<{ payload: string; confi
   const confirmCode = await page.locator('.confirm-code__value').textContent()
   if (!confirmCode) throw new Error('Could not read confirm code from invite modal')
 
-  // Extract payload from clipboard after clicking Copy Link
-  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
-  await page.locator('#invite-copy-link').click()
-  await page.waitForTimeout(200)
-
-  const clipboardText = await page.evaluate(() => navigator.clipboard.readText())
-  const hashIndex = clipboardText.indexOf('#join/')
-  if (hashIndex === -1) throw new Error('Invite link missing #join/ fragment')
-  const payload = decodeURIComponent(clipboardText.slice(hashIndex + 6))
+  // Read payload from data attribute (more reliable than clipboard)
+  const payload = await page.locator('#invite-modal').getAttribute('data-payload')
+  if (!payload) throw new Error('Could not read invite payload from modal')
 
   await page.click('#invite-close-btn')
   return { payload, confirmCode }
@@ -117,7 +111,7 @@ export async function acceptInviteViaModal(
   await page.fill('[name="payload"]', payload)
   await page.fill('[name="code"]', confirmCode)
   await page.click('#modal-form button[type="submit"]')
-  await page.waitForSelector('#app-modal:not([open])', { timeout: 5000 })
+  await page.waitForSelector('#app-modal:not([open])', { state: 'attached', timeout: 5000 })
 }
 
 /** Accept an invite by navigating to the invite URL hash. */
@@ -128,6 +122,15 @@ export async function acceptInviteViaLink(
   loginName?: string,
 ): Promise<void> {
   const encodedPayload = encodeURIComponent(payload)
+
+  // Capture any alert dialogs (e.g. from validation errors)
+  let alertMessage = ''
+  const dialogHandler = async (dialog: import('@playwright/test').Dialog) => {
+    alertMessage = dialog.message()
+    await dialog.accept()
+  }
+  page.on('dialog', dialogHandler)
+
   await page.goto(`/#join/${encodedPayload}`)
 
   // If not logged in, the login screen appears first
@@ -146,7 +149,14 @@ export async function acceptInviteViaLink(
   }
 
   await page.click('#modal-form button[type="submit"]')
-  await page.waitForSelector('#app-modal:not([open])', { timeout: 5000 })
+  await page.waitForSelector('#app-modal:not([open])', { state: 'attached', timeout: 5000 })
+
+  // Clean up dialog handler to avoid interfering with subsequent dialog expectations
+  page.off('dialog', dialogHandler)
+
+  if (alertMessage) {
+    throw new Error(`Invite acceptance failed: ${alertMessage}`)
+  }
 }
 
 // ── Verification ─────────────────────────────────────────────

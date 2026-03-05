@@ -17,13 +17,13 @@ test.describe('Encoding formats', () => {
   test('PIN encoding shows digits', async ({ cleanPage: page }) => {
     await setEncodingFormat(page, 'pin')
     const word = await getDisplayedWord(page)
-    expect(word).toMatch(/^\d+$/)
+    expect(word).toMatch(/^[\d-]+$/) // digits with optional dash separator
   })
 
   test('hex encoding shows hex string', async ({ cleanPage: page }) => {
     await setEncodingFormat(page, 'hex')
     const word = await getDisplayedWord(page)
-    expect(word).toMatch(/^[0-9a-f]+$/i)
+    expect(word).toMatch(/^[0-9a-f-]+$/i) // hex with optional dash separator
   })
 
   test('switching encoding updates display immediately', async ({ cleanPage: page }) => {

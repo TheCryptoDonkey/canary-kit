@@ -45,6 +45,7 @@ export function showInviteModal(payload: string, confirmCode: string): void {
     document.body.appendChild(dialog)
   }
 
+  dialog.dataset.payload = payload
   dialog.innerHTML = `
     <div class="modal__form invite-share">
       <h2 class="modal__title">Invite to Group</h2>

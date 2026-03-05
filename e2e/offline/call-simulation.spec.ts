@@ -19,32 +19,37 @@ test.describe('Call simulation', () => {
 
   test('call demo view: scenario tabs visible', async ({ cleanPage: page }) => {
     await loginOffline(page, 'Alice')
-    // Navigate to call demo via header tab or hash
-    await page.goto('/#call')
-    await page.waitForTimeout(500)
+    await createGroup(page, 'Test')
+    // Switch to call demo via header tab
+    await page.click('.header__nav-tab[data-view="call-demo"]')
+    await page.waitForTimeout(300)
     // The call demo should show scenario buttons
-    await expect(page.locator('text=Insurance')).toBeVisible()
-    await expect(page.locator('text=Pickup')).toBeVisible()
-    await expect(page.locator('text=Rideshare')).toBeVisible()
+    await expect(page.locator('.call-sim__scenario-btn')).toHaveCount(3, { timeout: 5000 })
+    await expect(page.locator('.call-sim__scenario-btn[data-scenario="insurance"]')).toBeVisible()
+    await expect(page.locator('.call-sim__scenario-btn[data-scenario="pickup"]')).toBeVisible()
+    await expect(page.locator('.call-sim__scenario-btn[data-scenario="rideshare"]')).toBeVisible()
   })
 
   test('call demo shows directional words (caller ≠ receiver)', async ({ cleanPage: page }) => {
     await loginOffline(page, 'Alice')
-    await page.goto('/#call')
-    await page.waitForTimeout(500)
+    await createGroup(page, 'Test')
+    // Switch to call demo via header tab
+    await page.click('.header__nav-tab[data-view="call-demo"]')
+    await page.waitForTimeout(300)
 
-    // Both caller and agent sections should be visible
-    const callerWord = page.locator('.call-card').first().locator('.call-word')
-    const agentWord = page.locator('.call-card').last().locator('.call-word')
+    // Both caller and agent token elements should be visible
+    const callerToken = page.locator('#caller-reveal')
+    const agentToken = page.locator('#agent-reveal')
 
-    await expect(callerWord).toBeVisible()
-    await expect(agentWord).toBeVisible()
+    await expect(callerToken).toBeVisible({ timeout: 5000 })
+    await expect(agentToken).toBeVisible()
 
-    const callerText = await callerWord.textContent()
-    const agentText = await agentWord.textContent()
-    expect(callerText).toBeTruthy()
-    expect(agentText).toBeTruthy()
+    // Read the real token value from data attribute (display is masked)
+    const callerReal = await callerToken.getAttribute('data-real')
+    const agentReal = await agentToken.getAttribute('data-real')
+    expect(callerReal).toBeTruthy()
+    expect(agentReal).toBeTruthy()
     // Directional: caller and receiver should see DIFFERENT words
-    expect(callerText).not.toBe(agentText)
+    expect(callerReal).not.toBe(agentReal)
   })
 })

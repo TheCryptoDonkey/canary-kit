@@ -43,11 +43,11 @@ test.describe('Group lifecycle', () => {
     await createGroup(page, 'Doomed Group')
     await openSettings(page)
 
-    // Click delete — there should be a confirm dialog
+    // Click dissolve — there should be a confirm dialog
     page.once('dialog', async (dialog) => {
       await dialog.accept()
     })
-    await page.click('text=Delete Group')
+    await page.click('#dissolve-btn')
 
     await expect(page.locator('.group-list__item')).not.toBeVisible()
   })

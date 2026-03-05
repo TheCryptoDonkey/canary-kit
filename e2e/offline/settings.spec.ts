@@ -29,13 +29,13 @@ test.describe('Settings panel', () => {
     await setEncodingFormat(page, 'pin')
     // The hero word should now be a numeric PIN
     const word = await getDisplayedWord(page)
-    expect(word).toMatch(/^\d+$/) // all digits
+    expect(word).toMatch(/^[\d-]+$/) // digits with optional dash separator
   })
 
   test('encoding format change: words to hex', async ({ cleanPage: page }) => {
     await setEncodingFormat(page, 'hex')
     const word = await getDisplayedWord(page)
-    expect(word).toMatch(/^[0-9a-f]+$/i) // hex string
+    expect(word).toMatch(/^[0-9a-f-]+$/i) // hex with optional dash separator
   })
 
   test('encoding format change updates hero display immediately', async ({ cleanPage: page }) => {
