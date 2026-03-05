@@ -540,6 +540,144 @@ function showJoinConfirmation(groupName: string, joinTokenEncoded: string, curre
   dialog.showModal()
 }
 
+// ── Shared invite acceptance logic ───────────────────────────────
+
+/**
+ * Validate and merge an accepted invite into local state.
+ * Used by both "Join Group" (new members) and "Sync State" (existing members).
+ */
+async function applyInvite(data: ReturnType<typeof acceptInvite>, myName: string): Promise<{ appGroup: Record<string, unknown> }> {
+  const id = data.groupId
+  const { groups: existingGroups, identity } = getState()
+  const existingGroup = existingGroups[id]
+
+  // Reject replayed invites for this group.
+  if (isInviteConsumed(id, data.nonce)) {
+    throw new Error('This invite has already been used.')
+  }
+
+  // Reject stale-but-unique nonces for existing groups.
+  if (existingGroup && data.issuedAt <= (existingGroup.latestInviteIssuedAt ?? 0)) {
+    throw new Error('This invite is stale and has been rejected.')
+  }
+
+  // Authority check: for existing groups, inviter must be a current admin
+  // in our LOCAL state (not the invite's claimed admins — those are attacker-controlled).
+  if (existingGroup) {
+    const localAdmins = existingGroup.admins ?? []
+    if (!localAdmins.includes(data.inviterPubkey)) {
+      throw new Error('Invite rejected — the inviter is not a recognised admin of this group.')
+    }
+  }
+
+  // I5: invites accepted only if invite.epoch >= local.epoch
+  // (strictly newer for seed change)
+  if (existingGroup) {
+    const localEpoch = existingGroup.epoch ?? 0
+    const inviteEpoch = data.epoch
+    if (inviteEpoch < localEpoch) {
+      throw new Error('This invite is from an older epoch and has been rejected.')
+    }
+    if (data.seed !== existingGroup.seed && inviteEpoch <= localEpoch) {
+      throw new Error('Seed change requires a strictly newer epoch.')
+    }
+  }
+
+  // Forward-only rekey migration:
+  // if seed differs and invite is newer, accept as intentional rotation.
+  const isSeedMigration = !!(existingGroup && existingGroup.seed !== data.seed)
+  const relays = Array.from(new Set([...(existingGroup?.relays ?? []), ...data.relays]))
+  const hasRelays = relays.length > 0
+
+  // Keep anti-rollback union for same-seed updates; for rekeys, trust invite membership.
+  const memberSet = isSeedMigration
+    ? new Set<string>(data.members)
+    : new Set<string>([...(existingGroup?.members ?? []), ...data.members])
+  if (identity?.pubkey) {
+    memberSet.add(identity.pubkey)
+  }
+  const members = Array.from(memberSet)
+
+  const memberNames: Record<string, string> = {
+    ...(data.memberNames ?? {}),        // names from invite (advisory, not signed)
+    ...(existingGroup?.memberNames ?? {}), // local names take precedence
+  }
+  if (myName && identity?.pubkey) {
+    memberNames[identity.pubkey] = myName
+  }
+  for (const key of Object.keys(memberNames)) {
+    if (!memberSet.has(key)) delete memberNames[key]
+  }
+
+  const livenessCheckins = isSeedMigration ? {} : { ...(existingGroup?.livenessCheckins ?? {}) }
+  for (const key of Object.keys(livenessCheckins)) {
+    if (!memberSet.has(key)) delete livenessCheckins[key]
+  }
+
+  // Whitelist known fields only — never spread untrusted invite data into state
+  const appGroup = {
+    id,
+    name: data.groupName,
+    seed: data.seed,
+    members,
+    memberNames,
+    mode: (hasRelays ? 'online' : 'offline') as 'offline' | 'online',
+    nostrEnabled: hasRelays,
+    relays,
+    wordlist: data.wordlist,
+    wordCount: data.wordCount,
+    counter: isSeedMigration
+      ? data.counter
+      : existingGroup
+        ? Math.max(existingGroup.counter, data.counter)
+        : data.counter,
+    usageOffset: isSeedMigration
+      ? data.usageOffset
+      : existingGroup
+        ? Math.max(existingGroup.usageOffset, data.usageOffset)
+        : data.usageOffset,
+    rotationInterval: data.rotationInterval,
+    encodingFormat: data.encodingFormat,
+    usedInvites: Array.from(new Set([...(existingGroup?.usedInvites ?? []), data.nonce])),
+    latestInviteIssuedAt: data.issuedAt,
+    beaconInterval: data.beaconInterval,
+    beaconPrecision: data.beaconPrecision,
+    duressMode: existingGroup?.duressMode ?? 'immediate',
+    livenessInterval: existingGroup?.livenessInterval ?? data.rotationInterval,
+    livenessCheckins,
+    tolerance: data.tolerance,
+    createdAt: existingGroup?.createdAt ?? Math.floor(Date.now() / 1000),
+    admins: isSeedMigration
+      ? [...data.admins]
+      : [...(existingGroup?.admins ?? data.admins)],
+    epoch: isSeedMigration
+      ? data.epoch
+      : Math.max(existingGroup?.epoch ?? 0, data.epoch),
+    consumedOps: isSeedMigration ? [] : [...(existingGroup?.consumedOps ?? [])],
+  }
+  const groups = { ...existingGroups, [id]: appGroup }
+  update({ groups, activeGroupId: id })
+
+  if (isSeedMigration) {
+    showToast('Group secret rotated. Joined latest group state.', 'warning', 5000)
+  }
+
+  // Boot relay sync for this group and announce ourselves
+  if (hasRelays && identity) {
+    void ensureTransport(relays, id).then(() => {
+      broadcastAction(id, {
+        type: 'member-join',
+        pubkey: identity.pubkey,
+        timestamp: Math.floor(Date.now() / 1000),
+        epoch: data.epoch,
+        opId: crypto.randomUUID(),
+      })
+    })
+  }
+
+  return { appGroup }
+}
+
 // ── Global event listeners ──────────────────────────────────────
 
 function wireGlobalEvents(): void {
@@ -577,131 +715,7 @@ function wireGlobalEvents(): void {
         const myName = joinKnownName || (form.get('myname') as string | null)?.trim() || ''
         const data = acceptInvite(payload.trim(), code.trim() || undefined)
 
-        // Use the invite's shared group ID so relay sync events match.
-        const id = data.groupId
-        const { groups: existingGroups, identity } = getState()
-        const existingGroup = existingGroups[id]
-
-        // Reject replayed invites for this group.
-        if (isInviteConsumed(id, data.nonce)) {
-          throw new Error('This invite has already been used.')
-        }
-
-        // Reject stale-but-unique nonces for existing groups.
-        if (existingGroup && data.issuedAt <= (existingGroup.latestInviteIssuedAt ?? 0)) {
-          throw new Error('This invite is stale and has been rejected.')
-        }
-
-        // Authority check: for existing groups, inviter must be a current admin
-        // in our LOCAL state (not the invite's claimed admins — those are attacker-controlled).
-        if (existingGroup) {
-          const localAdmins = existingGroup.admins ?? []
-          if (!localAdmins.includes(data.inviterPubkey)) {
-            throw new Error('Invite rejected — the inviter is not a recognised admin of this group.')
-          }
-        }
-
-        // I5: invites accepted only if invite.epoch >= local.epoch
-        // (strictly newer for seed change)
-        if (existingGroup) {
-          const localEpoch = existingGroup.epoch ?? 0
-          const inviteEpoch = data.epoch
-          if (inviteEpoch < localEpoch) {
-            throw new Error('This invite is from an older epoch and has been rejected.')
-          }
-          if (data.seed !== existingGroup.seed && inviteEpoch <= localEpoch) {
-            throw new Error('Seed change requires a strictly newer epoch.')
-          }
-        }
-
-        // Forward-only rekey migration:
-        // if seed differs and invite is newer, accept as intentional rotation.
-        const isSeedMigration = !!(existingGroup && existingGroup.seed !== data.seed)
-        const relays = Array.from(new Set([...(existingGroup?.relays ?? []), ...data.relays]))
-        const hasRelays = relays.length > 0
-
-        // Keep anti-rollback union for same-seed updates; for rekeys, trust invite membership.
-        const memberSet = isSeedMigration
-          ? new Set<string>(data.members)
-          : new Set<string>([...(existingGroup?.members ?? []), ...data.members])
-        if (identity?.pubkey) {
-          memberSet.add(identity.pubkey)
-        }
-        const members = Array.from(memberSet)
-
-        const memberNames: Record<string, string> = { ...(existingGroup?.memberNames ?? {}) }
-        if (myName && identity?.pubkey) {
-          memberNames[identity.pubkey] = myName
-        }
-        for (const key of Object.keys(memberNames)) {
-          if (!memberSet.has(key)) delete memberNames[key]
-        }
-
-        const livenessCheckins = isSeedMigration ? {} : { ...(existingGroup?.livenessCheckins ?? {}) }
-        for (const key of Object.keys(livenessCheckins)) {
-          if (!memberSet.has(key)) delete livenessCheckins[key]
-        }
-
-        // Whitelist known fields only — never spread untrusted invite data into state
-        const appGroup = {
-          id,
-          name: data.groupName,
-          seed: data.seed,
-          members,
-          memberNames,
-          mode: (hasRelays ? 'online' : 'offline') as 'offline' | 'online',
-          nostrEnabled: hasRelays,
-          relays,
-          wordlist: data.wordlist,
-          wordCount: data.wordCount,
-          counter: isSeedMigration
-            ? data.counter
-            : existingGroup
-              ? Math.max(existingGroup.counter, data.counter)
-              : data.counter,
-          usageOffset: isSeedMigration
-            ? data.usageOffset
-            : existingGroup
-              ? Math.max(existingGroup.usageOffset, data.usageOffset)
-              : data.usageOffset,
-          rotationInterval: data.rotationInterval,
-          encodingFormat: data.encodingFormat,
-          usedInvites: Array.from(new Set([...(existingGroup?.usedInvites ?? []), data.nonce])),
-          latestInviteIssuedAt: data.issuedAt,
-          beaconInterval: data.beaconInterval,
-          beaconPrecision: data.beaconPrecision,
-          duressMode: existingGroup?.duressMode ?? 'immediate',
-          livenessInterval: existingGroup?.livenessInterval ?? data.rotationInterval,
-          livenessCheckins,
-          tolerance: data.tolerance,
-          createdAt: existingGroup?.createdAt ?? Math.floor(Date.now() / 1000),
-          admins: isSeedMigration
-            ? [...data.admins]
-            : [...(existingGroup?.admins ?? data.admins)],
-          epoch: isSeedMigration
-            ? data.epoch
-            : Math.max(existingGroup?.epoch ?? 0, data.epoch),
-          consumedOps: isSeedMigration ? [] : [...(existingGroup?.consumedOps ?? [])],
-        }
-        const groups = { ...existingGroups, [id]: appGroup }
-        update({ groups, activeGroupId: id })
-
-        if (isSeedMigration) {
-          showToast('Group secret rotated. Joined latest group state.', 'warning', 5000)
-        }
-
-        // Boot relay sync for this group and announce ourselves
-        if (hasRelays && identity) {
-          void ensureTransport(relays, id).then(() => {
-            broadcastAction(id, {
-              type: 'member-join',
-              pubkey: identity.pubkey,
-              timestamp: Math.floor(Date.now() / 1000),
-              epoch: data.epoch,
-              opId: crypto.randomUUID(),
-            })
-          })
-        }
+        const { appGroup } = await applyInvite(data, myName)
 
         const dialog = document.getElementById('app-modal') as HTMLDialogElement | null
         dialog?.close()
@@ -710,11 +724,11 @@ function wireGlobalEvents(): void {
         const { identity: joinedIdentity } = getState()
         if (joinedIdentity?.privkey) {
           const { deriveToken } = await import('canary-kit/token')
-          const { GROUP_CONTEXT } = await import('./utils/encoding.js')
-          const effectiveCounter = appGroup.counter + (appGroup.usageOffset ?? 0)
-          const currentWord = deriveToken(data.seed, GROUP_CONTEXT, effectiveCounter)
+          const { GROUP_CONTEXT, toTokenEncoding } = await import('./utils/encoding.js')
+          const effectiveCounter = (appGroup.counter as number) + ((appGroup.usageOffset as number) ?? 0)
+          const currentWord = deriveToken(data.seed, GROUP_CONTEXT, effectiveCounter, toTokenEncoding(appGroup as any))
           const joinToken = createJoinToken({
-            groupId: id,
+            groupId: data.groupId,
             privkey: joinedIdentity.privkey,
             pubkey: joinedIdentity.pubkey,
             displayName: myName,
@@ -741,6 +755,50 @@ function wireGlobalEvents(): void {
     })
   })
 
+  // Fired by the members panel "Sync State" button.
+  document.addEventListener('canary:sync-state', () => {
+    const { identity: syncIdentity } = getState()
+    const syncName = syncIdentity?.displayName && syncIdentity.displayName !== 'You' ? syncIdentity.displayName : ''
+
+    showModal(`
+      <h2 class="modal__title">Sync Group State</h2>
+      <p class="settings-hint" style="margin-bottom: 0.75rem;">Paste the state update from your group admin.</p>
+      <label class="input-label">Invite String
+        <textarea name="payload" class="input" rows="3" placeholder="Paste the state string here" required></textarea>
+      </label>
+      <label class="input-label">Confirmation Words
+        <input name="code" class="input" placeholder="word word word" maxlength="40" required>
+      </label>
+      <div class="modal__actions">
+        <button type="button" class="btn" id="modal-cancel-btn">Cancel</button>
+        <button type="submit" class="btn btn--primary">Sync</button>
+      </div>
+    `, async (form) => {
+      try {
+        const payload = form.get('payload') as string
+        const code = form.get('code') as string
+        const data = acceptInvite(payload.trim(), code.trim() || undefined)
+
+        await applyInvite(data, syncName)
+
+        const dialog = document.getElementById('app-modal') as HTMLDialogElement | null
+        dialog?.close()
+
+        showToast('Group state synced successfully.', 'success')
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Invalid state update'
+        alert(message)
+      }
+    })
+
+    requestAnimationFrame(() => {
+      document.getElementById('modal-cancel-btn')?.addEventListener('click', () => {
+        const dialog = document.getElementById('app-modal') as HTMLDialogElement | null
+        dialog?.close()
+      })
+    })
+  })
+
   document.addEventListener('canary:show-invite', (evt) => {
     const { groupId } = (evt as CustomEvent).detail
     const { groups } = getState()
@@ -751,6 +809,11 @@ function wireGlobalEvents(): void {
   })
 
   document.addEventListener('canary:confirm-member', (evt) => {
+    const { identity, groups, activeGroupId } = getState()
+    if (!activeGroupId || !identity?.pubkey) return
+    const group = groups[activeGroupId]
+    if (!group || !group.admins.includes(identity.pubkey)) return
+
     const token = (evt as CustomEvent<{ token?: string }>).detail?.token ?? ''
     import('./panels/members.js').then(({ showConfirmMemberModal }) => {
       showConfirmMemberModal(token)
