@@ -1,7 +1,8 @@
 // app/invite.ts — Invite creation and acceptance for CANARY groups
 
-import { hmacSha256, bytesToHex, hexToBytes } from 'canary-kit/crypto'
+import { sha256, hmacSha256, bytesToHex, hexToBytes } from 'canary-kit/crypto'
 import { PROTOCOL_VERSION } from 'canary-kit/sync'
+import { schnorr } from '@noble/curves/secp256k1.js'
 import { getState, updateGroup } from './state.js'
 import type { AppGroup } from './types.js'
 
@@ -39,11 +40,16 @@ export interface InvitePayload {
   admins: string[]
   /** Protocol version at invite creation. */
   protocolVersion: number
+  /** Pubkey of the admin who created this invite. */
+  inviterPubkey: string
+  /** Schnorr signature over SHA-256(canonicalPayload) — proves the inviter controls the admin private key. */
+  inviterSig: string
 }
 
 // ── Helpers ────────────────────────────────────────────────────
 
 const HEX_64_RE = /^[0-9a-f]{64}$/
+const HEX_128_RE = /^[0-9a-f]{128}$/
 const HEX_32_RE = /^[0-9a-f]{32}$/
 const INVITE_MAX_AGE_SEC = 7 * 24 * 60 * 60
 const MAX_CLOCK_SKEW_SEC = 300
@@ -134,6 +140,50 @@ function assertInvitePayload(raw: unknown): asserts raw is InvitePayload {
   if (data.protocolVersion !== PROTOCOL_VERSION) {
     throw new Error(`Unsupported invite protocol version: ${data.protocolVersion} (expected: ${PROTOCOL_VERSION})`)
   }
+  if (typeof data.inviterPubkey !== 'string' || !HEX_64_RE.test(data.inviterPubkey)) {
+    throw new Error('Invalid invite payload — inviterPubkey must be a 64-char hex pubkey.')
+  }
+  // Inviter must be in the admins list
+  if (!(data.admins as string[]).includes(data.inviterPubkey as string)) {
+    throw new Error('Invalid invite payload — inviterPubkey must be in admins.')
+  }
+  if (typeof data.inviterSig !== 'string' || !HEX_128_RE.test(data.inviterSig)) {
+    throw new Error('Invalid invite payload — inviterSig must be a 128-char hex Schnorr signature.')
+  }
+}
+
+/**
+ * Compute the canonical bytes for invite signing/verification.
+ * Excludes inviterSig (the field being computed) but includes all other fields.
+ * Keys are sorted for deterministic output.
+ */
+function inviteCanonicalBytes(payload: InvitePayload): Uint8Array {
+  const { inviterSig: _sig, ...rest } = payload
+  const sorted = Object.keys(rest).sort().reduce((acc, key) => {
+    acc[key] = (rest as Record<string, unknown>)[key]
+    return acc
+  }, {} as Record<string, unknown>)
+  return new TextEncoder().encode(JSON.stringify(sorted))
+}
+
+/**
+ * Sign the invite payload with the inviter's Schnorr private key.
+ * Proves the invite was created by someone who controls the admin private key,
+ * not merely someone who knows the group seed.
+ */
+function signInvite(payload: InvitePayload, privkey: string): string {
+  const canonical = inviteCanonicalBytes(payload)
+  const hash = sha256(canonical)
+  return bytesToHex(schnorr.sign(hash, hexToBytes(privkey)))
+}
+
+/**
+ * Verify the invite signature against the claimed inviter pubkey.
+ */
+function verifyInviteSig(payload: InvitePayload): boolean {
+  const canonical = inviteCanonicalBytes(payload)
+  const hash = sha256(canonical)
+  return schnorr.verify(hexToBytes(payload.inviterSig), hash, hexToBytes(payload.inviterPubkey))
 }
 
 /**
@@ -169,7 +219,7 @@ function confirmCodeFromPayload(payload: InvitePayload): string {
 export function createInvite(group: AppGroup): { payload: string; confirmCode: string } {
   // Only admins can create invites
   const { identity } = getState()
-  if (!identity?.pubkey) {
+  if (!identity?.pubkey || !identity?.privkey) {
     throw new Error('No local identity — cannot create invite.')
   }
   if (!group.admins.includes(identity.pubkey)) {
@@ -200,7 +250,11 @@ export function createInvite(group: AppGroup): { payload: string; confirmCode: s
     epoch: group.epoch ?? 0,
     admins: [...(group.admins ?? [])],
     protocolVersion: 1,
+    inviterPubkey: identity.pubkey,
+    inviterSig: '', // placeholder — computed below
   }
+
+  invitePayload.inviterSig = signInvite(invitePayload, identity.privkey)
 
   const payload = btoa(JSON.stringify(invitePayload))
   const confirmCode = confirmCodeFromPayload(invitePayload)
@@ -247,6 +301,13 @@ export function acceptInvite(payload: string, confirmCode?: string): InvitePaylo
     epoch: raw.epoch,
     admins: [...raw.admins],
     protocolVersion: raw.protocolVersion,
+    inviterPubkey: raw.inviterPubkey,
+    inviterSig: raw.inviterSig,
+  }
+
+  // Verify the Schnorr signature — proves the inviter controls the claimed admin private key.
+  if (!verifyInviteSig(data)) {
+    throw new Error('Invite signature is invalid — the inviter could not prove control of the admin key.')
   }
 
   if (!confirmCode?.trim()) {
