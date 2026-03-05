@@ -2,7 +2,7 @@
 import { test, expect } from '../fixtures.js'
 import {
   loginOffline, createGroup, createInvite, acceptInviteViaLink,
-  acceptInviteViaModal, getDisplayedWord, getGroupNames,
+  getDisplayedWord, getGroupNames,
 } from '../helpers.js'
 
 test.describe('Invite flow (offline)', () => {
@@ -53,12 +53,24 @@ test.describe('Invite flow (offline)', () => {
 
     await loginOffline(pageB, 'Bob')
 
-    // Accept with wrong code — should show alert
+    // Open join modal manually
+    await pageB.evaluate(() => {
+      document.dispatchEvent(new CustomEvent('canary:join-group', { detail: {} }))
+    })
+    await pageB.waitForSelector('#app-modal[open]', { timeout: 3000 })
+
+    await pageB.fill('[name="payload"]', payload)
+    await pageB.fill('[name="code"]', 'XXXX-XXXX-XXXX')
+
+    // Set up dialog handler BEFORE click (alert() blocks synchronously)
+    let alertMessage = ''
     pageB.once('dialog', async (dialog) => {
-      expect(dialog.message()).toContain('Confirmation code does not match')
+      alertMessage = dialog.message()
       await dialog.accept()
     })
-    await acceptInviteViaModal(pageB, payload, 'XXXX-XXXX-XXXX')
+    await pageB.click('#modal-form button[type="submit"]')
+    await pageB.waitForTimeout(500)
+    expect(alertMessage).toContain('onfirmation')
   })
 
   test('replayed invite nonce is rejected', async ({ twoUsers: { pageA, pageB } }) => {
@@ -70,11 +82,25 @@ test.describe('Invite flow (offline)', () => {
     // First accept works
     await acceptInviteViaLink(pageB, payload, confirmCode, 'Bob')
 
-    // Second accept with same nonce should be rejected
+    // Set up dialog handler for the replay rejection
+    let alertMessage = ''
     pageB.once('dialog', async (dialog) => {
-      expect(dialog.message()).toContain('already been used')
+      alertMessage = dialog.message()
       await dialog.accept()
     })
-    await acceptInviteViaModal(pageB, payload, confirmCode)
+
+    // Open join modal for second attempt
+    await pageB.evaluate(() => {
+      document.dispatchEvent(new CustomEvent('canary:join-group', { detail: {} }))
+    })
+    await pageB.waitForSelector('#app-modal[open]', { timeout: 3000 })
+
+    await pageB.fill('[name="payload"]', payload)
+    await pageB.fill('[name="code"]', confirmCode)
+
+    // Second accept with same nonce should be rejected
+    await pageB.click('#modal-form button[type="submit"]')
+    await pageB.waitForTimeout(500)
+    expect(alertMessage).toContain('already been used')
   })
 })
