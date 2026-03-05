@@ -1,0 +1,60 @@
+// e2e/online/sync-reseed.spec.ts — Reseed propagation
+import { test, expect } from '../fixtures.js'
+import { loginWithNsec, createGroup, createInvite, openSettings, seedRelayUrl, getDisplayedWord } from '../helpers.js'
+
+const ALICE_NSEC = 'nsec1vuhg9nandn0kas2w9uuvztwyla2fp7enfzz0emt6ly4gs6p5q3mqc6c6w5'
+const BOB_NSEC = 'nsec1hszs2j8elt78kq6ewresrxfallpc6qvf0p33usgy9ujdkgu0mcesd4qryw'
+
+test.describe('Online sync: reseed', () => {
+  test('reseed propagates to other members', async ({ browser, mockRelay }) => {
+    const relayUrl = mockRelay.url
+
+    // Setup: Alice creates group, Bob joins
+    const ctxA = await browser.newContext()
+    const pageA = await ctxA.newPage()
+    await seedRelayUrl(pageA, relayUrl)
+    await pageA.goto('/')
+    await loginWithNsec(pageA, ALICE_NSEC)
+    await createGroup(pageA, 'Rekey Test', { mode: 'online' })
+    await pageA.waitForTimeout(1000)
+
+    const { payload, confirmCode } = await createInvite(pageA)
+
+    const ctxB = await browser.newContext()
+    const pageB = await ctxB.newPage()
+    await seedRelayUrl(pageB, relayUrl)
+    await pageB.goto('/')
+    await loginWithNsec(pageB, BOB_NSEC)
+    await pageB.evaluate(() => {
+      document.dispatchEvent(new CustomEvent('canary:join-group', { detail: {} }))
+    })
+    await pageB.waitForSelector('#app-modal[open]')
+    await pageB.fill('[name="payload"]', payload)
+    await pageB.fill('[name="code"]', confirmCode)
+    await pageB.click('#modal-form button[type="submit"]')
+    await pageB.waitForSelector('#app-modal:not([open])', { timeout: 5000 })
+
+    // Both should now see the same word
+    await pageA.waitForTimeout(2000)
+    const wordBefore = await getDisplayedWord(pageA)
+
+    // Alice reseeds
+    await openSettings(pageA)
+    pageA.once('dialog', async (d) => await d.accept())
+    await pageA.click('text=Rotate Seed')
+    await pageA.waitForTimeout(1000)
+
+    const wordAfterA = await getDisplayedWord(pageA)
+    expect(wordAfterA).not.toBe(wordBefore)
+
+    // Wait for propagation
+    await pageB.waitForTimeout(3000)
+
+    // Bob should now show the new word (same as Alice)
+    const wordAfterB = await getDisplayedWord(pageB)
+    expect(wordAfterB).toBe(wordAfterA)
+
+    await ctxA.close()
+    await ctxB.close()
+  })
+})
