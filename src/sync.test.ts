@@ -116,7 +116,7 @@ describe('applySyncMessage', () => {
   it('applies member-leave (removes member, seed unchanged)', () => {
     const group = makeGroup()
     const withBob = applySyncMessage(group, { type: 'member-join', pubkey: PUBKEY_BBB, timestamp: 0, epoch: 0, opId: 'test-join-1' }, undefined, PUBKEY_AAA)
-    // Self-leave: BBB removes themselves (no epoch/opId needed)
+    // Self-leave: BBB removes themselves
     const result = applySyncMessage(withBob, { type: 'member-leave', pubkey: PUBKEY_BBB, timestamp: 0, epoch: 0, opId: 'self-leave-1' }, undefined, PUBKEY_BBB)
     expect(result.members).not.toContain(PUBKEY_BBB)
     // removeMember no longer reseeds — seed stays the same
