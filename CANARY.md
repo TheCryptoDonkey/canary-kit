@@ -6,6 +6,11 @@ Coercion-Resistant Spoken Verification Protocol
 
 `version 1.0` `draft`
 
+> **Compatibility policy:** Protocol v1 has `draft` status. No backward
+> compatibility is guaranteed until `stable` designation. Breaking changes
+> increment the `protocolVersion` field; implementations MUST reject messages
+> with an unrecognised version.
+
 ## Abstract
 
 CANARY is a protocol for coercion-resistant spoken verification. It combines

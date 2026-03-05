@@ -657,6 +657,12 @@ describe('canonical JSON (H2)', () => {
 describe('conformance vectors (H6)', () => {
   for (const vector of vectors.vectors) {
     it(vector.id, () => {
+      // F1 vectors: test that decodeSyncMessage rejects malformed messages
+      if (vector.expected === 'decode-error') {
+        expect(() => decodeSyncMessage(vector.rawMessage as string)).toThrow(vector.expectedError as string)
+        return
+      }
+
       const group = vector.initialGroup as unknown as GroupState
       let msg: SyncMessage
       if (vector.message.type === 'reseed') {
@@ -668,13 +674,19 @@ describe('conformance vectors (H6)', () => {
         msg = vector.message as unknown as SyncMessage
       }
       const sender = vector.sender || undefined
-      const result = applySyncMessage(group, msg, undefined, sender)
+      const nowSec = (vector as Record<string, unknown>).nowSec as number | undefined
+      const result = applySyncMessage(group, msg, nowSec, sender)
+      const fireAndForget = (vector as Record<string, unknown>).fireAndForget as boolean | undefined
       if (vector.expected === 'accept') {
-        expect(result).not.toBe(group)
-        if (vector.expectedState) {
+        if (fireAndForget) {
+          // Fire-and-forget messages return group unchanged even when accepted
+          expect(result).toBe(group)
+        } else if (vector.expectedState) {
           for (const [key, value] of Object.entries(vector.expectedState)) {
             expect((result as Record<string, unknown>)[key]).toEqual(value)
           }
+        } else {
+          expect(result).not.toBe(group)
         }
       } else {
         expect(result).toBe(group)
