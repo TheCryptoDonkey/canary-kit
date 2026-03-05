@@ -11,6 +11,8 @@ import {
   signInvite,
   verifyInviteSig,
   confirmCodeFromPayload,
+  createJoinToken,
+  verifyJoinToken,
   type InvitePayload,
 } from './invite.js'
 import vectors from '../test-vectors/invite-authority.json'
@@ -205,6 +207,75 @@ describe('confirmCodeFromPayload', () => {
   it('changes when nonce differs', () => {
     const other = { ...validPayload, nonce: 'ff'.repeat(16) }
     expect(confirmCodeFromPayload(other)).not.toBe(confirmCodeFromPayload(validPayload))
+  })
+})
+
+// ── Join token ──────────────────────────────────────────────────
+
+describe('join token', () => {
+  const groupSeed = 'a'.repeat(64)
+  const groupId = 'test-group-1'
+  const privkey = 'b'.repeat(64)
+  // Derive pubkey from privkey for test
+  const pubkey = bytesToHex(schnorr.getPublicKey(hexToBytes(privkey)))
+
+  it('round-trips: create then verify', () => {
+    const token = createJoinToken({
+      groupId,
+      privkey,
+      pubkey,
+      displayName: 'Alice',
+      currentWord: 'sparrow',
+    })
+    const result = verifyJoinToken(token, { groupId, groupSeed })
+    expect(result.valid).toBe(true)
+    expect(result.pubkey).toBe(pubkey)
+    expect(result.displayName).toBe('Alice')
+    expect(result.word).toBe('sparrow')
+  })
+
+  it('rejects token with invalid signature', () => {
+    const token = createJoinToken({
+      groupId,
+      privkey,
+      pubkey,
+      displayName: 'Alice',
+      currentWord: 'sparrow',
+    })
+    // Tamper with the token
+    const parsed = JSON.parse(atob(token))
+    parsed.n = 'Eve'
+    const tampered = btoa(JSON.stringify(parsed))
+    const result = verifyJoinToken(tampered, { groupId, groupSeed })
+    expect(result.valid).toBe(false)
+    expect(result.error).toMatch(/signature/i)
+  })
+
+  it('rejects token with wrong groupId', () => {
+    const token = createJoinToken({
+      groupId,
+      privkey,
+      pubkey,
+      displayName: 'Alice',
+      currentWord: 'sparrow',
+    })
+    const result = verifyJoinToken(token, { groupId: 'wrong-group', groupSeed })
+    expect(result.valid).toBe(false)
+    expect(result.error).toMatch(/group/i)
+  })
+
+  it('rejects token with stale timestamp', () => {
+    const token = createJoinToken({
+      groupId,
+      privkey,
+      pubkey,
+      displayName: 'Alice',
+      currentWord: 'sparrow',
+      timestampOverride: Math.floor(Date.now() / 1000) - 86400 * 8, // 8 days ago
+    })
+    const result = verifyJoinToken(token, { groupId, groupSeed })
+    expect(result.valid).toBe(false)
+    expect(result.error).toMatch(/expired|stale/i)
   })
 })
 
