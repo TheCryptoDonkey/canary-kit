@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest'
 import { schnorr } from '@noble/curves/secp256k1.js'
 import { sha256, bytesToHex, hexToBytes } from 'canary-kit/crypto'
+import { indexOf } from 'canary-kit/wordlist'
 import {
   assertInvitePayload,
   inviteCanonicalBytes,
@@ -181,28 +182,29 @@ describe('assertInvitePayload', () => {
 // ── Confirmation code ───────────────────────────────────────────
 
 describe('confirmCodeFromPayload', () => {
-  it('returns formatted XXXX-XXXX-XXXX code', () => {
-    const payload = makeValidPayload()
-    const code = confirmCodeFromPayload(payload)
-    expect(code).toMatch(/^[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$/)
+  const validPayload = makeValidPayload()
+
+  it('returns 3 hyphenated words from wordlist', () => {
+    const code = confirmCodeFromPayload(validPayload)
+    const words = code.split('-')
+    expect(words).toHaveLength(3)
+    words.forEach(w => {
+      expect(indexOf(w)).toBeGreaterThanOrEqual(0)
+    })
   })
 
   it('is deterministic', () => {
-    const payload = makeValidPayload()
-    expect(confirmCodeFromPayload(payload)).toBe(confirmCodeFromPayload(payload))
+    expect(confirmCodeFromPayload(validPayload)).toBe(confirmCodeFromPayload(validPayload))
   })
 
   it('changes when payload is tampered', () => {
-    const payload = makeValidPayload()
-    const original = confirmCodeFromPayload(payload)
-    const tampered = { ...payload, counter: 999 }
-    expect(confirmCodeFromPayload(tampered)).not.toBe(original)
+    const tampered = { ...validPayload, seed: 'b'.repeat(64) }
+    expect(confirmCodeFromPayload(tampered)).not.toBe(confirmCodeFromPayload(validPayload))
   })
 
   it('changes when nonce differs', () => {
-    const payload1 = makeValidPayload({ nonce: 'a'.repeat(32) })
-    const payload2 = makeValidPayload({ nonce: 'c'.repeat(32) })
-    expect(confirmCodeFromPayload(payload1)).not.toBe(confirmCodeFromPayload(payload2))
+    const other = { ...validPayload, nonce: 'ff'.repeat(16) }
+    expect(confirmCodeFromPayload(other)).not.toBe(confirmCodeFromPayload(validPayload))
   })
 })
 
