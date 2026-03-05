@@ -265,6 +265,8 @@ export function showConfirmMemberModal(prefillToken?: string): void {
         const result = verifyJoinToken(tokenStr, {
           groupId: currentGroupId,
           groupSeed: currentGroup.seed,
+          counter: currentGroup.counter + (currentGroup.usageOffset ?? 0),
+          context: 'canary:group',
         })
         if (!result.valid) {
           throw new Error(result.error ?? 'Invalid join token.')
