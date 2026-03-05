@@ -11,7 +11,7 @@ import { addMember, removeMember } from './group.js'
 /** A typed, serialisable description of a group state change. */
 export type SyncMessage =
   | { type: 'member-join'; pubkey: string; timestamp: number; epoch: number; opId: string; protocolVersion?: number }
-  | { type: 'member-leave'; pubkey: string; timestamp: number; epoch?: number; opId?: string; protocolVersion?: number }
+  | { type: 'member-leave'; pubkey: string; timestamp: number; epoch: number; opId: string; protocolVersion?: number }
   | { type: 'counter-advance'; counter: number; usageOffset: number; timestamp: number; protocolVersion?: number }
   | { type: 'reseed'; seed: Uint8Array; counter: number; timestamp: number; epoch: number; opId: string; admins: string[]; members: string[]; protocolVersion?: number }
   | { type: 'beacon'; lat: number; lon: number; accuracy: number; timestamp: number; opId: string; protocolVersion?: number }
@@ -161,12 +161,11 @@ export function decodeSyncMessage(payload: string): SyncMessage {
       if (typeof parsed.pubkey !== 'string' || !HEX_64_RE.test(parsed.pubkey)) {
         throw new Error('Invalid sync message: member-leave requires a 64-char hex pubkey')
       }
-      // epoch/opId optional (only required when removing another member)
-      if (parsed.epoch !== undefined && !isNonNegativeInt(parsed.epoch)) {
-        throw new Error('Invalid sync message: member-leave.epoch must be a non-negative integer')
+      if (!isNonNegativeInt(parsed.epoch)) {
+        throw new Error('Invalid sync message: member-leave requires a non-negative epoch')
       }
-      if (parsed.opId !== undefined && (typeof parsed.opId !== 'string' || parsed.opId.length === 0 || parsed.opId.length > 128)) {
-        throw new Error('Invalid sync message: member-leave.opId must be a non-empty string (max 128 chars)')
+      if (typeof parsed.opId !== 'string' || parsed.opId.length === 0 || parsed.opId.length > 128) {
+        throw new Error('Invalid sync message: member-leave requires a non-empty opId (max 128 chars)')
       }
       break
 
@@ -359,6 +358,12 @@ export function applySyncMessage(
     if (elapsed < -MAX_FUTURE_SKEW_SEC) return group             // too far in the future
   }
 
+  // Non-privileged member-leave still needs opId replay guard
+  if (msg.type === 'member-leave' && !isPrivilegedAction(msg, sender)) {
+    const consumedSet = new Set(group.consumedOps)
+    if (consumedSet.has(msg.opId)) return group
+  }
+
   switch (msg.type) {
     case 'member-join': {
       const updated = addMember(group, msg.pubkey)
@@ -370,10 +375,7 @@ export function applySyncMessage(
       if (!group.members.includes(msg.pubkey)) return group
       {
         const updated = removeMember(group, msg.pubkey)
-        if (msg.epoch !== undefined && msg.opId !== undefined) {
-          return { ...updated, consumedOps: appendConsumedOp(updated.consumedOps, msg.opId) }
-        }
-        return updated
+        return { ...updated, consumedOps: appendConsumedOp(updated.consumedOps, msg.opId) }
       }
 
     case 'counter-advance': {

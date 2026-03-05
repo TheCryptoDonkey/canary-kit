@@ -25,7 +25,7 @@ describe('sync message serialisation', () => {
   })
 
   it('round-trips a member-leave message', () => {
-    const msg: SyncMessage = { type: 'member-leave', pubkey: 'a'.repeat(64), timestamp: 1700000000, protocolVersion: 1 }
+    const msg: SyncMessage = { type: 'member-leave', pubkey: 'a'.repeat(64), timestamp: 1700000000, epoch: 0, opId: 'leave-1', protocolVersion: 1 }
     expect(decodeSyncMessage(encodeSyncMessage(msg))).toEqual(msg)
   })
 
@@ -71,6 +71,21 @@ describe('sync message serialisation', () => {
   it('throws on unknown message type', () => {
     expect(() => decodeSyncMessage(JSON.stringify({ type: 'unknown', timestamp: 0, protocolVersion: 1 }))).toThrow()
   })
+
+  it('rejects member-leave without required epoch', () => {
+    const payload = JSON.stringify({
+      type: 'member-leave', pubkey: 'a'.repeat(64), timestamp: 1700000000, protocolVersion: 1,
+    })
+    expect(() => decodeSyncMessage(payload)).toThrow('epoch')
+  })
+
+  it('rejects member-leave without required opId', () => {
+    const payload = JSON.stringify({
+      type: 'member-leave', pubkey: 'a'.repeat(64), timestamp: 1700000000,
+      epoch: 0, protocolVersion: 1,
+    })
+    expect(() => decodeSyncMessage(payload)).toThrow('opId')
+  })
 })
 
 // Valid 64-char hex pubkeys for testing (addMember validates these)
@@ -102,7 +117,7 @@ describe('applySyncMessage', () => {
     const group = makeGroup()
     const withBob = applySyncMessage(group, { type: 'member-join', pubkey: PUBKEY_BBB, timestamp: 0, epoch: 0, opId: 'test-join-1' }, undefined, PUBKEY_AAA)
     // Self-leave: BBB removes themselves (no epoch/opId needed)
-    const result = applySyncMessage(withBob, { type: 'member-leave', pubkey: PUBKEY_BBB, timestamp: 0 }, undefined, PUBKEY_BBB)
+    const result = applySyncMessage(withBob, { type: 'member-leave', pubkey: PUBKEY_BBB, timestamp: 0, epoch: 0, opId: 'self-leave-1' }, undefined, PUBKEY_BBB)
     expect(result.members).not.toContain(PUBKEY_BBB)
     // removeMember no longer reseeds — seed stays the same
     expect(result.seed).toEqual(withBob.seed)
@@ -111,10 +126,27 @@ describe('applySyncMessage', () => {
   it('member-leave is idempotent — replayed leave for absent member returns state unchanged', () => {
     const group = makeGroup()
     const withBob = applySyncMessage(group, { type: 'member-join', pubkey: PUBKEY_BBB, timestamp: 0, epoch: 0, opId: 'test-join-1' }, undefined, PUBKEY_AAA)
-    const afterLeave = applySyncMessage(withBob, { type: 'member-leave', pubkey: PUBKEY_BBB, timestamp: 0 }, undefined, PUBKEY_BBB)
+    const afterLeave = applySyncMessage(withBob, { type: 'member-leave', pubkey: PUBKEY_BBB, timestamp: 0, epoch: 0, opId: 'self-leave-1' }, undefined, PUBKEY_BBB)
     // Replay the same leave — should be no-op (member already gone)
-    const replayed = applySyncMessage(afterLeave, { type: 'member-leave', pubkey: PUBKEY_BBB, timestamp: 0 }, undefined, PUBKEY_BBB)
+    const replayed = applySyncMessage(afterLeave, { type: 'member-leave', pubkey: PUBKEY_BBB, timestamp: 0, epoch: 0, opId: 'self-leave-1' }, undefined, PUBKEY_BBB)
     expect(replayed).toBe(afterLeave) // reference equality — no change
+  })
+
+  it('member-leave with consumed opId is rejected (replay protection)', () => {
+    const group = makeGroup()
+    const withBob = applySyncMessage(group, { type: 'member-join', pubkey: PUBKEY_BBB, timestamp: 0, epoch: 0, opId: 'join-1' }, undefined, PUBKEY_AAA)
+
+    // First leave succeeds
+    const afterLeave = applySyncMessage(withBob, { type: 'member-leave', pubkey: PUBKEY_BBB, timestamp: 0, epoch: 0, opId: 'leave-1' }, undefined, PUBKEY_BBB)
+    expect(afterLeave.members).not.toContain(PUBKEY_BBB)
+
+    // Re-add Bob
+    const withBobAgain = applySyncMessage(afterLeave, { type: 'member-join', pubkey: PUBKEY_BBB, timestamp: 0, epoch: 0, opId: 'join-2' }, undefined, PUBKEY_AAA)
+    expect(withBobAgain.members).toContain(PUBKEY_BBB)
+
+    // Replay the same leave-1 opId — must be rejected
+    const replayed = applySyncMessage(withBobAgain, { type: 'member-leave', pubkey: PUBKEY_BBB, timestamp: 0, epoch: 0, opId: 'leave-1' }, undefined, PUBKEY_BBB)
+    expect(replayed.members).toContain(PUBKEY_BBB)
   })
 
   it('applies counter-advance (monotonic — only advances)', () => {
@@ -737,6 +769,7 @@ describe('authority model invariants', () => {
     const group = makeAuthorityGroup()
     const result = applySyncMessage(group, {
       type: 'member-leave', pubkey: PUBKEY_BBB, timestamp: 0,
+      epoch: 3, opId: 'self-leave-auth-1',
     }, undefined, PUBKEY_BBB)
     expect(result.members).not.toContain(PUBKEY_BBB)
   })
@@ -1032,7 +1065,7 @@ describe('canonical JSON (H2)', () => {
   it('encode → decode → canonicalise round-trip matches send-side canonical for all message types', () => {
     const messages: SyncMessage[] = [
       { type: 'member-join', pubkey: PUBKEY_AAA, timestamp: 1700000000, epoch: 0, opId: 'mj-1' },
-      { type: 'member-leave', pubkey: PUBKEY_AAA, timestamp: 1700000000 },
+      { type: 'member-leave', pubkey: PUBKEY_AAA, timestamp: 1700000000, epoch: 0, opId: 'ml-1' },
       { type: 'counter-advance', counter: 5, usageOffset: 2, timestamp: 1700000000 },
       {
         type: 'reseed', seed: new Uint8Array(32).fill(42), counter: 0,
