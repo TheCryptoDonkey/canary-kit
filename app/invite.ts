@@ -384,3 +384,116 @@ export function consumeInvite(groupId: string, nonce: string): void {
     usedInvites: Array.from(new Set([...group.usedInvites, nonce])),
   })
 }
+
+// ── Join Token ────────────────────────────────────────────────
+
+/** Compact join token — proves the joiner has the group seed and controls their key. */
+export interface JoinToken {
+  /** Group ID */
+  g: string
+  /** Joiner's pubkey (64-char hex) */
+  p: string
+  /** Display name */
+  n: string
+  /** Current verification word (proves seed possession) */
+  w: string
+  /** Timestamp (unix seconds) */
+  t: number
+  /** Schnorr signature over SHA-256(canonical fields) */
+  s: string
+}
+
+export interface JoinTokenResult {
+  valid: boolean
+  pubkey?: string
+  displayName?: string
+  word?: string
+  error?: string
+}
+
+const JOIN_TOKEN_MAX_AGE_SEC = 7 * 24 * 60 * 60
+
+function joinTokenCanonicalBytes(token: Omit<JoinToken, 's'>): Uint8Array {
+  const sorted = Object.keys(token).sort().reduce((acc, key) => {
+    acc[key] = (token as Record<string, unknown>)[key]
+    return acc
+  }, {} as Record<string, unknown>)
+  return new TextEncoder().encode(JSON.stringify(sorted))
+}
+
+/**
+ * Create a signed join token proving the joiner has the group seed and controls their private key.
+ */
+export function createJoinToken(opts: {
+  groupId: string
+  privkey: string
+  pubkey: string
+  displayName: string
+  currentWord: string
+  timestampOverride?: number
+}): string {
+  const token: Omit<JoinToken, 's'> = {
+    g: opts.groupId,
+    p: opts.pubkey,
+    n: opts.displayName,
+    w: opts.currentWord,
+    t: opts.timestampOverride ?? Math.floor(Date.now() / 1000),
+  }
+  const hash = sha256(joinTokenCanonicalBytes(token))
+  const sig = bytesToHex(schnorr.sign(hash, hexToBytes(opts.privkey)))
+  return btoa(JSON.stringify({ ...token, s: sig }))
+}
+
+/**
+ * Verify a join token. Returns the parsed fields on success.
+ */
+export function verifyJoinToken(
+  encoded: string,
+  context: { groupId: string; groupSeed: string },
+): JoinTokenResult {
+  let raw: JoinToken
+  try {
+    raw = JSON.parse(atob(encoded))
+  } catch {
+    return { valid: false, error: 'Invalid join token — could not decode.' }
+  }
+
+  if (raw.g !== context.groupId) {
+    return { valid: false, error: 'Join token is for a different group.' }
+  }
+
+  if (typeof raw.p !== 'string' || !HEX_64_RE.test(raw.p)) {
+    return { valid: false, error: 'Join token has invalid pubkey.' }
+  }
+
+  if (typeof raw.s !== 'string' || !HEX_128_RE.test(raw.s)) {
+    return { valid: false, error: 'Join token has invalid signature.' }
+  }
+
+  const now = Math.floor(Date.now() / 1000)
+  if (typeof raw.t !== 'number' || raw.t < now - JOIN_TOKEN_MAX_AGE_SEC) {
+    return { valid: false, error: 'Join token has expired or is stale.' }
+  }
+  if (raw.t > now + MAX_CLOCK_SKEW_SEC) {
+    return { valid: false, error: 'Join token timestamp is too far in the future.' }
+  }
+
+  // Verify Schnorr signature
+  const { s: _sig, ...fields } = raw
+  const hash = sha256(joinTokenCanonicalBytes(fields))
+  try {
+    const valid = schnorr.verify(hexToBytes(raw.s), hash, hexToBytes(raw.p))
+    if (!valid) {
+      return { valid: false, error: 'Join token signature is invalid.' }
+    }
+  } catch {
+    return { valid: false, error: 'Join token signature verification failed.' }
+  }
+
+  return {
+    valid: true,
+    pubkey: raw.p,
+    displayName: raw.n || '',
+    word: raw.w || '',
+  }
+}
