@@ -2,6 +2,7 @@
 
 import { sha256, hmacSha256, bytesToHex, hexToBytes } from 'canary-kit/crypto'
 import { getWord } from 'canary-kit/wordlist'
+import { deriveToken } from 'canary-kit/token'
 import { PROTOCOL_VERSION } from 'canary-kit/sync'
 import { schnorr } from '@noble/curves/secp256k1.js'
 import { getState, updateGroup } from './state.js'
@@ -227,7 +228,7 @@ export function confirmCodeFromPayload(payload: InvitePayload): string {
   const w1 = (bits >>> 22) & 0x7ff
   const w2 = (bits >>> 11) & 0x7ff
   const w3 = bits & 0x7ff
-  return `${getWord(w1)}-${getWord(w2)}-${getWord(w3)}`
+  return `${getWord(w1)} ${getWord(w2)} ${getWord(w3)}`
 }
 
 // ── Public API ─────────────────────────────────────────────────
@@ -240,7 +241,7 @@ export function confirmCodeFromPayload(payload: InvitePayload): string {
  * to prevent replay attacks.
  *
  * @returns `payload` — base64 invite string to share with the new member.
- * @returns `confirmCode` — 3 hyphen-separated words (e.g. "apple-river-castle") to read aloud for out-of-band confirmation.
+ * @returns `confirmCode` — 3 space-separated words (e.g. "apple river castle") to read aloud for out-of-band confirmation.
  */
 export function createInvite(group: AppGroup): { payload: string; confirmCode: string } {
   // Only admins can create invites
@@ -341,7 +342,7 @@ export function acceptInvite(payload: string, confirmCode?: string): InvitePaylo
   }
 
   const expected = confirmCodeFromPayload(data)
-  const normalised = confirmCode.trim().replace(/[-\s]+/g, '-').toLowerCase()
+  const normalised = confirmCode.trim().replace(/[-\s]+/g, ' ').toLowerCase()
   const expectedNorm = expected.toLowerCase()
   if (normalised !== expectedNorm) {
     throw new Error('Confirmation words do not match — invite may have been tampered with.')
@@ -449,7 +450,7 @@ export function createJoinToken(opts: {
  */
 export function verifyJoinToken(
   encoded: string,
-  context: { groupId: string; groupSeed: string },
+  context: { groupId: string; groupSeed: string; counter: number; context: string },
 ): JoinTokenResult {
   let raw: JoinToken
   try {
@@ -488,6 +489,21 @@ export function verifyJoinToken(
     }
   } catch {
     return { valid: false, error: 'Join token signature verification failed.' }
+  }
+
+  // Verify word proves seed possession (F1 hardening)
+  const word = (raw.w || '').toLowerCase()
+  const tolerance = 1
+  let wordValid = false
+  for (let c = context.counter - tolerance; c <= context.counter + tolerance; c++) {
+    if (c < 0) continue
+    if (word === deriveToken(context.groupSeed, context.context, c).toLowerCase()) {
+      wordValid = true
+      break
+    }
+  }
+  if (!wordValid) {
+    return { valid: false, error: 'Join token word does not match — seed possession not proven.' }
   }
 
   return {

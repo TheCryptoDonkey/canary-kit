@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest'
 import { schnorr } from '@noble/curves/secp256k1.js'
 import { sha256, bytesToHex, hexToBytes } from 'canary-kit/crypto'
 import { indexOf } from 'canary-kit/wordlist'
+import { deriveToken } from 'canary-kit/token'
 import {
   assertInvitePayload,
   inviteCanonicalBytes,
@@ -186,9 +187,9 @@ describe('assertInvitePayload', () => {
 describe('confirmCodeFromPayload', () => {
   const validPayload = makeValidPayload()
 
-  it('returns 3 hyphenated words from wordlist', () => {
+  it('returns 3 space-separated words from wordlist', () => {
     const code = confirmCodeFromPayload(validPayload)
-    const words = code.split('-')
+    const words = code.split(' ')
     expect(words).toHaveLength(3)
     words.forEach(w => {
       expect(indexOf(w)).toBeGreaterThanOrEqual(0)
@@ -220,18 +221,18 @@ describe('join token', () => {
   const pubkey = bytesToHex(schnorr.getPublicKey(hexToBytes(privkey)))
 
   it('round-trips: create then verify', () => {
+    const correctWord = deriveToken(groupSeed, 'canary:group', 0)
     const token = createJoinToken({
       groupId,
       privkey,
       pubkey,
       displayName: 'Alice',
-      currentWord: 'sparrow',
+      currentWord: correctWord,
     })
-    const result = verifyJoinToken(token, { groupId, groupSeed })
+    const result = verifyJoinToken(token, { groupId, groupSeed, counter: 0, context: 'canary:group' })
     expect(result.valid).toBe(true)
     expect(result.pubkey).toBe(pubkey)
     expect(result.displayName).toBe('Alice')
-    expect(result.word).toBe('sparrow')
   })
 
   it('rejects token with invalid signature', () => {
@@ -246,7 +247,7 @@ describe('join token', () => {
     const parsed = JSON.parse(atob(token))
     parsed.n = 'Eve'
     const tampered = btoa(JSON.stringify(parsed))
-    const result = verifyJoinToken(tampered, { groupId, groupSeed })
+    const result = verifyJoinToken(tampered, { groupId, groupSeed, counter: 0, context: 'canary:group' })
     expect(result.valid).toBe(false)
     expect(result.error).toMatch(/signature/i)
   })
@@ -259,7 +260,7 @@ describe('join token', () => {
       displayName: 'Alice',
       currentWord: 'sparrow',
     })
-    const result = verifyJoinToken(token, { groupId: 'wrong-group', groupSeed })
+    const result = verifyJoinToken(token, { groupId: 'wrong-group', groupSeed, counter: 0, context: 'canary:group' })
     expect(result.valid).toBe(false)
     expect(result.error).toMatch(/group/i)
   })
@@ -273,9 +274,36 @@ describe('join token', () => {
       currentWord: 'sparrow',
       timestampOverride: Math.floor(Date.now() / 1000) - 86400 * 8, // 8 days ago
     })
-    const result = verifyJoinToken(token, { groupId, groupSeed })
+    const result = verifyJoinToken(token, { groupId, groupSeed, counter: 0, context: 'canary:group' })
     expect(result.valid).toBe(false)
     expect(result.error).toMatch(/expired|stale/i)
+  })
+
+  it('rejects token with wrong word (attacker does not know seed)', () => {
+    const token = createJoinToken({
+      groupId,
+      privkey,
+      pubkey,
+      displayName: 'Eve',
+      currentWord: 'wrong-word',
+    })
+    const result = verifyJoinToken(token, { groupId, groupSeed, counter: 0, context: 'canary:group' })
+    expect(result.valid).toBe(false)
+    expect(result.error).toMatch(/word|seed/i)
+  })
+
+  it('accepts token with word from adjacent counter (tolerance)', () => {
+    const prevWord = deriveToken(groupSeed, 'canary:group', 0)
+    const token = createJoinToken({
+      groupId,
+      privkey,
+      pubkey,
+      displayName: 'Alice',
+      currentWord: prevWord,
+    })
+    // Verify with counter=1 — the word from counter=0 should still be accepted
+    const result = verifyJoinToken(token, { groupId, groupSeed, counter: 1, context: 'canary:group' })
+    expect(result.valid).toBe(true)
   })
 })
 
