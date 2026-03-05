@@ -1,6 +1,7 @@
 // app/invite.ts — Invite creation and acceptance for CANARY groups
 
 import { sha256, hmacSha256, bytesToHex, hexToBytes } from 'canary-kit/crypto'
+import { getWord } from 'canary-kit/wordlist'
 import { PROTOCOL_VERSION } from 'canary-kit/sync'
 import { schnorr } from '@noble/curves/secp256k1.js'
 import { getState, updateGroup } from './state.js'
@@ -212,7 +213,8 @@ export function verifyInviteSig(payload: InvitePayload): boolean {
  * keyed by the nonce. This means any modification to the payload fields invalidates
  * the code, even if the nonce is unchanged.
  *
- * Returns 48 bits of MAC (12 hex chars) formatted as three groups of four: XXXX-XXXX-XXXX.
+ * Returns 3 words from the en-v1 wordlist, hyphen-separated (e.g. "apple-river-castle").
+ * Uses 33 bits of MAC output (3 × 11-bit word indices).
  */
 /** @internal Exported for contract testing — not part of the public API. */
 export function confirmCodeFromPayload(payload: InvitePayload): string {
@@ -220,8 +222,12 @@ export function confirmCodeFromPayload(payload: InvitePayload): string {
   const data = JSON.stringify(rest)
   const encoder = new TextEncoder()
   const mac = hmacSha256(hexToBytes(nonce), encoder.encode(data))
-  const hex = bytesToHex(mac).slice(0, 12).toUpperCase()
-  return `${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}`
+  // Extract 33 bits (3 × 11-bit word indices) from the HMAC
+  const bits = (mac[0] << 25) | (mac[1] << 17) | (mac[2] << 9) | (mac[3] << 1) | (mac[4] >> 7)
+  const w1 = (bits >>> 22) & 0x7ff
+  const w2 = (bits >>> 11) & 0x7ff
+  const w3 = bits & 0x7ff
+  return `${getWord(w1)}-${getWord(w2)}-${getWord(w3)}`
 }
 
 // ── Public API ─────────────────────────────────────────────────
@@ -335,10 +341,10 @@ export function acceptInvite(payload: string, confirmCode?: string): InvitePaylo
   }
 
   const expected = confirmCodeFromPayload(data)
-  const normalised = confirmCode.trim().replace(/[-\s]/g, '').toUpperCase()
-  const expectedRaw = expected.replace(/-/g, '')
-  if (normalised !== expectedRaw) {
-    throw new Error('Confirmation code does not match — invite may have been tampered with.')
+  const normalised = confirmCode.trim().replace(/[-\s]+/g, '-').toLowerCase()
+  const expectedNorm = expected.toLowerCase()
+  if (normalised !== expectedNorm) {
+    throw new Error('Confirmation words do not match — invite may have been tampered with.')
   }
 
   const now = Math.floor(Date.now() / 1000)
