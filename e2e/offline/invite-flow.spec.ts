@@ -174,4 +174,99 @@ test.describe('Invite flow (offline)', () => {
 
     await pageB.click('#join-confirm-done')
   })
+
+  test('creator confirms member by typing the correct word', async ({ twoUsers: { pageA, pageB, contextB } }) => {
+    await loginOffline(pageA, 'Creator')
+    await createGroup(pageA, 'Confirm Word')
+    const { payload, confirmCode } = await createInvite(pageA)
+
+    // Alice joins
+    await loginOffline(pageB, 'Alice')
+    await contextB.grantPermissions(['clipboard-read', 'clipboard-write'])
+
+    // Accept invite manually to read the word
+    await pageB.evaluate(() => {
+      document.dispatchEvent(new CustomEvent('canary:join-group', { detail: {} }))
+    })
+    await pageB.waitForSelector('#app-modal[open]', { timeout: 3000 })
+    await pageB.fill('[name="payload"]', payload)
+    await pageB.fill('[name="code"]', confirmCode)
+    await pageB.click('#modal-form button[type="submit"]')
+    await pageB.waitForSelector('#app-modal:not([open])', { state: 'attached', timeout: 5000 })
+
+    // Read the word from join confirmation modal
+    await pageB.waitForSelector('#join-confirm-modal[open]', { timeout: 3000 })
+    const word = await pageB.locator('#join-word-value').textContent()
+    expect(word).toBeTruthy()
+    await pageB.click('#join-confirm-done')
+
+    // Creator confirms via word
+    await pageA.click('#confirm-member-btn')
+    await pageA.waitForSelector('#app-modal[open]', { timeout: 3000 })
+    await pageA.fill('[name="word"]', word!.trim())
+    await pageA.fill('[name="memberName"]', 'Alice')
+    await pageA.click('#modal-form button[type="submit"]')
+    // Modal should close on success
+    await pageA.waitForSelector('#app-modal:not([open])', { state: 'attached', timeout: 3000 })
+
+    // Alice should appear in creator's member list
+    await expect(pageA.locator('.member-list')).toContainText('Alice')
+  })
+
+  test('creator confirms member via ack link with correct name', async ({ twoUsers: { pageA, pageB, contextB } }) => {
+    await loginOffline(pageA, 'Creator')
+    await createGroup(pageA, 'Confirm Link')
+    const { payload, confirmCode } = await createInvite(pageA)
+
+    await loginOffline(pageB, 'Alice')
+    await contextB.grantPermissions(['clipboard-read', 'clipboard-write'])
+
+    // Accept invite manually and get the ack URL
+    await pageB.evaluate(() => {
+      document.dispatchEvent(new CustomEvent('canary:join-group', { detail: {} }))
+    })
+    await pageB.waitForSelector('#app-modal[open]', { timeout: 3000 })
+    await pageB.fill('[name="payload"]', payload)
+    await pageB.fill('[name="code"]', confirmCode)
+    await pageB.click('#modal-form button[type="submit"]')
+    await pageB.waitForSelector('#app-modal:not([open])', { state: 'attached', timeout: 5000 })
+
+    // Read ack URL from join confirmation
+    await pageB.waitForSelector('#join-confirm-modal[open]', { timeout: 3000 })
+    await pageB.click('#join-ack-copy')
+    await pageB.waitForTimeout(200)
+    const ackUrl = await pageB.evaluate(() => navigator.clipboard.readText())
+    expect(ackUrl).toContain('#ack/')
+    await pageB.click('#join-confirm-done')
+
+    // Creator confirms via ack link
+    await pageA.click('#confirm-member-btn')
+    await pageA.waitForSelector('#app-modal[open]', { timeout: 3000 })
+    await pageA.fill('[name="ackToken"]', ackUrl)
+    await pageA.click('#modal-form button[type="submit"]')
+    await pageA.waitForSelector('#app-modal:not([open])', { state: 'attached', timeout: 3000 })
+
+    // Alice should appear in creator's member list with her name
+    await expect(pageA.locator('.member-list')).toContainText('Alice')
+  })
+
+  test('wrong verification word shows error', async ({ twoUsers: { pageA } }) => {
+    await loginOffline(pageA, 'Creator')
+    await createGroup(pageA, 'Wrong Word')
+
+    let alertMessage = ''
+    pageA.once('dialog', async (d) => {
+      alertMessage = d.message()
+      await d.accept()
+    })
+
+    await pageA.click('#confirm-member-btn')
+    await pageA.waitForSelector('#app-modal[open]', { timeout: 3000 })
+    await pageA.fill('[name="word"]', 'wrongword')
+    await pageA.fill('[name="memberName"]', 'Eve')
+    await pageA.click('#modal-form button[type="submit"]')
+    await pageA.waitForTimeout(500)
+
+    expect(alertMessage).toMatch(/does not match/i)
+  })
 })
