@@ -1,0 +1,48 @@
+// e2e/offline/members.spec.ts — Members panel tests
+import { test, expect } from '../fixtures.js'
+import { loginOffline, createGroup } from '../helpers.js'
+
+test.describe('Members panel', () => {
+  test.beforeEach(async ({ cleanPage: page }) => {
+    await loginOffline(page, 'Alice')
+    await createGroup(page, 'Team')
+  })
+
+  test('shows "You" for local identity', async ({ cleanPage: page }) => {
+    await expect(page.locator('.member-item__pubkey:text("You")')).toBeVisible()
+  })
+
+  test('admin sees remove buttons', async ({ cleanPage: page }) => {
+    await expect(page.locator('.member-item__remove')).toBeVisible()
+  })
+
+  test('add member increases member count', async ({ cleanPage: page }) => {
+    const countBefore = await page.locator('.member-item').count()
+    await page.click('#add-member-btn')
+    const countAfter = await page.locator('.member-item').count()
+    expect(countAfter).toBe(countBefore + 1)
+  })
+
+  test('remove member triggers confirm and removes', async ({ cleanPage: page }) => {
+    // Add a member first
+    await page.click('#add-member-btn')
+    const countBefore = await page.locator('.member-item').count()
+
+    // Click remove on the second member (not "You")
+    page.once('dialog', async (dialog) => {
+      await dialog.accept()
+    })
+    const removeButtons = page.locator('.member-item__remove')
+    // Click the last remove button (the added member, not self)
+    await removeButtons.last().click()
+
+    await page.waitForTimeout(300) // state update + re-render
+    const countAfter = await page.locator('.member-item').count()
+    expect(countAfter).toBe(countBefore - 1)
+  })
+
+  test('invite button opens invite modal', async ({ cleanPage: page }) => {
+    await page.click('#invite-btn')
+    await expect(page.locator('#invite-modal[open]')).toBeVisible()
+  })
+})
