@@ -1,13 +1,14 @@
 // app/panels/members.ts — Members panel: list members and generate invites
 
 import { getState, updateGroup } from '../state.js'
-import { addGroupMember, removeGroupMember } from '../actions/groups.js'
+import { removeGroupMember } from '../actions/groups.js'
 import { createInvite, verifyJoinToken } from '../invite.js'
 import { generateQR } from '../components/qr.js'
 import { escapeHtml } from '../utils/escape.js'
 import { showModal } from '../components/modal.js'
 import { showToast } from '../components/toast.js'
-import { deriveVerificationWord } from 'canary-kit'
+import { deriveToken } from 'canary-kit/token'
+import { GROUP_CONTEXT } from '../utils/encoding.js'
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -70,6 +71,8 @@ export function showInviteModal(payload: string, confirmCode: string): void {
       </div>
 
       <p class="invite-hint">Share via WhatsApp, Signal, email, or any messaging app</p>
+
+      <p class="invite-hint" style="margin-top: 1rem; font-style: italic;">After they join, click <strong>Confirm Member</strong> to verify them — they'll give you a word or token.</p>
 
       <div class="modal__actions">
         <button class="btn" id="invite-close-btn" type="button">Done</button>
@@ -156,7 +159,6 @@ export function renderMembers(container: HTMLElement): void {
         ${memberItems}
       </ul>
       ${isAdmin ? `<div class="members-actions">
-        <button class="btn btn--sm" id="add-member-btn" type="button">+ Add Member</button>
         <button class="btn btn--sm" id="invite-btn" type="button">+ Invite</button>
         <button class="btn btn--sm" id="confirm-member-btn" type="button">Confirm Member</button>
       </div>` : ''}
@@ -180,17 +182,6 @@ export function renderMembers(container: HTMLElement): void {
     const { activeGroupId: currentGroupId } = getState()
     if (!currentGroupId) return
     removeGroupMember(currentGroupId, pubkey)
-  })
-
-  // ── Add simulated member ─────────────────────────────────
-
-  container.querySelector<HTMLButtonElement>('#add-member-btn')?.addEventListener('click', () => {
-    const { activeGroupId: currentGroupId } = getState()
-    if (!currentGroupId) return
-    const bytes = new Uint8Array(32)
-    crypto.getRandomValues(bytes)
-    const fakePubkey = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-    addGroupMember(currentGroupId, fakePubkey)
   })
 
   // ── Invite button ─────────────────────────────────────────
@@ -285,7 +276,8 @@ export function showConfirmMemberModal(prefillToken?: string): void {
         if (!nameInput) throw new Error('Please enter the member name.')
 
         // Verify word against current group derivation
-        const currentWord = deriveVerificationWord(currentGroup.seed, currentGroup.counter).toLowerCase()
+        const effectiveCounter = currentGroup.counter + (currentGroup.usageOffset ?? 0)
+        const currentWord = deriveToken(currentGroup.seed, GROUP_CONTEXT, effectiveCounter).toLowerCase()
         if (wordInput !== currentWord) {
           throw new Error('Word does not match — the member may not have the current group key.')
         }

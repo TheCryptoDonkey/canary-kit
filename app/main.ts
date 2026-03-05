@@ -564,7 +564,7 @@ function wireGlobalEvents(): void {
       </label>
       ` : ''}
       <label class="input-label">Confirmation Words
-        <input name="code" class="input" placeholder="word-word-word" maxlength="40" required>
+        <input name="code" class="input" placeholder="word word word" maxlength="40" required>
       </label>
       <div class="modal__actions">
         <button type="button" class="btn" id="modal-cancel-btn">Cancel</button>
@@ -709,8 +709,10 @@ function wireGlobalEvents(): void {
         // Show join confirmation with signed token for the creator
         const { identity: joinedIdentity } = getState()
         if (joinedIdentity?.privkey) {
-          const { deriveCurrentWord } = await import('canary-kit')
-          const currentWord = deriveCurrentWord({ seed: data.seed, counter: appGroup.counter })
+          const { deriveToken } = await import('canary-kit/token')
+          const { GROUP_CONTEXT } = await import('./utils/encoding.js')
+          const effectiveCounter = appGroup.counter + (appGroup.usageOffset ?? 0)
+          const currentWord = deriveToken(data.seed, GROUP_CONTEXT, effectiveCounter)
           const joinToken = createJoinToken({
             groupId: id,
             privkey: joinedIdentity.privkey,
