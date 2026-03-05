@@ -54,10 +54,10 @@ export function showInviteModal(payload: string, confirmCode: string): void {
       <p class="invite-hint">Scan with your phone camera to join</p>
 
       <div class="confirm-code">
-        <span class="confirm-code__label">Verification code</span>
+        <span class="confirm-code__label">Confirmation words</span>
         <span class="confirm-code__value">${confirmCode}</span>
       </div>
-      <p class="invite-hint">Read this code to the recipient — they'll need it to join</p>
+      <p class="invite-hint">Read these words to the recipient — they'll need them to join</p>
 
       <p class="invite-hint" style="color: var(--duress); font-weight: 500;">Share via a private channel — WhatsApp, Signal, or in person. The confirmation code verifies it wasn't tampered with.</p>
 
