@@ -490,8 +490,8 @@ function wireGlobalEvents(): void {
         <input name="myname" class="input" placeholder="e.g. Alice">
       </label>
       ` : ''}
-      <label class="input-label">Confirmation Code
-        <input name="code" class="input" placeholder="XXXX-XXXX-XXXX" maxlength="14" required>
+      <label class="input-label">Confirmation Words
+        <input name="code" class="input" placeholder="word-word-word" maxlength="40" required>
       </label>
       <div class="modal__actions">
         <button type="button" class="btn" id="modal-cancel-btn">Cancel</button>
