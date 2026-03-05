@@ -8,26 +8,22 @@ import { escapeHtml } from '../utils/escape.js'
 import { showModal } from '../components/modal.js'
 import { showToast } from '../components/toast.js'
 import { deriveToken } from 'canary-kit/token'
-import { GROUP_CONTEXT } from '../utils/encoding.js'
+import { GROUP_CONTEXT, toTokenEncoding } from '../utils/encoding.js'
 
 // ── Helpers ────────────────────────────────────────────────────
 
-const MEMBER_NAMES = ['Alice', 'Bob', 'Charlie', 'Dana', 'Eli', 'Faye', 'Gus', 'Hana']
-
 /**
- * Format a pubkey for display: "You" for local identity, memberNames, friendly names for others.
+ * Format a pubkey for display: "You" for local identity, memberNames, or truncated pubkey.
  */
-function formatPubkey(pubkey: string, members: string[], groupId?: string): string {
+function formatPubkey(pubkey: string, _members: string[], groupId?: string): string {
   const { identity, groups } = getState()
   if (identity?.pubkey === pubkey) return 'You'
-  // Check memberNames first
   if (groupId) {
     const group = groups[groupId]
     const name = group?.memberNames?.[pubkey]
     if (name) return name
   }
-  const otherIndex = members.filter(m => m !== identity?.pubkey).indexOf(pubkey)
-  return MEMBER_NAMES[otherIndex] ?? `${pubkey.slice(0, 8)}\u2026${pubkey.slice(-4)}`
+  return `${pubkey.slice(0, 8)}\u2026${pubkey.slice(-4)}`
 }
 
 // ── Invite modal ───────────────────────────────────────────────
@@ -36,7 +32,17 @@ function formatPubkey(pubkey: string, members: string[], groupId?: string): stri
  * Open the invite share sheet with QR, Copy Link, and Copy Invite Text all visible at once.
  * Uses a plain <dialog> element rather than the shared modal helper.
  */
-export function showInviteModal(payload: string, confirmCode: string): void {
+interface InviteModalOptions {
+  title?: string
+  scanHint?: string
+  showConfirmMemberNote?: boolean
+}
+
+export function showInviteModal(payload: string, confirmCode: string, options?: InviteModalOptions): void {
+  const title = options?.title ?? 'Invite to Group'
+  const scanHint = options?.scanHint ?? 'Scan with your phone camera to join'
+  const showConfirmMemberNote = options?.showConfirmMemberNote ?? true
+
   const base = window.location.href.split('#')[0]
   const joinUrl = `${base}#join/${encodeURIComponent(payload)}`
   const svgMarkup = generateQR(joinUrl)
@@ -52,10 +58,10 @@ export function showInviteModal(payload: string, confirmCode: string): void {
   dialog.dataset.payload = payload
   dialog.innerHTML = `
     <div class="modal__form invite-share">
-      <h2 class="modal__title">Invite to Group</h2>
+      <h2 class="modal__title">${escapeHtml(title)}</h2>
 
       <div class="qr-container">${svgMarkup}</div>
-      <p class="invite-hint">Scan with your phone camera to join</p>
+      <p class="invite-hint">${escapeHtml(scanHint)}</p>
 
       <div class="confirm-code">
         <span class="confirm-code__label">Confirmation words</span>
@@ -72,7 +78,7 @@ export function showInviteModal(payload: string, confirmCode: string): void {
 
       <p class="invite-hint">Share via WhatsApp, Signal, email, or any messaging app</p>
 
-      <p class="invite-hint" style="margin-top: 1rem; font-style: italic;">After they join, click <strong>Confirm Member</strong> to verify them — they'll give you a word or token.</p>
+      ${showConfirmMemberNote ? `<p class="invite-hint" style="margin-top: 1rem; font-style: italic;">After they join, click <strong>Confirm Member</strong> to verify them — they'll give you a word or token.</p>` : ''}
 
       <div class="modal__actions">
         <button class="btn" id="invite-close-btn" type="button">Done</button>
@@ -109,6 +115,18 @@ export function showInviteModal(payload: string, confirmCode: string): void {
   })
 
   dialog.showModal()
+}
+
+/**
+ * Open the share-state modal — a thin wrapper around showInviteModal
+ * with copy tailored for syncing existing members after rekey/membership changes.
+ */
+export function showShareStateModal(payload: string, confirmCode: string): void {
+  showInviteModal(payload, confirmCode, {
+    title: 'Share Group State',
+    scanHint: 'Share with existing members to sync the latest group state.',
+    showConfirmMemberNote: false,
+  })
 }
 
 // ── Render ─────────────────────────────────────────────────────
@@ -160,8 +178,12 @@ export function renderMembers(container: HTMLElement): void {
       </ul>
       ${isAdmin ? `<div class="members-actions">
         <button class="btn btn--sm" id="invite-btn" type="button">+ Invite</button>
+        <button class="btn btn--sm" id="share-state-btn" type="button">Share State</button>
         <button class="btn btn--sm" id="confirm-member-btn" type="button">Confirm Member</button>
       </div>` : ''}
+      <div class="members-sync">
+        <button class="btn btn--sm" id="sync-state-btn" type="button">Sync State</button>
+      </div>
     </section>
   `
 
@@ -182,6 +204,14 @@ export function renderMembers(container: HTMLElement): void {
     const { activeGroupId: currentGroupId } = getState()
     if (!currentGroupId) return
     removeGroupMember(currentGroupId, pubkey)
+
+    // Auto-open share state modal so admin can sync remaining members
+    const { groups: updatedGroups } = getState()
+    const updatedGroup = updatedGroups[currentGroupId]
+    if (updatedGroup && updatedGroup.members.length > 0) {
+      const { payload, confirmCode } = createInvite(updatedGroup)
+      showShareStateModal(payload, confirmCode)
+    }
   })
 
   // ── Invite button ─────────────────────────────────────────
@@ -196,19 +226,38 @@ export function renderMembers(container: HTMLElement): void {
     showInviteModal(payload, confirmCode)
   })
 
+  // ── Share state button ──────────────────────────────────────
+
+  container.querySelector<HTMLButtonElement>('#share-state-btn')?.addEventListener('click', () => {
+    const { groups: currentGroups, activeGroupId: currentGroupId } = getState()
+    if (!currentGroupId) return
+    const currentGroup = currentGroups[currentGroupId]
+    if (!currentGroup) return
+
+    const { payload, confirmCode } = createInvite(currentGroup)
+    showShareStateModal(payload, confirmCode)
+  })
+
   // ── Confirm member button ──────────────────────────────────────
 
   container.querySelector<HTMLButtonElement>('#confirm-member-btn')?.addEventListener('click', () => {
     showConfirmMemberModal()
+  })
+
+  // ── Sync state button (all members) ──────────────────────────
+
+  container.querySelector<HTMLButtonElement>('#sync-state-btn')?.addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('canary:sync-state'))
   })
 }
 
 // ── Confirm member helpers ──────────────────────────────────────
 
 function addConfirmedMember(groupId: string, pubkey: string, displayName: string): void {
-  const { groups } = getState()
+  const { groups, identity } = getState()
   const group = groups[groupId]
   if (!group) return
+  if (!identity?.pubkey || !group.admins.includes(identity.pubkey)) return
   if (group.members.includes(pubkey)) return
 
   const members = [...group.members, pubkey]
@@ -267,6 +316,7 @@ export function showConfirmMemberModal(prefillToken?: string): void {
           groupSeed: currentGroup.seed,
           counter: currentGroup.counter + (currentGroup.usageOffset ?? 0),
           context: 'canary:group',
+          encoding: toTokenEncoding(currentGroup),
         })
         if (!result.valid) {
           throw new Error(result.error ?? 'Invalid join token.')
@@ -277,9 +327,9 @@ export function showConfirmMemberModal(prefillToken?: string): void {
       } else if (wordInput) {
         if (!nameInput) throw new Error('Please enter the member name.')
 
-        // Verify word against current group derivation
+        // Verify word against current group derivation (must match group encoding)
         const effectiveCounter = currentGroup.counter + (currentGroup.usageOffset ?? 0)
-        const currentWord = deriveToken(currentGroup.seed, GROUP_CONTEXT, effectiveCounter).toLowerCase()
+        const currentWord = deriveToken(currentGroup.seed, GROUP_CONTEXT, effectiveCounter, toTokenEncoding(currentGroup)).toLowerCase()
         if (wordInput !== currentWord) {
           throw new Error('Word does not match — the member may not have the current group key.')
         }
