@@ -32,7 +32,8 @@ export const PRESETS: Readonly<Record<PresetName, Readonly<GroupPreset>>> = Obje
     rotationInterval: DEFAULT_ROTATION_INTERVAL,
     description:
       'Casual verification for family and friends. Single word, weekly rotation. ' +
-      'Adequate for live voice calls where the attacker gets one attempt.',
+      'Adequate for live voice/video calls where the attacker gets one attempt. ' +
+      'NOT suitable for text-based verification — 11 bits of entropy is trivially brute-forceable without rate limiting.',
   }),
   'field-ops': Object.freeze({
     wordCount: 2,

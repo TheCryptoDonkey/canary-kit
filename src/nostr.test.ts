@@ -207,3 +207,28 @@ describe('buildBeaconEvent', () => {
     expect(expirationTags).toHaveLength(0)
   })
 })
+
+describe('expiration edge cases', () => {
+  it('buildGroupEvent includes expiration tag for timestamp 0', () => {
+    const event = buildGroupEvent({
+      groupId: GROUP_D,
+      name: 'Test',
+      members: [ALICE],
+      rotationInterval: 604_800,
+      wordCount: 1,
+      wordlist: 'en-v1',
+      encryptedContent: '',
+      expiration: 0,
+    })
+    expect(event.tags).toContainEqual(['expiration', '0'])
+  })
+
+  it('buildBeaconEvent includes expiration tag for timestamp 0', () => {
+    const event = buildBeaconEvent({
+      groupId: GROUP_D,
+      encryptedContent: '',
+      expiration: 0,
+    })
+    expect(event.tags).toContainEqual(['expiration', '0'])
+  })
+})

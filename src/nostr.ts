@@ -48,7 +48,7 @@ export function buildGroupEvent(params: GroupEventParams): UnsignedEvent {
     ['words', String(params.wordCount)],
     ['wordlist', params.wordlist],
   ]
-  if (params.expiration) {
+  if (params.expiration !== undefined) {
     tags.push(['expiration', String(params.expiration)])
   }
   return { kind: KINDS.group, content: params.encryptedContent, tags, created_at: now() }
@@ -134,7 +134,7 @@ export interface BeaconEventParams {
 
 export function buildBeaconEvent(params: BeaconEventParams): UnsignedEvent {
   const tags: string[][] = [['h', params.groupId]]
-  if (params.expiration) {
+  if (params.expiration !== undefined) {
     tags.push(['expiration', String(params.expiration)])
   }
   return { kind: KINDS.beacon, content: params.encryptedContent, tags, created_at: now() }

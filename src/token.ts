@@ -187,7 +187,7 @@ export function verifyToken(
   if (tolerance > MAX_TOLERANCE) {
     throw new RangeError(`Tolerance must be <= ${MAX_TOLERANCE}, got ${tolerance}`)
   }
-  const normalised = input.toLowerCase().trim()
+  const normalised = input.toLowerCase().trim().replace(/\s+/g, ' ')
 
   // Compute all branches to prevent timing side-channels from revealing
   // which branch matched (valid vs duress vs invalid).

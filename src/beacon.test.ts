@@ -120,6 +120,30 @@ describe('buildDuressAlert', () => {
   })
 })
 
+describe('decryptBeacon validation', () => {
+  it('rejects payload missing required fields', async () => {
+    const key = deriveBeaconKey(SEED_1)
+    // Encrypt a malformed payload directly
+    const plaintext = JSON.stringify({ bad: 'data' })
+    const encoder = new TextEncoder()
+
+    // Use the encrypt flow manually to create a valid ciphertext with bad JSON
+    const iv = crypto.getRandomValues(new Uint8Array(12))
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw', key, { name: 'AES-GCM' }, false, ['encrypt'],
+    )
+    const ciphertext = new Uint8Array(
+      await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, encoder.encode(plaintext)),
+    )
+    const combined = new Uint8Array(12 + ciphertext.length)
+    combined.set(iv)
+    combined.set(ciphertext, 12)
+    const encoded = btoa(String.fromCharCode(...combined))
+
+    await expect(decryptBeacon(key, encoded)).rejects.toThrow()
+  })
+})
+
 describe('encryptDuressAlert / decryptDuressAlert', () => {
   it('round-trips a duress alert with location', async () => {
     const key = deriveBeaconKey(SEED_1)
