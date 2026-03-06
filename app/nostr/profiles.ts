@@ -11,7 +11,11 @@ interface NostrProfile {
 }
 
 /** In-memory cache: pubkey → profile. Survives re-renders but not page reload. */
-const _cache = new Map<string, NostrProfile | null>()
+const _cache = new Map<string, NostrProfile>()
+
+/** Pubkeys that returned no profile — retry after 60s. */
+const _notFound = new Map<string, number>()
+const NOT_FOUND_TTL_MS = 60_000
 
 /** Pubkeys currently being fetched (dedup in-flight requests). */
 const _pending = new Set<string>()
@@ -36,7 +40,13 @@ export function fetchProfiles(pubkeys: string[], groupId?: string): void {
   if (!pool) return
 
   // Filter to pubkeys we haven't fetched or aren't already fetching
-  const needed = pubkeys.filter(pk => !_cache.has(pk) && !_pending.has(pk))
+  const now = Date.now()
+  const needed = pubkeys.filter(pk => {
+    if (_cache.has(pk) || _pending.has(pk)) return false
+    const notFoundAt = _notFound.get(pk)
+    if (notFoundAt && (now - notFoundAt) < NOT_FOUND_TTL_MS) return false
+    return true
+  })
   if (needed.length === 0) return
 
   const { identity } = getState()
@@ -73,14 +83,13 @@ export function fetchProfiles(pubkeys: string[], groupId?: string): void {
             }
           }
         } catch {
-          _cache.set(event.pubkey, null)
+          _notFound.set(event.pubkey, Date.now())
           _pending.delete(event.pubkey)
         }
       },
       oneose() {
-        // Mark any pubkeys we didn't get a response for as "no profile"
         for (const pk of needed) {
-          if (!_cache.has(pk)) _cache.set(pk, null)
+          if (!_cache.has(pk)) _notFound.set(pk, Date.now())
           _pending.delete(pk)
         }
         sub.close()
