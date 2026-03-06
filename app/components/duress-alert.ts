@@ -3,8 +3,6 @@
 import { getState } from '../state.js'
 import { escapeHtml } from '../utils/escape.js'
 
-const MEMBER_NAMES = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry']
-
 function memberName(pubkey: string, groupId: string): string {
   const group = getState().groups[groupId]
   if (!group) return pubkey.slice(0, 8)
@@ -12,9 +10,7 @@ function memberName(pubkey: string, groupId: string): string {
   if (identity?.pubkey === pubkey) return 'You'
   const name = group.memberNames?.[pubkey]
   if (name) return name
-  const others = group.members.filter(m => m !== identity?.pubkey)
-  const idx = others.indexOf(pubkey)
-  return idx >= 0 && idx < MEMBER_NAMES.length ? MEMBER_NAMES[idx] : pubkey.slice(0, 8)
+  return `${pubkey.slice(0, 8)}\u2026${pubkey.slice(-4)}`
 }
 
 /**
