@@ -12,3 +12,4 @@ docs/plans/
 # Playwright
 test-results/
 playwright-report/
+.worktrees/
