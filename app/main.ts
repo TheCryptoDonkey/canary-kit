@@ -915,7 +915,9 @@ async function bootSync(): Promise<void> {
   }
   if (allRelays.size === 0) {
     console.warn('[canary:boot] No relays found — sync disabled')
-    showToast(`Sync disabled — ${groupCount} group(s), no relays configured`, 'warning', 5000)
+    if (groupCount > 0) {
+      showToast(`Sync disabled — ${groupCount} group(s), no relays configured`, 'warning', 5000)
+    }
     return
   }
 
