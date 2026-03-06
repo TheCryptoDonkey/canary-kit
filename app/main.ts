@@ -34,7 +34,7 @@ import { renderLiveness } from './panels/liveness.js'
 import { renderSettings } from './panels/settings.js'
 import { renderCallSimulation, destroyCallSimulation } from './views/call-simulation.js'
 import { showCallVerify } from './components/call-verify.js'
-import { acceptInvite, createJoinToken, isInviteConsumed } from './invite.js'
+import { acceptInvite, confirmCodeFromPayload, createJoinToken, isInviteConsumed } from './invite.js'
 import { resolveSigner, hasNip07 } from './nostr/signer.js'
 import { DEMO_ACCOUNTS } from './demo-accounts.js'
 import { decode as nip19decode } from 'nostr-tools/nip19'
@@ -712,6 +712,74 @@ function wireGlobalEvents(): void {
     const { identity: joinIdentity } = getState()
     const joinKnownName = joinIdentity?.displayName && joinIdentity.displayName !== 'You' ? joinIdentity.displayName : ''
 
+    // ── QR path: physical presence IS the verification ──────
+    // Auto-derive the confirmation code from the payload so the
+    // joiner doesn't have to type it. If we already have a name,
+    // skip the modal entirely and join immediately.
+    if (joinChannel === 'qr' && prefill) {
+      const doQrJoin = async (myName: string) => {
+        try {
+          const raw = JSON.parse(atob(prefill.trim()))
+          const autoCode = confirmCodeFromPayload(raw)
+          const data = acceptInvite(prefill.trim(), autoCode)
+
+          const { appGroup } = await applyInvite(data, myName)
+          flushPersist()
+
+          const { identity: joinedIdentity } = getState()
+          if (joinedIdentity?.privkey) {
+            const { deriveToken } = await import('canary-kit/token')
+            const { GROUP_CONTEXT, toTokenEncoding } = await import('./utils/encoding.js')
+            const effectiveCounter = (appGroup.counter as number) + ((appGroup.usageOffset as number) ?? 0)
+            const currentWord = deriveToken(data.seed, GROUP_CONTEXT, effectiveCounter, toTokenEncoding(appGroup as any))
+            const joinToken = createJoinToken({
+              groupId: data.groupId,
+              privkey: joinedIdentity.privkey,
+              pubkey: joinedIdentity.pubkey,
+              displayName: myName,
+              currentWord,
+            })
+            showJoinConfirmation(data.groupName, joinToken, currentWord, joinChannel)
+          }
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Invalid invite'
+          alert(message)
+        }
+      }
+
+      if (joinKnownName) {
+        // Already have a name — join immediately, no modal needed
+        doQrJoin(joinKnownName)
+        return
+      }
+
+      // Need a name — show minimal modal (name only)
+      showModal(`
+        <h2 class="modal__title">Join Group</h2>
+        <label class="input-label">Your name
+          <input name="myname" class="input" placeholder="e.g. Alice">
+        </label>
+        <div class="modal__actions">
+          <button type="button" class="btn" id="modal-cancel-btn">Cancel</button>
+          <button type="submit" class="btn btn--primary">Join</button>
+        </div>
+      `, async (form) => {
+        const myName = (form.get('myname') as string | null)?.trim() || ''
+        const dialog = document.getElementById('app-modal') as HTMLDialogElement | null
+        dialog?.close()
+        await doQrJoin(myName)
+      })
+
+      requestAnimationFrame(() => {
+        document.getElementById('modal-cancel-btn')?.addEventListener('click', () => {
+          const dialog = document.getElementById('app-modal') as HTMLDialogElement | null
+          dialog?.close()
+        })
+      })
+      return
+    }
+
+    // ── Link path: full modal with confirmation code ────────
     showModal(`
       <h2 class="modal__title">Join Group</h2>
       <label class="input-label">Invite String

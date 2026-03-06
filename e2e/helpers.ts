@@ -200,11 +200,15 @@ export async function acceptInviteViaLink(
 /**
  * Simulate scanning a QR code invite (in-person path).
  * The QR code generates `#scan/<payload>` URLs, not `#join/`.
+ *
+ * QR path auto-derives the confirmation code (physical presence IS
+ * the verification). If the user already has a name, the app joins
+ * immediately with no modal. Otherwise a minimal name-only modal appears.
  */
 export async function acceptInviteViaQR(
   page: Page,
   payload: string,
-  confirmCode: string,
+  _confirmCode?: string, // kept for backward compat — no longer needed
   loginName?: string,
 ): Promise<void> {
   const encodedPayload = encodeURIComponent(payload)
@@ -223,20 +227,20 @@ export async function acceptInviteViaQR(
     await loginOffline(page, loginName ?? 'Invitee')
   }
 
-  // The join modal should appear with payload pre-filled
-  await page.waitForSelector('#app-modal[open]', { timeout: 5000 })
-  await page.fill('[name="code"]', confirmCode)
-
-  const nameInput = page.locator('#app-modal [name="myname"]')
-  if (await nameInput.isVisible().catch(() => false)) {
-    await nameInput.fill(loginName ?? 'Invitee')
+  // QR path: if user already has a name, auto-joins with no modal.
+  // If name is needed, a minimal name-only modal appears.
+  const modal = page.locator('#app-modal[open]')
+  if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
+    const nameInput = page.locator('#app-modal [name="myname"]')
+    if (await nameInput.isVisible().catch(() => false)) {
+      await nameInput.fill(loginName ?? 'Invitee')
+    }
+    await page.click('#modal-form button[type="submit"]')
+    await page.waitForSelector('#app-modal:not([open])', { state: 'attached', timeout: 5000 })
   }
 
-  await page.click('#modal-form button[type="submit"]')
-  await page.waitForSelector('#app-modal:not([open])', { state: 'attached', timeout: 5000 })
-
   // QR scan path shows a toast instead of a confirmation modal
-  // Wait briefly for toast to appear
+  // Wait briefly for toast to appear and join to complete
   await page.waitForTimeout(500)
 
   page.off('dialog', dialogHandler)
