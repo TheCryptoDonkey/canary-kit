@@ -2,7 +2,8 @@
 import { test, expect } from '../fixtures.js'
 import {
   loginOffline, createGroup, createInvite, acceptInviteViaLink, acceptInviteViaQR,
-  acceptInviteViaModal, getJoinToken, getDisplayedWord, getGroupNames,
+  acceptInviteViaModal, acceptSyncViaLink, getJoinToken, getDisplayedWord, getGroupNames,
+  startTrackingWarningToasts, assertNoWarningToasts,
 } from '../helpers.js'
 
 test('online: no Next button, shows waiting status', async ({ cleanPage: page }) => {
@@ -66,11 +67,13 @@ test.describe('Invite flow (offline)', () => {
     await createGroup(pageA, 'Family')
 
     const { payload, confirmCode } = await createInvite(pageA)
+    await startTrackingWarningToasts(pageB)
     await acceptInviteViaLink(pageB, payload, confirmCode, 'Bob')
 
     // Both should see a group called "Family"
     const groupsB = await getGroupNames(pageB)
     expect(groupsB).toContain('Family')
+    await assertNoWarningToasts(pageB)
   })
 
   test('User B scans QR code (#scan/ path), logs in, joins successfully', async ({ twoUsers: { pageA, pageB } }) => {
@@ -78,10 +81,12 @@ test.describe('Invite flow (offline)', () => {
     await createGroup(pageA, 'QRGroup')
 
     const { payload, confirmCode } = await createInvite(pageA)
+    await startTrackingWarningToasts(pageB)
     await acceptInviteViaQR(pageB, payload, confirmCode, 'Bob')
 
     const groupsB = await getGroupNames(pageB)
     expect(groupsB).toContain('QRGroup')
+    await assertNoWarningToasts(pageB)
   })
 
   test('joiner sees creator name in member list', async ({ twoUsers: { pageA, pageB } }) => {
@@ -345,6 +350,26 @@ test.describe('Invite flow (offline)', () => {
     await expect(pageA.locator('#invite-save-qr')).toBeVisible()
 
     await pageA.click('#invite-close-btn')
+  })
+
+  test('#sync/ deep link: member syncs state update', async ({ twoUsers: { pageA, pageB } }) => {
+    await loginOffline(pageA, 'Alice')
+    await createGroup(pageA, 'SyncTest')
+    const { payload, confirmCode } = await createInvite(pageA)
+    await acceptInviteViaLink(pageB, payload, confirmCode, 'Bob')
+
+    // Wait for the next second so the new invite has a strictly later issuedAt
+    await pageA.waitForTimeout(1100)
+
+    // Alice creates a fresh invite (simulating state update)
+    const invite2 = await createInvite(pageA)
+
+    // Bob accepts via #sync/ deep link
+    await acceptSyncViaLink(pageB, invite2.payload, invite2.confirmCode)
+
+    // Bob should still see the group
+    const groupsB = await getGroupNames(pageB)
+    expect(groupsB).toContain('SyncTest')
   })
 
   test('wrong verification word shows error', async ({ twoUsers: { pageA } }) => {

@@ -246,6 +246,43 @@ export async function acceptInviteViaQR(
   }
 }
 
+/**
+ * Accept a sync-state update via the #sync/ deep link.
+ */
+export async function acceptSyncViaLink(
+  page: Page,
+  payload: string,
+  confirmCode: string,
+  loginName?: string,
+): Promise<void> {
+  const encodedPayload = encodeURIComponent(payload)
+
+  let alertMessage = ''
+  const dialogHandler = async (dialog: import('@playwright/test').Dialog) => {
+    alertMessage = dialog.message()
+    await dialog.accept()
+  }
+  page.on('dialog', dialogHandler)
+
+  await page.goto(`/#sync/${encodedPayload}`)
+
+  const loginScreen = page.locator('.lock-screen')
+  if (await loginScreen.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await loginOffline(page, loginName ?? 'Member')
+  }
+
+  await page.waitForSelector('#app-modal[open]', { timeout: 5000 })
+  await page.fill('[name="code"]', confirmCode)
+  await page.click('#modal-form button[type="submit"]')
+  await page.waitForSelector('#app-modal:not([open])', { state: 'attached', timeout: 5000 })
+
+  page.off('dialog', dialogHandler)
+
+  if (alertMessage) {
+    throw new Error(`Sync acceptance failed: ${alertMessage}`)
+  }
+}
+
 /** After accepting an invite, read the join confirmation word and ack URL. */
 export async function getJoinToken(page: Page): Promise<{ word: string; ackUrl: string }> {
   await page.waitForSelector('#join-confirm-modal[open]', { timeout: 3000 })
@@ -430,4 +467,34 @@ export function trackConsoleErrors(page: Page): string[] {
   })
   page.on('pageerror', (err) => errors.push(err.message))
   return errors
+}
+
+// ── Warning toast tracking ───────────────────────────────────
+
+/**
+ * Start tracking warning toasts via MutationObserver.
+ * Call BEFORE the action you want to monitor.
+ */
+export async function startTrackingWarningToasts(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    (window as any).__canaryWarningToasts = []
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node instanceof HTMLElement && node.classList?.contains('toast--warning')) {
+            (window as any).__canaryWarningToasts.push(node.textContent?.trim() ?? '')
+          }
+        }
+      }
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+  })
+}
+
+/** Assert no warning toasts appeared since tracking started. */
+export async function assertNoWarningToasts(page: Page): Promise<void> {
+  const warnings: string[] = await page.evaluate(() => (window as any).__canaryWarningToasts ?? [])
+  if (warnings.length > 0) {
+    throw new Error(`Unexpected warning toast(s): ${warnings.join(', ')}`)
+  }
 }
