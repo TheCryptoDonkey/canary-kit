@@ -14,6 +14,10 @@ import { showToast } from '../components/toast.js'
 import { deriveToken } from 'canary-kit/token'
 import { GROUP_CONTEXT, toTokenEncoding } from '../utils/encoding.js'
 import { fetchProfiles, getCachedName } from '../nostr/profiles.js'
+import { DEMO_ACCOUNTS } from '../demo-accounts.js'
+
+/** Quick lookup: pubkey → demo account name (compile-time, no relay needed). */
+const _demoNameByPubkey = new Map(DEMO_ACCOUNTS.map(a => [a.pubkey, a.name]))
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -45,6 +49,8 @@ function formatPubkey(pubkey: string, _members: string[], groupId?: string): str
     const name = group?.memberNames?.[pubkey]
     if (name) return name
   }
+  const demoName = _demoNameByPubkey.get(pubkey)
+  if (demoName) return demoName
   const profileName = getCachedName(pubkey)
   if (profileName) return profileName
   return `${pubkey.slice(0, 8)}\u2026${pubkey.slice(-4)}`
