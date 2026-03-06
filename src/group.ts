@@ -1,6 +1,6 @@
 import { randomSeed, hmacSha256, hexToBytes, bytesToHex } from './crypto.js'
 import { getCounter, DEFAULT_ROTATION_INTERVAL } from './counter.js'
-import { deriveToken, deriveDuressToken } from './token.js'
+import { deriveToken, deriveDuressToken, MAX_TOLERANCE } from './token.js'
 import { GROUP_CONTEXT } from './derive.js'
 import { PRESETS, type PresetName } from './presets.js'
 
@@ -91,6 +91,9 @@ export function createGroup(config: GroupConfig): GroupState {
   }
   if (wordCount !== 1 && wordCount !== 2 && wordCount !== 3) {
     throw new Error(`wordCount must be 1, 2, or 3, got ${wordCount}`)
+  }
+  if (!Number.isInteger(tolerance) || tolerance < 0 || tolerance > MAX_TOLERANCE) {
+    throw new RangeError(`tolerance must be an integer 0–${MAX_TOLERANCE}, got ${tolerance}`)
   }
   if (config.beaconInterval !== undefined) {
     if (!Number.isInteger(config.beaconInterval) || config.beaconInterval <= 0) {

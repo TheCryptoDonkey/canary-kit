@@ -209,12 +209,13 @@ export function verifyToken(
   const hi = Math.min(0xFFFFFFFF, counter + tolerance)
   const matches: string[] = []
   for (const identity of identities) {
+    let found = false
     for (let c = lo; c <= hi; c++) {
       if (timingSafeStringEqual(normalised, deriveDuressToken(secret, context, identity, c, encoding, tolerance))) {
-        matches.push(identity)
-        break // found match for this identity, move to next
+        found = true
       }
     }
+    if (found) matches.push(identity)
   }
 
   // 3. Check normal token at remaining tolerance window (non-exact counters)

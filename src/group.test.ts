@@ -94,6 +94,21 @@ describe('createGroup', () => {
       .toThrow('beaconInterval must be a positive integer, got 300.7')
   })
 
+  it('rejects negative tolerance', () => {
+    expect(() => createGroup({ name: 'Bad', members: [ALICE], tolerance: -1 }))
+      .toThrow('tolerance must be an integer 0–10, got -1')
+  })
+
+  it('rejects tolerance exceeding MAX_TOLERANCE', () => {
+    expect(() => createGroup({ name: 'Bad', members: [ALICE], tolerance: 11 }))
+      .toThrow('tolerance must be an integer 0–10, got 11')
+  })
+
+  it('rejects fractional tolerance', () => {
+    expect(() => createGroup({ name: 'Bad', members: [ALICE], tolerance: 1.5 }))
+      .toThrow('tolerance must be an integer 0–10, got 1.5')
+  })
+
   it('accepts valid edge-case config', () => {
     const group = createGroup({
       name: 'Edge',
