@@ -9,6 +9,7 @@ import { NostrSyncTransport } from './nostr/adapter.js'
 import { updateRelayStatus, flashSyncing } from './components/header.js'
 import { showToast } from './components/toast.js'
 import { recordCheckin, startLivenessHeartbeat, stopLivenessHeartbeat } from './components/liveness.js'
+import { drainDuressQueue } from './duress-queue.js'
 
 let _transport: SyncTransport | null = null
 const _unsubscribers = new Map<string, () => void>()
@@ -67,6 +68,14 @@ export async function ensureTransport(relays: string[], groupId?: string): Promi
 
     if (groupId) {
       subscribeToGroup(groupId)
+    }
+
+    // Drain any queued duress alerts for this group
+    if (groupId) {
+      const queued = drainDuressQueue(groupId)
+      for (const msg of queued) {
+        broadcastAction(groupId, msg)
+      }
     }
 
     updateRelayStatus(isConnected(), getRelayCount())
