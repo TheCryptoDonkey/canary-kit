@@ -5,6 +5,21 @@ import {
   acceptInviteViaModal, getJoinToken, getDisplayedWord, getGroupNames,
 } from '../helpers.js'
 
+test('online: no Next button, shows waiting status', async ({ cleanPage: page }) => {
+  await loginOffline(page, 'Alice')
+  await createGroup(page, 'Online Rotate', { mode: 'online' })
+
+  await page.click('#hero-invite-btn')
+  await expect(page.locator('#invite-modal[open]')).toBeVisible()
+
+  await page.click('#invite-qr-path')
+  await expect(page.locator('.qr-container')).toBeVisible()
+  await expect(page.locator('#invite-next-btn')).not.toBeVisible()
+  await expect(page.locator('#invite-waiting-status')).toBeVisible()
+
+  await page.click('#invite-close-btn')
+})
+
 test.describe('Invite flow (offline)', () => {
   test('invite modal shows path chooser, QR path shows QR, Link path shows words', async ({ twoUsers: { pageA } }) => {
     await loginOffline(pageA, 'Alice')
@@ -276,6 +291,49 @@ test.describe('Invite flow (offline)', () => {
 
     // Alice should appear in creator's member list with her name
     await expect(pageA.locator('.member-list')).toContainText('Alice')
+  })
+
+  test('offline: Next button rotates QR code', async ({ cleanPage: page }) => {
+    // Seed empty relays via addInitScript so the group is truly offline
+    await page.addInitScript(() => {
+      localStorage.setItem('canary:settings', JSON.stringify({ defaultRelays: [] }))
+    })
+    await page.reload()
+    await loginOffline(page, 'Alice')
+    await createGroup(page, 'Rotate Test')
+
+    await page.click('#hero-invite-btn')
+    await expect(page.locator('#invite-modal[open]')).toBeVisible()
+
+    // Go to QR path
+    await page.click('#invite-qr-path')
+    await expect(page.locator('.qr-container')).toBeVisible()
+
+    // Read the QR SVG content
+    const qr1 = await page.locator('.qr-container').innerHTML()
+
+    // Click Next to rotate
+    await expect(page.locator('#invite-next-btn')).toBeVisible()
+    await page.click('#invite-next-btn')
+
+    // QR should change (new nonce = new payload = different SVG)
+    const qr2 = await page.locator('.qr-container').innerHTML()
+    expect(qr2).not.toBe(qr1)
+
+    await page.click('#invite-close-btn')
+  })
+
+  test('Save QR button visible on Link path', async ({ twoUsers: { pageA } }) => {
+    await loginOffline(pageA, 'Alice')
+    await createGroup(pageA, 'Save QR Test')
+
+    await pageA.click('#hero-invite-btn')
+    await expect(pageA.locator('#invite-modal[open]')).toBeVisible()
+
+    await pageA.click('#invite-link-path')
+    await expect(pageA.locator('#invite-save-qr')).toBeVisible()
+
+    await pageA.click('#invite-close-btn')
   })
 
   test('wrong verification word shows error', async ({ twoUsers: { pageA } }) => {
