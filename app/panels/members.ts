@@ -190,7 +190,7 @@ export function showInviteModal(group: import('../types.js').AppGroup, options?:
     const joinHandler = (evt: Event) => {
       const detail = (evt as CustomEvent).detail
       if (detail.groupId !== group.id) return
-      showToast(`${detail.name} joined`, 'success')
+      // Toast is handled by sync.ts — just rotate the QR
       const currentGroup = getState().groups[group.id]
       if (currentGroup) {
         const rotated = rotateInviteSession(currentGroup)
