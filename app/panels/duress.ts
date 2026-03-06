@@ -129,6 +129,7 @@ export function renderDuress(container: HTMLElement): void {
               lon: pos.coords.longitude,
               timestamp: Math.floor(Date.now() / 1000),
               opId,
+              subject: id.pubkey,
             })
           },
           () => {
@@ -139,6 +140,7 @@ export function renderDuress(container: HTMLElement): void {
               lon: 0,
               timestamp: Math.floor(Date.now() / 1000),
               opId,
+              subject: id.pubkey,
             })
           },
           { enableHighAccuracy: true, timeout: 5000 },
@@ -150,6 +152,7 @@ export function renderDuress(container: HTMLElement): void {
           lon: 0,
           timestamp: Math.floor(Date.now() / 1000),
           opId,
+          subject: id.pubkey,
         })
       }
 

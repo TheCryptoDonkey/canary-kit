@@ -874,7 +874,9 @@ function wireGlobalEvents(): void {
       console.info(`[canary] Beacon from ${sender.slice(0, 8)}…: ${message.lat}, ${message.lon}`)
       handleIncomingBeacon(sender, message.lat, message.lon, message.accuracy ?? 20000, message.timestamp)
     } else if (message.type === 'duress-alert') {
-      showDuressAlert(sender, groupId, message.lat != null ? { lat: message.lat, lon: message.lon } : undefined, message.timestamp)
+      // Use subject (person under duress) if available, fall back to sender
+      const duressPubkey = message.subject || sender
+      showDuressAlert(duressPubkey, groupId, message.lat != null ? { lat: message.lat, lon: message.lon } : undefined, message.timestamp)
     }
   })
 }
