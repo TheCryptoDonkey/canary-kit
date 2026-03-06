@@ -39,7 +39,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   pinEnabled: false,
   autoLockMinutes: 5,
-  defaultRelays: ['wss://relay.trotters.cc/'],
+  defaultRelays: [],
 }
 
 // ── Helpers ────────────────────────────────────────────────────
