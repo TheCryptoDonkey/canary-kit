@@ -258,8 +258,11 @@ export function subscribeToGroup(groupId: string): void {
     }
 
     // Toast notifications for important sync events
-    if (msg.type === 'member-join') {
-      showToast('New member joined the group', 'success')
+    if (msg.type === 'member-join' && updated !== group) {
+      const name = msg.pubkey
+        ? (updated.memberNames?.[msg.pubkey] ?? sender?.slice(0, 8) ?? 'Someone')
+        : 'Someone'
+      showToast(`${name} joined the group`, 'success')
     } else if (msg.type === 'reseed') {
       showToast('Group secret was rotated', 'warning')
     } else if (msg.type === 'state-snapshot') {
