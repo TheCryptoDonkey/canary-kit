@@ -215,6 +215,13 @@ describe('addMember', () => {
     expect(() => addMember(group, 'not-a-pubkey'))
       .toThrow('Invalid member pubkey: expected 64 hex characters')
   })
+
+  it('rejects adding beyond maximum member count', () => {
+    const members = Array.from({ length: 100 }, (_, i) => i.toString(16).padStart(64, '0'))
+    const group = createGroup({ name: 'Test', members })
+    const nextPubkey = (100).toString(16).padStart(64, '0')
+    expect(() => addMember(group, nextPubkey)).toThrow(/maximum/)
+  })
 })
 
 describe('removeMember', () => {
@@ -304,5 +311,18 @@ describe('syncCounter', () => {
     const state = createGroup({ name: 'test', members: ['a'.repeat(64)] })
     const synced = syncCounter(state, Math.floor(Date.now() / 1000))
     expect(synced).toBe(state) // reference equality — no unnecessary copy
+  })
+
+  it('syncCounter rejects counter regression from clock rollback', () => {
+    const state = createGroup({ name: 'test', members: ['a'.repeat(64)] })
+    // Advance to a future time first
+    const futureTime = Math.floor(Date.now() / 1000) + state.rotationInterval * 5
+    const advanced = syncCounter(state, futureTime)
+    expect(advanced.counter).toBeGreaterThan(state.counter)
+
+    // Now attempt to sync to a past time — should not regress
+    const pastTime = Math.floor(Date.now() / 1000) - state.rotationInterval * 2
+    const regressed = syncCounter(advanced, pastTime)
+    expect(regressed.counter).toBe(advanced.counter)
   })
 })

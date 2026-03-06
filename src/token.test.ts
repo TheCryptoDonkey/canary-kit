@@ -170,6 +170,15 @@ describe('verifyToken', () => {
     expect(result.status).toBe('valid')
   })
 
+  it('normalises multi-word input with collapsed whitespace', () => {
+    const encoding = { format: 'words' as const, count: 2 }
+    const token = deriveToken(SECRET_1, 'test', 0, encoding)
+    // Insert extra spaces between words
+    const messy = '  ' + token.replace(' ', '   ') + '  '
+    const result = verifyToken(SECRET_1, 'test', 0, messy, [IDENTITY_A], { encoding })
+    expect(result.status).toBe('valid')
+  })
+
   it('respects tolerance window', () => {
     const token = deriveToken(SECRET_1, 'test', 5)
     const result = verifyToken(SECRET_1, 'test', 6, token, [], { tolerance: 1 })

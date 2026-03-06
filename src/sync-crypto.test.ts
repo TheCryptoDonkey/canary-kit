@@ -113,6 +113,14 @@ describe('deriveGroupSigningKey', () => {
     const key2 = deriveGroupSigningKey(seedHex, otherPrivkeyHex)
     expect(Array.from(key1)).not.toEqual(Array.from(key2))
   })
+
+  it('rejects non-64-hex private key', () => {
+    expect(() => deriveGroupSigningKey(seedHex, 'not-a-hex-key')).toThrow()
+  })
+
+  it('rejects short hex private key', () => {
+    expect(() => deriveGroupSigningKey(seedHex, 'abcd')).toThrow()
+  })
 })
 
 // ── Task 2: Hashed group tag ──────────────────────────────────────────────────

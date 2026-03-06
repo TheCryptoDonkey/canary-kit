@@ -111,6 +111,9 @@ export async function decryptEnvelope(groupKey: Uint8Array, encoded: string): Pr
  * identity is unique within the group, even across reseed events.
  */
 export function deriveGroupSigningKey(seedHex: string, personalPrivkeyHex: string): Uint8Array {
+  if (!/^[0-9a-f]{64}$/.test(personalPrivkeyHex)) {
+    throw new Error('personalPrivkeyHex must be a 64-character lowercase hex string (32 bytes)')
+  }
   const data = concatBytes(utf8('canary:sync:sign:'), hexToBytes(personalPrivkeyHex))
   return hmacSha256(hexToBytes(seedHex), data)
 }

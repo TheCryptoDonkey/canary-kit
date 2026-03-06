@@ -93,7 +93,11 @@ export async function decryptBeacon(
   content: string,
 ): Promise<BeaconPayload> {
   const plaintext = await aesGcmDecrypt(key, content)
-  return JSON.parse(new TextDecoder().decode(plaintext))
+  const parsed = JSON.parse(new TextDecoder().decode(plaintext))
+  if (typeof parsed.geohash !== 'string' || typeof parsed.precision !== 'number' || typeof parsed.timestamp !== 'number') {
+    throw new Error('Invalid beacon payload: missing or malformed required fields')
+  }
+  return parsed
 }
 
 // ---------------------------------------------------------------------------
@@ -167,5 +171,9 @@ export async function decryptDuressAlert(
   content: string,
 ): Promise<DuressAlert> {
   const plaintext = await aesGcmDecrypt(key, content)
-  return JSON.parse(new TextDecoder().decode(plaintext))
+  const parsed = JSON.parse(new TextDecoder().decode(plaintext))
+  if (parsed.type !== 'duress' || typeof parsed.member !== 'string' || typeof parsed.timestamp !== 'number') {
+    throw new Error('Invalid duress alert payload: missing or malformed required fields')
+  }
+  return parsed
 }

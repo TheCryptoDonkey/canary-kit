@@ -10,6 +10,9 @@ import { PRESETS, type PresetName } from './presets.js'
 
 const HEX_64_RE = /^[0-9a-f]{64}$/
 
+/** Maximum group members. Large groups degrade collision resistance in the 2048-word space. */
+const MAX_MEMBERS = 100
+
 /** Validate that a string is a 64-character lowercase hex pubkey. */
 function validatePubkey(pubkey: string): void {
   if (!HEX_64_RE.test(pubkey)) {
@@ -197,6 +200,9 @@ function deterministicReseed(state: GroupState, context: string): GroupState {
 export function addMember(state: GroupState, pubkey: string): GroupState {
   validatePubkey(pubkey)
   if (state.members.includes(pubkey)) return state
+  if (state.members.length >= MAX_MEMBERS) {
+    throw new Error(`Cannot add member: group has reached the maximum of ${MAX_MEMBERS} members`)
+  }
   return { ...state, members: [...state.members, pubkey] }
 }
 
@@ -226,12 +232,13 @@ export function removeMemberAndReseed(state: GroupState, pubkey: string): GroupS
   return reseed(removed)
 }
 
-/** Refresh the counter to the current time window. Call after loading persisted state. */
+/** Refresh the counter to the current time window. Call after loading persisted state.
+ * Enforces monotonicity: the counter never regresses, preventing clock rollback attacks. */
 export function syncCounter(
   state: GroupState,
   nowSec: number = Math.floor(Date.now() / 1000),
 ): GroupState {
   const counter = getCounter(nowSec, state.rotationInterval)
-  if (counter === state.counter) return state
+  if (counter <= state.counter) return state
   return { ...state, counter, usageOffset: 0 }
 }
