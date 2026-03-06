@@ -149,6 +149,27 @@ describe('applySyncMessage', () => {
     expect(replayed.members).toContain(PUBKEY_BBB)
   })
 
+  it('rejects replayed message after consumedOps eviction when timestamp is below floor', () => {
+    let group = makeGroup()
+    // Fill consumedOps past the MAX_CONSUMED_OPS limit (1000) with member-join messages
+    for (let i = 0; i < 1001; i++) {
+      group = applySyncMessage(group, {
+        type: 'member-join', pubkey: PUBKEY_BBB, timestamp: 100 + i, epoch: 0, opId: `fill-${i}`,
+      }, undefined, PUBKEY_AAA)
+    }
+    // The first opId ('fill-0') should have been evicted from consumedOps
+    expect(group.consumedOps).not.toContain('fill-0')
+    // But the floor timestamp should block replay of old messages
+    expect(group.consumedOpsFloor).toBeGreaterThan(0)
+
+    // Attempt to replay 'fill-0' with its original old timestamp
+    const replayed = applySyncMessage(group, {
+      type: 'member-join', pubkey: PUBKEY_BBB, timestamp: 100, epoch: 0, opId: 'fill-0',
+    }, undefined, PUBKEY_AAA)
+    // Should be rejected — timestamp is below the floor
+    expect(replayed.consumedOps).not.toContain('fill-0')
+  })
+
   it('applies counter-advance (monotonic — only advances)', () => {
     const group = makeGroup()
     // Use counter values ahead of the group's current time-based counter
