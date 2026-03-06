@@ -1,7 +1,7 @@
 // e2e/offline/invite-flow.spec.ts — Invite creation and acceptance (two users)
 import { test, expect } from '../fixtures.js'
 import {
-  loginOffline, createGroup, createInvite, acceptInviteViaLink,
+  loginOffline, createGroup, createInvite, acceptInviteViaLink, acceptInviteViaQR,
   acceptInviteViaModal, getJoinToken, getDisplayedWord, getGroupNames,
 } from '../helpers.js'
 
@@ -71,6 +71,17 @@ test.describe('Invite flow (offline)', () => {
     // Both should see a group called "Family"
     const groupsB = await getGroupNames(pageB)
     expect(groupsB).toContain('Family')
+  })
+
+  test('User B scans QR code (#scan/ path), logs in, joins successfully', async ({ twoUsers: { pageA, pageB } }) => {
+    await loginOffline(pageA, 'Alice')
+    await createGroup(pageA, 'QRGroup')
+
+    const { payload, confirmCode } = await createInvite(pageA)
+    await acceptInviteViaQR(pageB, payload, confirmCode, 'Bob')
+
+    const groupsB = await getGroupNames(pageB)
+    expect(groupsB).toContain('QRGroup')
   })
 
   test('joiner sees creator name in member list', async ({ twoUsers: { pageA, pageB } }) => {
