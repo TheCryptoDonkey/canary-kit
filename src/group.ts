@@ -57,6 +57,8 @@ export interface GroupState {
   epoch: number
   /** Consumed operation IDs within the current epoch. Cleared on epoch bump. */
   consumedOps: string[]
+  /** Timestamp floor: reject messages with timestamps at or below this value (replay protection after consumedOps eviction). */
+  consumedOpsFloor?: number
 }
 
 /**
@@ -202,14 +204,26 @@ export function addMember(state: GroupState, pubkey: string): GroupState {
  * Remove a member from the group's member list.
  *
  * **Important:** This does NOT reseed. In a symmetric-key group, the removed
- * member still possesses the old seed and can derive valid words. Callers
- * should create a replacement group with a fresh seed if forward secrecy is
- * required. See `reseed()` for manual key rotation.
+ * member still possesses the old seed and can derive valid words. Use
+ * `removeMemberAndReseed()` instead unless you have a specific reason not to.
  *
  * Returns new state — does not mutate the input.
  */
 export function removeMember(state: GroupState, pubkey: string): GroupState {
   return { ...state, members: state.members.filter((m) => m !== pubkey) }
+}
+
+/**
+ * Remove a member and immediately reseed, atomically invalidating the old seed.
+ * This is the recommended way to remove members — ensures forward secrecy by
+ * preventing the removed member from deriving future tokens or decrypting
+ * future beacons.
+ *
+ * Returns new state — does not mutate the input.
+ */
+export function removeMemberAndReseed(state: GroupState, pubkey: string): GroupState {
+  const removed = removeMember(state, pubkey)
+  return reseed(removed)
 }
 
 /** Refresh the counter to the current time window. Call after loading persisted state. */

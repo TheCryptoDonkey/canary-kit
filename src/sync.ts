@@ -38,9 +38,20 @@ export const MAX_FUTURE_SKEW_SEC = 60
 /** Maximum consumedOps entries per epoch before oldest are evicted. */
 const MAX_CONSUMED_OPS = 1000
 
-function appendConsumedOp(ops: string[], opId: string): string[] {
+interface ConsumedOpsResult {
+  consumedOps: string[]
+  consumedOpsFloor?: number
+}
+
+function appendConsumedOp(ops: string[], opId: string, timestamp: number, currentFloor?: number): ConsumedOpsResult {
   const next = [...ops, opId]
-  return next.length > MAX_CONSUMED_OPS ? next.slice(-MAX_CONSUMED_OPS) : next
+  if (next.length > MAX_CONSUMED_OPS) {
+    return {
+      consumedOps: next.slice(-MAX_CONSUMED_OPS),
+      consumedOpsFloor: Math.max(currentFloor ?? 0, timestamp),
+    }
+  }
+  return { consumedOps: next, consumedOpsFloor: currentFloor }
 }
 
 /** Current protocol version. Bump on any breaking wire format change. */
@@ -353,6 +364,10 @@ export function applySyncMessage(
     if (msg.type !== 'reseed' && !(msg.type === 'state-snapshot' && msgEpoch > group.epoch)) {
       const consumedSet = new Set(group.consumedOps)
       if (consumedSet.has(msgOpId)) return group
+
+      // Floor check: reject messages with timestamps at or below the eviction floor
+      // (prevents replay of ops that were evicted from consumedOps)
+      if (group.consumedOpsFloor !== undefined && msg.timestamp <= group.consumedOpsFloor) return group
     }
   }
 
@@ -368,12 +383,14 @@ export function applySyncMessage(
   if (msg.type === 'member-leave' && !isPrivilegedAction(msg, sender)) {
     const consumedSet = new Set(group.consumedOps)
     if (consumedSet.has(msg.opId)) return group
+    if (group.consumedOpsFloor !== undefined && msg.timestamp <= group.consumedOpsFloor) return group
   }
 
   switch (msg.type) {
     case 'member-join': {
       const updated = addMember(group, msg.pubkey)
-      return { ...updated, consumedOps: appendConsumedOp(updated.consumedOps, msg.opId) }
+      const ops = appendConsumedOp(updated.consumedOps, msg.opId, msg.timestamp, group.consumedOpsFloor)
+      return { ...updated, ...ops }
     }
 
     case 'member-leave':
@@ -381,7 +398,8 @@ export function applySyncMessage(
       if (!group.members.includes(msg.pubkey)) return group
       {
         const updated = removeMember(group, msg.pubkey)
-        return { ...updated, consumedOps: appendConsumedOp(updated.consumedOps, msg.opId) }
+        const ops = appendConsumedOp(updated.consumedOps, msg.opId, msg.timestamp, group.consumedOpsFloor)
+        return { ...updated, ...ops }
       }
 
     case 'counter-advance': {
@@ -439,13 +457,14 @@ export function applySyncMessage(
         if (!group.members.every(m => msg.members.includes(m))) return group
         if (!group.admins.every(a => msg.admins.includes(a))) return group
         // Append to consumedOps (preserve replay history within epoch)
+        const snapOps = appendConsumedOp(group.consumedOps, msg.opId, msg.timestamp, group.consumedOpsFloor)
         return {
           ...group,
           counter: msg.counter,
           usageOffset: msg.usageOffset,
           members: [...msg.members],
           admins: [...msg.admins],
-          consumedOps: appendConsumedOp(group.consumedOps, msg.opId),
+          ...snapOps,
         }
       }
       // ── Higher-epoch recovery: full state replacement ──

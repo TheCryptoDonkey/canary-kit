@@ -34,6 +34,7 @@ export {
   reseed,
   addMember,
   removeMember,
+  removeMemberAndReseed,
   syncCounter,
   type GroupConfig,
   type GroupState,

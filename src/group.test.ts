@@ -7,6 +7,7 @@ import {
   reseed,
   addMember,
   removeMember,
+  removeMemberAndReseed,
   syncCounter,
   type GroupConfig,
   type GroupState,
@@ -231,6 +232,26 @@ describe('removeMember', () => {
     const result = removeMember(state, 'b'.repeat(64))
     expect(result.seed).toBe(state.seed)
     expect(result.members).toEqual(state.members)
+  })
+})
+
+describe('removeMemberAndReseed', () => {
+  it('removes the member and generates a fresh seed', () => {
+    const group = createGroup({ name: 'Test', members: [ALICE, BOB, CHARLIE] })
+    const updated = removeMemberAndReseed(group, CHARLIE)
+    expect(updated.members).not.toContain(CHARLIE)
+    expect(updated.members).toHaveLength(2)
+    expect(updated.seed).not.toBe(group.seed)
+    expect(updated.usageOffset).toBe(0)
+  })
+
+  it('returns reseeded state even for absent members', () => {
+    const group = createGroup({ name: 'Test', members: [ALICE, BOB] })
+    const updated = removeMemberAndReseed(group, CHARLIE)
+    // Member list unchanged (Charlie wasn't in it)
+    expect(updated.members).toEqual(group.members)
+    // But seed is still rotated (caller explicitly asked for reseed)
+    expect(updated.seed).not.toBe(group.seed)
   })
 })
 
