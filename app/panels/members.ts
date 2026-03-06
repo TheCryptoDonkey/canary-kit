@@ -47,6 +47,37 @@ function formatPubkey(pubkey: string, _members: string[], groupId?: string): str
   return `${pubkey.slice(0, 8)}\u2026${pubkey.slice(-4)}`
 }
 
+/** Convert an SVG string to a PNG Blob via canvas. */
+async function svgToBlob(svgMarkup: string, size = 400): Promise<Blob> {
+  const svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' })
+  const url = URL.createObjectURL(svgBlob)
+  const img = new Image()
+  img.width = size
+  img.height = size
+
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve()
+    img.onerror = reject
+    img.src = url
+  })
+
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, size, size)
+  ctx.drawImage(img, 0, 0, size, size)
+  URL.revokeObjectURL(url)
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob)
+      else reject(new Error('Canvas toBlob failed'))
+    }, 'image/png')
+  })
+}
+
 // ── Invite modal ───────────────────────────────────────────────
 
 /**
@@ -193,9 +224,12 @@ export function showInviteModal(group: import('../types.js').AppGroup, options?:
 
         <p class="invite-hint" style="color: var(--duress); font-weight: 500;">Share via a private channel — WhatsApp, Signal, or in person. The confirmation code verifies it wasn't tampered with.</p>
 
-        <div class="invite-share__actions">
-          <button class="btn btn--primary" id="invite-copy-link" type="button">Copy Link</button>
-          <button class="btn" id="invite-copy-text" type="button">Copy Invite Text</button>
+        <div class="invite-share__actions" style="flex-direction: column; gap: 0.5rem;">
+          <div style="display: flex; gap: 0.75rem; justify-content: center;">
+            <button class="btn btn--primary" id="invite-copy-link" type="button">Copy Link</button>
+            <button class="btn" id="invite-copy-text" type="button">Copy Invite Text</button>
+          </div>
+          <button class="btn" id="invite-save-qr" type="button">Save QR Image</button>
         </div>
 
         <p class="invite-hint">Share via WhatsApp, Signal, email, or any messaging app</p>
@@ -229,6 +263,32 @@ export function showInviteModal(group: import('../types.js').AppGroup, options?:
         btn.classList.add('btn--copied')
         setTimeout(() => { btn.textContent = 'Copy Invite Text'; btn.classList.remove('btn--copied') }, 2000)
       } catch { /* clipboard may be blocked */ }
+    })
+
+    d.querySelector<HTMLButtonElement>('#invite-save-qr')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget as HTMLButtonElement
+      try {
+        const linkQrSvg = generateQR(currentLinkUrl())
+        const blob = await svgToBlob(linkQrSvg)
+        if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+          btn.textContent = 'QR Copied!'
+          btn.classList.add('btn--copied')
+        } else {
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = 'canary-invite.png'
+          a.click()
+          URL.revokeObjectURL(url)
+          btn.textContent = 'QR Downloaded!'
+          btn.classList.add('btn--copied')
+        }
+        setTimeout(() => { btn.textContent = 'Save QR Image'; btn.classList.remove('btn--copied') }, 2000)
+      } catch {
+        btn.textContent = 'Failed'
+        setTimeout(() => { btn.textContent = 'Save QR Image' }, 2000)
+      }
     })
   }
 
