@@ -446,6 +446,19 @@ function checkInviteFragment(): void {
     document.dispatchEvent(
       new CustomEvent('canary:join-group', { detail: { payload } }),
     )
+  } else if (hash.startsWith('#scan/')) {
+    let payload: string
+    try {
+      payload = decodeURIComponent(hash.slice(6))
+    } catch {
+      console.warn('[canary] Malformed scan fragment — ignoring.')
+      window.location.hash = ''
+      return
+    }
+    window.location.hash = ''
+    document.dispatchEvent(
+      new CustomEvent('canary:join-group', { detail: { payload, channel: 'qr' } }),
+    )
   } else if (hash.startsWith('#sync/')) {
     let payload: string
     try {
@@ -693,7 +706,9 @@ function wireGlobalEvents(): void {
   })
 
   document.addEventListener('canary:join-group', (evt) => {
-    const prefill = (evt as CustomEvent<{ payload?: string }>).detail?.payload ?? ''
+    const detail = (evt as CustomEvent<{ payload?: string; channel?: 'qr' | 'link' }>).detail ?? {}
+    const prefill = detail.payload ?? ''
+    const joinChannel = detail.channel ?? 'link'
     const { identity: joinIdentity } = getState()
     const joinKnownName = joinIdentity?.displayName && joinIdentity.displayName !== 'You' ? joinIdentity.displayName : ''
 
@@ -741,7 +756,7 @@ function wireGlobalEvents(): void {
             displayName: myName,
             currentWord,
           })
-          showJoinConfirmation(data.groupName, joinToken, currentWord)
+          showJoinConfirmation(data.groupName, joinToken, currentWord, joinChannel)
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Invalid invite'

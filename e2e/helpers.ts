@@ -197,6 +197,55 @@ export async function acceptInviteViaLink(
   }
 }
 
+/**
+ * Simulate scanning a QR code invite (in-person path).
+ * The QR code generates `#scan/<payload>` URLs, not `#join/`.
+ */
+export async function acceptInviteViaQR(
+  page: Page,
+  payload: string,
+  confirmCode: string,
+  loginName?: string,
+): Promise<void> {
+  const encodedPayload = encodeURIComponent(payload)
+
+  let alertMessage = ''
+  const dialogHandler = async (dialog: import('@playwright/test').Dialog) => {
+    alertMessage = dialog.message()
+    await dialog.accept()
+  }
+  page.on('dialog', dialogHandler)
+
+  await page.goto(`/#scan/${encodedPayload}`)
+
+  const loginScreen = page.locator('.lock-screen')
+  if (await loginScreen.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await loginOffline(page, loginName ?? 'Invitee')
+  }
+
+  // The join modal should appear with payload pre-filled
+  await page.waitForSelector('#app-modal[open]', { timeout: 5000 })
+  await page.fill('[name="code"]', confirmCode)
+
+  const nameInput = page.locator('#app-modal [name="myname"]')
+  if (await nameInput.isVisible().catch(() => false)) {
+    await nameInput.fill(loginName ?? 'Invitee')
+  }
+
+  await page.click('#modal-form button[type="submit"]')
+  await page.waitForSelector('#app-modal:not([open])', { state: 'attached', timeout: 5000 })
+
+  // QR scan path shows a toast instead of a confirmation modal
+  // Wait briefly for toast to appear
+  await page.waitForTimeout(500)
+
+  page.off('dialog', dialogHandler)
+
+  if (alertMessage) {
+    throw new Error(`QR invite acceptance failed: ${alertMessage}`)
+  }
+}
+
 /** After accepting an invite, read the join confirmation word and ack URL. */
 export async function getJoinToken(page: Page): Promise<{ word: string; ackUrl: string }> {
   await page.waitForSelector('#join-confirm-modal[open]', { timeout: 3000 })
