@@ -47,7 +47,7 @@ function formatPubkey(pubkey: string, _members: string[], groupId?: string): str
   if (groupId) {
     const group = groups[groupId]
     const name = group?.memberNames?.[pubkey]
-    if (name) return name
+    if (name && name !== 'You') return name
   }
   const demoName = _demoNameByPubkey.get(pubkey)
   if (demoName) return demoName
@@ -319,6 +319,82 @@ export function showShareStateModal(group: import('../types.js').AppGroup): void
   })
 }
 
+// ── Member detail popover ──────────────────────────────────────
+
+function showMemberDetail(pubkey: string, anchor: HTMLElement, groupId: string): void {
+  // Remove any existing popover
+  document.getElementById('member-detail-popover')?.remove()
+
+  const { identity, groups } = getState()
+  const group = groups[groupId]
+  const isYou = identity?.pubkey === pubkey
+  const isAdmin = group?.admins.includes(pubkey) ?? false
+  const displayName = formatPubkey(pubkey, group?.members ?? [], groupId)
+  const profileName = getCachedName(pubkey)
+  const demoName = _demoNameByPubkey.get(pubkey)
+  const memberName = group?.memberNames?.[pubkey]
+
+  const lastCheckin = group?.livenessCheckins?.[pubkey]
+  let livenessLabel = 'Never checked in'
+  if (lastCheckin) {
+    const elapsed = Math.floor(Date.now() / 1000) - lastCheckin
+    if (elapsed < 60) livenessLabel = 'Active now'
+    else if (elapsed < 3600) livenessLabel = `${Math.floor(elapsed / 60)}m ago`
+    else livenessLabel = `${Math.floor(elapsed / 3600)}h ago`
+  }
+
+  const popover = document.createElement('div')
+  popover.id = 'member-detail-popover'
+  popover.className = 'member-detail-popover'
+  popover.innerHTML = `
+    <div class="member-detail-popover__header">
+      <strong>${escapeHtml(displayName)}</strong>
+      ${isYou ? '<span class="member-detail-popover__badge">You</span>' : ''}
+      ${isAdmin ? '<span class="member-detail-popover__badge member-detail-popover__badge--admin">Admin</span>' : ''}
+    </div>
+    <div class="member-detail-popover__row">
+      <span class="member-detail-popover__label">Pubkey</span>
+      <span class="member-detail-popover__value" title="${escapeHtml(pubkey)}">${escapeHtml(pubkey.slice(0, 12))}…${escapeHtml(pubkey.slice(-8))}</span>
+    </div>
+    ${profileName ? `<div class="member-detail-popover__row">
+      <span class="member-detail-popover__label">Nostr profile</span>
+      <span class="member-detail-popover__value">${escapeHtml(profileName)}</span>
+    </div>` : ''}
+    ${memberName && memberName !== 'You' ? `<div class="member-detail-popover__row">
+      <span class="member-detail-popover__label">Display name</span>
+      <span class="member-detail-popover__value">${escapeHtml(memberName)}</span>
+    </div>` : ''}
+    ${demoName ? `<div class="member-detail-popover__row">
+      <span class="member-detail-popover__label">Demo account</span>
+      <span class="member-detail-popover__value">${escapeHtml(demoName)}</span>
+    </div>` : ''}
+    <div class="member-detail-popover__row">
+      <span class="member-detail-popover__label">Liveness</span>
+      <span class="member-detail-popover__value">${livenessLabel}</span>
+    </div>
+    <button class="btn btn--sm member-detail-popover__copy" type="button">Copy Pubkey</button>
+  `
+
+  anchor.closest('.member-item')?.appendChild(popover)
+
+  popover.querySelector('.member-detail-popover__copy')?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(pubkey)
+      const btn = popover.querySelector('.member-detail-popover__copy') as HTMLButtonElement
+      btn.textContent = 'Copied!'
+      setTimeout(() => { btn.textContent = 'Copy Pubkey' }, 1500)
+    } catch { /* clipboard blocked */ }
+  })
+
+  const close = (e: MouseEvent) => {
+    if (!popover.contains(e.target as Node) && e.target !== anchor) {
+      popover.remove()
+      document.removeEventListener('click', close)
+    }
+  }
+  requestAnimationFrame(() => document.addEventListener('click', close))
+}
+
 // ── Render ─────────────────────────────────────────────────────
 
 /**
@@ -354,7 +430,7 @@ export function renderMembers(container: HTMLElement): void {
               return `
           <li class="member-item" data-pubkey="${escapeHtml(pubkey)}">
             <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${dotColour};flex-shrink:0;box-shadow:0 0 6px ${dotColour}80;"></span>
-            <span class="member-item__pubkey">${escapeHtml(formatPubkey(pubkey, group.members, activeGroupId))}</span>
+            <button class="member-item__name-btn" data-pubkey="${escapeHtml(pubkey)}" type="button">${escapeHtml(formatPubkey(pubkey, group.members, activeGroupId))}</button>
             ${isAdmin ? `<button
               class="btn btn--sm member-item__remove"
               data-pubkey="${escapeHtml(pubkey)}"
@@ -383,6 +459,16 @@ export function renderMembers(container: HTMLElement): void {
       </div>
     </section>
   `
+
+  // ── Member detail popover ────────────────────────────────
+
+  container.querySelectorAll<HTMLButtonElement>('.member-item__name-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pubkey = btn.dataset.pubkey
+      if (!pubkey) return
+      showMemberDetail(pubkey, btn, activeGroupId)
+    })
+  })
 
   // ── Remove member handlers ────────────────────────────────
 
