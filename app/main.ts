@@ -858,11 +858,11 @@ function showLoginScreen(): void {
       <div style="width: 100%; max-width: 360px; margin-top: 1.5rem;">
 
         <div style="background: var(--bg-raised); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
-          <p class="input-label__text" style="margin-bottom: 0.5rem;">Use Offline</p>
-          <p class="settings-hint" style="margin-bottom: 0.5rem;">No account needed. Everything stays on this device.</p>
+          <p class="input-label__text" style="margin-bottom: 0.5rem;">Quick Start</p>
+          <p class="settings-hint" style="margin-bottom: 0.5rem;">No Nostr account needed. Enter your name to get started.</p>
           <form id="offline-form" autocomplete="off" style="display: flex; gap: 0.375rem;">
-            <input class="input" type="text" id="offline-name" placeholder="Your name" style="flex: 1; font-size: 0.875rem; padding: 0.5rem;" />
-            <button class="btn btn--primary" type="submit">Start</button>
+            <input class="input" type="text" id="offline-name" placeholder="Enter your name" required style="flex: 1; font-size: 0.875rem; padding: 0.5rem;" />
+            <button class="btn btn--primary" type="submit">Go</button>
           </form>
         </div>
 
@@ -909,10 +909,15 @@ function showLoginScreen(): void {
     </div>
   `
 
-  // Offline — generate key silently, just ask for a name
+  // Quick Start — generate key silently, just ask for a name
   app.querySelector<HTMLFormElement>('#offline-form')?.addEventListener('submit', async (e) => {
     e.preventDefault()
-    const name = app.querySelector<HTMLInputElement>('#offline-name')?.value.trim() || 'You'
+    const input = app.querySelector<HTMLInputElement>('#offline-name')
+    const name = input?.value.trim()
+    if (!name) {
+      input?.focus()
+      return
+    }
     await ensureLocalIdentity()
     const { identity } = getState()
     if (identity) update({ identity: { ...identity, displayName: name } })
