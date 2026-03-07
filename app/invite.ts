@@ -571,3 +571,89 @@ export function getInviteSession(): InviteSession | null {
 export function endInviteSession(): void {
   _activeSession = null
 }
+
+// ── Remote Invite Session ─────────────────────────────────────
+
+import {
+  createRemoteInviteToken,
+  createWelcomeEnvelope,
+  type WelcomePayload,
+} from './crypto/remote-invite.js'
+
+export interface RemoteInviteSession {
+  groupId: string
+  /** Base64-encoded seedless invite token (Message 1) */
+  tokenPayload: string
+  /** The invite ID for tracking */
+  inviteId: string
+}
+
+let _activeRemoteSession: RemoteInviteSession | null = null
+
+export function startRemoteInviteSession(group: AppGroup): RemoteInviteSession {
+  const { identity } = getState()
+  if (!identity?.pubkey || !identity?.privkey) {
+    throw new Error('No local identity — cannot create remote invite.')
+  }
+  if (!group.admins.includes(identity.pubkey)) {
+    throw new Error(`Not authorised — you are not an admin of "${group.name}".`)
+  }
+
+  const token = createRemoteInviteToken({
+    groupName: group.name,
+    groupId: group.id,
+    adminPubkey: identity.pubkey,
+    adminPrivkey: identity.privkey,
+  })
+
+  const tokenPayload = btoa(JSON.stringify(token))
+
+  _activeRemoteSession = {
+    groupId: group.id,
+    tokenPayload,
+    inviteId: token.inviteId,
+  }
+
+  return _activeRemoteSession
+}
+
+export function createRemoteWelcomeEnvelope(group: AppGroup, joinerPubkey: string): string {
+  const { identity } = getState()
+  if (!identity?.privkey) {
+    throw new Error('No local identity — cannot create welcome envelope.')
+  }
+
+  const welcome: WelcomePayload = {
+    seed: group.seed,
+    counter: group.counter,
+    usageOffset: group.usageOffset,
+    epoch: group.epoch ?? 0,
+    wordCount: group.wordCount,
+    rotationInterval: group.rotationInterval,
+    groupId: group.id,
+    groupName: group.name,
+    wordlist: group.wordlist,
+    beaconInterval: group.beaconInterval,
+    beaconPrecision: group.beaconPrecision,
+    encodingFormat: group.encodingFormat ?? 'words',
+    tolerance: group.tolerance ?? 1,
+    members: [...group.members],
+    admins: [...(group.admins ?? [])],
+    relays: [...(group.relays ?? [])],
+    memberNames: group.memberNames ? { ...group.memberNames } : undefined,
+  }
+
+  return createWelcomeEnvelope({
+    welcome,
+    adminPrivkey: identity.privkey,
+    joinerPubkey,
+  })
+}
+
+export function getRemoteInviteSession(): RemoteInviteSession | null {
+  return _activeRemoteSession
+}
+
+export function endRemoteInviteSession(): void {
+  _activeRemoteSession = null
+}
