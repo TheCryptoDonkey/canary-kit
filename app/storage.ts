@@ -131,6 +131,20 @@ function resolveActiveGroupId(validGroups: Record<string, unknown>): string | nu
   return ids.length > 0 ? ids[0] : null
 }
 
+/**
+ * Merge persisted settings with defaults, backfilling defaultRelays
+ * when the persisted value is empty (migration for existing users).
+ */
+function mergeSettings(raw: Partial<AppSettings> | null): AppSettings {
+  const merged: AppSettings = { ...DEFAULT_SETTINGS, ...(raw ?? {}) }
+  // Backfill: existing users may have defaultRelays: [] persisted before
+  // the relay default was added. Use the built-in default when empty.
+  if (!merged.defaultRelays?.length) {
+    merged.defaultRelays = [...DEFAULT_SETTINGS.defaultRelays]
+  }
+  return merged
+}
+
 // ── Public API ─────────────────────────────────────────────────
 
 /**
@@ -200,7 +214,7 @@ export function hasPinSalt(): boolean {
  */
 export function readSettingsOnly(): AppSettings {
   const rawSettings = safeRead<Partial<AppSettings>>(KEY_SETTINGS)
-  return { ...DEFAULT_SETTINGS, ...(rawSettings ?? {}) }
+  return mergeSettings(rawSettings)
 }
 
 /**
@@ -219,7 +233,7 @@ export async function unlockAndRestoreState(pin: string): Promise<void> {
   const rawIdentity = safeRead<AppIdentity & { _privkeyEncrypted?: boolean }>(KEY_IDENTITY)
   const rawSettings = safeRead<Partial<AppSettings>>(KEY_SETTINGS)
 
-  const settings: AppSettings = { ...DEFAULT_SETTINGS, ...(rawSettings ?? {}) }
+  const settings: AppSettings = mergeSettings(rawSettings)
 
   // This will throw if the key is wrong — AES-GCM authentication will fail.
   const groups = await decryptSeeds(rawGroups, key)
@@ -278,10 +292,7 @@ export function restoreState(): void {
   const identity = safeRead<AppIdentity>(KEY_IDENTITY)
   const rawSettings = safeRead<Partial<AppSettings>>(KEY_SETTINGS)
 
-  const settings: AppSettings = {
-    ...DEFAULT_SETTINGS,
-    ...(rawSettings ?? {}),
-  }
+  const settings: AppSettings = mergeSettings(rawSettings)
 
   const validGroups: Record<string, AppGroup> = {}
   for (const [id, group] of Object.entries(groups)) {
