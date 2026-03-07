@@ -5,6 +5,7 @@ import { addGroupMember, removeGroupMember } from '../actions/groups.js'
 import {
   verifyJoinToken,
   startInviteSession, rotateInviteSession, endInviteSession,
+  startRemoteInviteSession, createRemoteWelcomeEnvelope, endRemoteInviteSession,
 } from '../invite.js'
 import { groupMode } from '../types.js'
 import { generateQR } from '../components/qr.js'
@@ -148,7 +149,7 @@ export function showInviteModal(group: import('../types.js').AppGroup, options?:
 
         <div class="invite-share__actions" style="flex-direction: column; gap: 0.75rem;">
           <button class="btn btn--primary" id="invite-qr-path" type="button">Scan QR &mdash; they're with me</button>
-          <button class="btn btn--primary" id="invite-link-path" type="button">Share Link &mdash; send it to them</button>
+          <button class="btn btn--primary" id="invite-link-path" type="button">Secure Channel &mdash; Signal, WhatsApp, etc.</button>
         </div>
 
         <div class="modal__actions">
@@ -157,7 +158,7 @@ export function showInviteModal(group: import('../types.js').AppGroup, options?:
       </div>
     `
     d.querySelector<HTMLButtonElement>('#invite-qr-path')?.addEventListener('click', renderQRPath)
-    d.querySelector<HTMLButtonElement>('#invite-link-path')?.addEventListener('click', renderLinkPath)
+    d.querySelector<HTMLButtonElement>('#invite-link-path')?.addEventListener('click', renderRemotePath)
     d.querySelector<HTMLButtonElement>('#invite-close-btn')?.addEventListener('click', () => { endInviteSession(); d.close() })
   }
 
@@ -303,6 +304,109 @@ export function showInviteModal(group: import('../types.js').AppGroup, options?:
         setTimeout(() => { btn.textContent = 'Save QR Image' }, 2000)
       }
     })
+  }
+
+  function renderRemotePath(): void {
+    const remoteSession = startRemoteInviteSession(group)
+    const base = window.location.href.split('#')[0]
+    const remoteUrl = `${base}#remote/${encodeURIComponent(remoteSession.tokenPayload)}`
+
+    function renderStep1(): void {
+      d.innerHTML = `
+        <div class="modal__form invite-share">
+          <h2 class="modal__title">Step 1 of 3: Send Invite</h2>
+          <p class="invite-hint">Copy this and send it via Signal, WhatsApp, or any secure channel.</p>
+          <p class="invite-hint" style="color: var(--duress); font-weight: 500;">This invite does NOT contain the group secret — it's safe to send.</p>
+          <div class="invite-share__actions" style="flex-direction: column; gap: 0.5rem;">
+            <button class="btn btn--primary" id="remote-copy-token" type="button">Copy Invite</button>
+          </div>
+          <div class="modal__actions" style="gap: 0.5rem;">
+            <button class="btn" id="remote-back-btn" type="button">Back</button>
+            <button class="btn btn--primary" id="remote-next-1" type="button">Next</button>
+          </div>
+        </div>
+      `
+      d.querySelector<HTMLButtonElement>('#remote-copy-token')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget as HTMLButtonElement
+        try {
+          await navigator.clipboard.writeText(remoteUrl)
+          btn.textContent = 'Copied!'
+          btn.classList.add('btn--copied')
+          setTimeout(() => { btn.textContent = 'Copy Invite'; btn.classList.remove('btn--copied') }, 2000)
+        } catch { /* clipboard may be blocked */ }
+      })
+      d.querySelector<HTMLButtonElement>('#remote-back-btn')?.addEventListener('click', () => { endRemoteInviteSession(); renderChooser() })
+      d.querySelector<HTMLButtonElement>('#remote-next-1')?.addEventListener('click', renderStep2)
+    }
+
+    function renderStep2(): void {
+      d.innerHTML = `
+        <div class="modal__form invite-share">
+          <h2 class="modal__title">Step 2 of 3: Paste Join Code</h2>
+          <p class="invite-hint">Ask them to open the invite and send you their join code.</p>
+          <input class="input" id="remote-joincode-input" type="text" placeholder="Paste their join code here..." autocomplete="off" style="font-family: monospace; font-size: 0.85rem;">
+          <p class="invite-hint" id="remote-joincode-error" style="color: var(--duress); display: none;"></p>
+          <div class="modal__actions" style="gap: 0.5rem;">
+            <button class="btn" id="remote-back-2" type="button">Back</button>
+            <button class="btn btn--primary" id="remote-next-2" type="button">Generate Welcome</button>
+          </div>
+        </div>
+      `
+      d.querySelector<HTMLButtonElement>('#remote-back-2')?.addEventListener('click', renderStep1)
+      d.querySelector<HTMLButtonElement>('#remote-next-2')?.addEventListener('click', () => {
+        const input = d.querySelector<HTMLInputElement>('#remote-joincode-input')
+        const errorEl = d.querySelector<HTMLElement>('#remote-joincode-error')
+        const joinerPubkey = input?.value.trim() ?? ''
+
+        if (!/^[0-9a-f]{64}$/.test(joinerPubkey)) {
+          if (errorEl) {
+            errorEl.textContent = 'Invalid join code — must be a 64-character hex public key.'
+            errorEl.style.display = ''
+          }
+          return
+        }
+
+        try {
+          const currentGroup = getState().groups[group.id]
+          if (!currentGroup) throw new Error('Group not found.')
+          const envelope = createRemoteWelcomeEnvelope(currentGroup, joinerPubkey)
+          renderStep3(envelope)
+        } catch (err) {
+          if (errorEl) {
+            errorEl.textContent = err instanceof Error ? err.message : 'Failed to create welcome envelope.'
+            errorEl.style.display = ''
+          }
+        }
+      })
+    }
+
+    function renderStep3(envelope: string): void {
+      d.innerHTML = `
+        <div class="modal__form invite-share">
+          <h2 class="modal__title">Step 3 of 3: Send Welcome</h2>
+          <p class="invite-hint">Copy this encrypted message and send it back to them.</p>
+          <p class="invite-hint" style="color: var(--success); font-weight: 500;">This is encrypted — only they can read it.</p>
+          <div class="invite-share__actions" style="flex-direction: column; gap: 0.5rem;">
+            <button class="btn btn--primary" id="remote-copy-welcome" type="button">Copy Welcome Message</button>
+          </div>
+          <div class="modal__actions" style="gap: 0.5rem;">
+            <button class="btn" id="remote-done" type="button">Done</button>
+          </div>
+        </div>
+      `
+      d.querySelector<HTMLButtonElement>('#remote-copy-welcome')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget as HTMLButtonElement
+        try {
+          await navigator.clipboard.writeText(envelope)
+          btn.textContent = 'Copied!'
+          btn.classList.add('btn--copied')
+          setTimeout(() => { btn.textContent = 'Copy Welcome Message'; btn.classList.remove('btn--copied') }, 2000)
+        } catch { /* clipboard may be blocked */ }
+      })
+      d.querySelector<HTMLButtonElement>('#remote-done')?.addEventListener('click', () => { endRemoteInviteSession(); endInviteSession(); d.close() })
+    }
+
+    renderStep1()
   }
 
   // Start with the path chooser

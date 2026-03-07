@@ -35,6 +35,7 @@ import { renderSettings } from './panels/settings.js'
 import { renderCallSimulation, destroyCallSimulation } from './views/call-simulation.js'
 import { showCallVerify } from './components/call-verify.js'
 import { acceptInvite, confirmCodeFromPayload, createJoinToken, isInviteConsumed } from './invite.js'
+import { assertRemoteInviteToken, decryptWelcomeEnvelope } from './crypto/remote-invite.js'
 import { resolveSigner, hasNip07 } from './nostr/signer.js'
 import { DEMO_ACCOUNTS } from './demo-accounts.js'
 import { decode as nip19decode } from 'nostr-tools/nip19'
@@ -495,6 +496,181 @@ function checkInviteFragment(): void {
     document.dispatchEvent(
       new CustomEvent('canary:confirm-member', { detail: { token } }),
     )
+  } else if (hash.startsWith('#remote/')) {
+    let tokenPayload: string
+    try {
+      tokenPayload = decodeURIComponent(hash.slice(8))
+    } catch {
+      console.warn('[canary] Malformed remote invite fragment — ignoring.')
+      window.location.hash = ''
+      return
+    }
+    window.location.hash = ''
+    showRemoteJoinScreen(tokenPayload)
+  }
+}
+
+// ── Remote join screen (joiner side) ────────────────────────────
+
+function showRemoteJoinScreen(tokenPayload: string): void {
+  try {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(atob(tokenPayload))
+    } catch {
+      throw new Error('Invalid invite — could not decode token.')
+    }
+
+    assertRemoteInviteToken(parsed)
+
+    const token = parsed
+    const { identity } = getState()
+    if (!identity?.pubkey || !identity?.privkey) {
+      showToast('No local identity — create or import one first.', 'error')
+      return
+    }
+
+    const shortAdmin = `${token.adminPubkey.slice(0, 8)}\u2026${token.adminPubkey.slice(-4)}`
+
+    let dialog = document.getElementById('remote-join-modal') as HTMLDialogElement | null
+    if (!dialog) {
+      dialog = document.createElement('dialog')
+      dialog.id = 'remote-join-modal'
+      dialog.className = 'modal'
+      document.body.appendChild(dialog)
+      dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) dialog!.close()
+      })
+    }
+
+    const d = dialog
+
+    d.innerHTML = `
+      <div class="modal__form invite-share">
+        <h2 class="modal__title">Remote Invite</h2>
+        <p class="invite-hint">You've been invited to <strong>${escapeHtml(token.groupName)}</strong> by <code>${escapeHtml(shortAdmin)}</code></p>
+
+        <div style="margin: 1rem 0;">
+          <p class="invite-hint" style="font-weight: 500;">Send this join code back to the person who invited you:</p>
+          <div style="display: flex; align-items: center; gap: 0.5rem; justify-content: center; margin: 0.5rem 0;">
+            <code style="font-size: 0.75rem; word-break: break-all; max-width: 80%;">${escapeHtml(identity.pubkey)}</code>
+            <button class="btn btn--sm" id="remote-join-copy-pubkey" type="button">Copy</button>
+          </div>
+        </div>
+
+        <div style="margin: 1rem 0;">
+          <p class="invite-hint">Paste the welcome message they send you:</p>
+          <input class="input" id="remote-join-welcome-input" type="text" placeholder="Paste welcome message here..." autocomplete="off" style="font-family: monospace; font-size: 0.85rem;">
+          <p class="invite-hint" id="remote-join-error" style="color: var(--duress); display: none;"></p>
+        </div>
+
+        <div class="modal__actions" style="gap: 0.5rem;">
+          <button class="btn" id="remote-join-cancel" type="button">Cancel</button>
+          <button class="btn btn--primary" id="remote-join-accept" type="button">Join</button>
+        </div>
+      </div>
+    `
+
+    d.querySelector<HTMLButtonElement>('#remote-join-copy-pubkey')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget as HTMLButtonElement
+      try {
+        await navigator.clipboard.writeText(identity.pubkey)
+        btn.textContent = 'Copied!'
+        setTimeout(() => { btn.textContent = 'Copy' }, 1500)
+      } catch { /* clipboard may be blocked */ }
+    })
+
+    d.querySelector<HTMLButtonElement>('#remote-join-cancel')?.addEventListener('click', () => d.close())
+
+    d.querySelector<HTMLButtonElement>('#remote-join-accept')?.addEventListener('click', async () => {
+      const input = d.querySelector<HTMLInputElement>('#remote-join-welcome-input')
+      const errorEl = d.querySelector<HTMLElement>('#remote-join-error')
+      const envelope = input?.value.trim() ?? ''
+
+      if (!envelope) {
+        if (errorEl) { errorEl.textContent = 'Please paste the welcome message.'; errorEl.style.display = '' }
+        return
+      }
+
+      try {
+        const welcome = decryptWelcomeEnvelope({
+          envelope,
+          joinerPrivkey: identity.privkey!,
+          adminPubkey: token.adminPubkey,
+        })
+
+        // Build AppGroup from welcome payload
+        const id = welcome.groupId
+        const { groups: existingGroups } = getState()
+        const members = new Set<string>(welcome.members)
+        members.add(identity.pubkey)
+        const memberNames: Record<string, string> = { ...(welcome.memberNames ?? {}) }
+        if (identity.displayName && identity.displayName !== 'You') {
+          memberNames[identity.pubkey] = identity.displayName
+        }
+
+        const relays = [...(welcome.relays ?? [])]
+        const hasRelays = relays.length > 0
+
+        const appGroup = {
+          id,
+          name: welcome.groupName,
+          seed: welcome.seed,
+          members: Array.from(members),
+          memberNames,
+          nostrEnabled: hasRelays,
+          relays,
+          wordlist: welcome.wordlist,
+          wordCount: welcome.wordCount,
+          counter: welcome.counter,
+          usageOffset: welcome.usageOffset,
+          rotationInterval: welcome.rotationInterval,
+          encodingFormat: welcome.encodingFormat,
+          usedInvites: [] as string[],
+          latestInviteIssuedAt: 0,
+          beaconInterval: welcome.beaconInterval,
+          beaconPrecision: welcome.beaconPrecision,
+          duressMode: 'immediate' as const,
+          livenessInterval: welcome.rotationInterval,
+          livenessCheckins: {} as Record<string, number>,
+          tolerance: welcome.tolerance,
+          createdAt: Math.floor(Date.now() / 1000),
+          admins: [...welcome.admins],
+          epoch: welcome.epoch,
+          consumedOps: [] as string[],
+        }
+
+        const groups = { ...existingGroups, [id]: appGroup }
+        update({ groups, activeGroupId: id })
+        flushPersist()
+
+        // Boot relay sync and announce
+        if (hasRelays && identity) {
+          void ensureTransport(relays, id).then(() => {
+            broadcastAction(id, {
+              type: 'member-join',
+              pubkey: identity.pubkey,
+              displayName: identity.displayName && identity.displayName !== 'You' ? identity.displayName : undefined,
+              timestamp: Math.floor(Date.now() / 1000),
+              epoch: welcome.epoch,
+              opId: crypto.randomUUID(),
+            })
+          })
+        }
+
+        d.close()
+        showToast(`Joined ${welcome.groupName}`, 'success')
+      } catch (err) {
+        if (errorEl) {
+          errorEl.textContent = err instanceof Error ? err.message : 'Failed to decrypt welcome message.'
+          errorEl.style.display = ''
+        }
+      }
+    })
+
+    d.showModal()
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Invalid remote invite.', 'error')
   }
 }
 
