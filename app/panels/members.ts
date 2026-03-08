@@ -4,9 +4,12 @@ import { getState, updateGroup } from '../state.js'
 import { addGroupMember, removeGroupMember } from '../actions/groups.js'
 import {
   verifyJoinToken,
+  createInviteRaw,
   startRemoteInviteSession, createRemoteWelcomeEnvelope, endRemoteInviteSession,
   endInviteSession,
 } from '../invite.js'
+import { packInvite } from '../utils/binary-invite.js'
+import { bytesToBase64url } from '../utils/base64.js'
 import { groupMode } from '../types.js'
 import { generateQR } from '../components/qr.js'
 import { escapeHtml } from '../utils/escape.js'
@@ -238,13 +241,11 @@ export function showInviteModal(group: import('../types.js').AppGroup, options?:
   // ── QR path ──────────────────────────────────────────────────
 
   function renderQRPath(): void {
-    const qrSession = startRemoteInviteSession(group)
+    const { payload, confirmCode } = createInviteRaw(group)
+    const packed = packInvite(payload)
     const base = window.location.href.split('#')[0]
-    const qrUrl = `${base}#remote/${qrSession.tokenPayload}`
+    const qrUrl = `${base}#inv/${bytesToBase64url(packed)}`
     const svgMarkup = generateQR(qrUrl)
-    const readRelays = group.readRelays?.length ? group.readRelays : getState().settings.defaultReadRelays
-    const writeRelays = group.writeRelays?.length ? group.writeRelays : getState().settings.defaultWriteRelays
-    const relays = Array.from(new Set([...readRelays, ...writeRelays]))
 
     d.innerHTML = `
       <div class="modal__form invite-share">
@@ -252,63 +253,25 @@ export function showInviteModal(group: import('../types.js').AppGroup, options?:
 
         <div class="qr-container">${svgMarkup}</div>
         <p class="invite-hint">${escapeHtml(scanHint)}</p>
-        <p class="invite-hint" style="color: var(--duress); font-weight: 500;">Seedless — group secret is sent encrypted after scan.</p>
-        <p class="invite-hint" id="qr-relay-status" style="color: var(--text-muted);">${relays.length > 0 ? 'Waiting for them to scan...' : ''}</p>
+        <p class="invite-hint" style="color: var(--duress); font-weight: 500;">Contains the group key &mdash; only share in person.</p>
+
+        <div style="margin: 1rem 0; padding: 0.75rem; border-radius: 0.5rem; background: var(--surface-alt, rgba(255,255,255,0.05));">
+          <p class="invite-hint" style="font-weight: 600; margin-bottom: 0.25rem;">Read these words aloud:</p>
+          <p style="font-size: 1.25rem; font-weight: 700; letter-spacing: 0.05em; text-align: center;">${escapeHtml(confirmCode)}</p>
+        </div>
 
         <div class="modal__actions" style="gap: 0.5rem;">
           <button class="btn" id="invite-back-btn" type="button">Back</button>
-          <button class="btn btn--primary" id="invite-next-btn" type="button">Next (manual)</button>
+          <button class="btn" id="invite-done-btn" type="button">Done</button>
         </div>
       </div>
     `
 
-    // Auto-listen for join requests over the relay
-    let cleanupListener = () => {}
-    if (relays.length > 0) {
-      // Ensure pool is connected before subscribing — don't assume bootSync pool still exists
-      void ensureTransport(readRelays, writeRelays).then(() => {
-        cleanupListener = listenForJoinRequests({
-          inviteId: qrSession.inviteId,
-          readRelays,
-          writeRelays,
-          onJoinRequest(joinerPubkey) {
-            cleanupListener()
-            try {
-              const currentGroup = getState().groups[group.id]
-              if (!currentGroup) return
-              const envelope = createRemoteWelcomeEnvelope(currentGroup, joinerPubkey)
-
-              // Send welcome back over relay (write relays only)
-              sendWelcomeOverRelay({
-                inviteId: qrSession.inviteId,
-                joinerPubkey,
-                envelope,
-                writeRelays,
-              })
-
-              // Add member to group
-              if (!currentGroup.members.includes(joinerPubkey)) {
-                addGroupMember(group.id, joinerPubkey)
-              }
-
-              endRemoteInviteSession()
-              endInviteSession()
-              d.close()
-              showToast('Member joined via relay', 'success')
-            } catch (err) {
-              showToast(err instanceof Error ? err.message : 'Failed to send welcome', 'error')
-            }
-          },
-          onError(msg) {
-            const statusEl = d.querySelector('#qr-relay-status')
-            if (statusEl) statusEl.textContent = msg || 'No relay response — use manual flow below.'
-          },
-        })
-      })
-    }
-
-    d.querySelector<HTMLButtonElement>('#invite-back-btn')?.addEventListener('click', () => { cleanupListener(); endRemoteInviteSession(); renderChooser() })
-    d.querySelector<HTMLButtonElement>('#invite-next-btn')?.addEventListener('click', () => { cleanupListener(); renderStep2(renderQRPath) })
+    d.querySelector<HTMLButtonElement>('#invite-back-btn')?.addEventListener('click', () => { renderChooser() })
+    d.querySelector<HTMLButtonElement>('#invite-done-btn')?.addEventListener('click', () => {
+      endInviteSession()
+      d.close()
+    })
   }
 
   // ── Secure Channel path ──────────────────────────────────────

@@ -295,6 +295,54 @@ export function createInvite(group: AppGroup): { payload: string; confirmCode: s
 }
 
 /**
+ * Create an invite and return the raw payload + confirmation code.
+ * Used by the QR path which binary-packs the payload instead of JSON-encoding it.
+ */
+export function createInviteRaw(group: AppGroup): { payload: InvitePayload; confirmCode: string } {
+  const { identity } = getState()
+  if (!identity?.pubkey || !identity?.privkey) {
+    throw new Error('No local identity — cannot create invite.')
+  }
+  if (!group.admins.includes(identity.pubkey)) {
+    throw new Error(`Not authorised — you are not an admin of "${group.name}".`)
+  }
+
+  const nonce = randomNonce()
+  const issuedAt = Math.floor(Date.now() / 1000)
+
+  const invitePayload: InvitePayload = {
+    groupId: group.id,
+    seed: group.seed,
+    groupName: group.name,
+    rotationInterval: group.rotationInterval,
+    wordCount: group.wordCount,
+    wordlist: group.wordlist,
+    counter: group.counter,
+    usageOffset: group.usageOffset,
+    nonce,
+    beaconInterval: group.beaconInterval,
+    beaconPrecision: group.beaconPrecision,
+    members: [...group.members],
+    relays: [...(group.writeRelays ?? group.relays ?? [])],
+    encodingFormat: group.encodingFormat ?? 'words',
+    tolerance: group.tolerance ?? 1,
+    issuedAt,
+    expiresAt: issuedAt + INVITE_MAX_AGE_SEC,
+    epoch: group.epoch ?? 0,
+    admins: [...(group.admins ?? [])],
+    protocolVersion: PROTOCOL_VERSION,
+    inviterPubkey: identity.pubkey,
+    inviterSig: '',
+    memberNames: { ...group.memberNames },
+  }
+
+  invitePayload.inviterSig = signInvite(invitePayload, identity.privkey)
+  const confirmCode = confirmCodeFromPayload(invitePayload)
+
+  return { payload: invitePayload, confirmCode }
+}
+
+/**
  * Accept and decode an invite payload.
  *
  * @param payload     Base64-encoded JSON invite string.
