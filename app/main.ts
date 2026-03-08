@@ -1233,6 +1233,15 @@ function showLoginScreen(): void {
           </form>
         </div>
 
+        <div style="background: var(--bg-raised); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+          <p class="input-label__text" style="margin-bottom: 0.5rem;">Recover Account</p>
+          <p class="settings-hint" style="margin-bottom: 0.5rem;">Paste your 12-word recovery phrase to restore your account.</p>
+          <form id="mnemonic-login-form" autocomplete="off" style="display: flex; flex-direction: column; gap: 0.375rem;">
+            <textarea class="input" id="login-mnemonic" placeholder="Enter your 12 recovery words..." rows="3" style="width: 100%; font-size: 0.8rem; resize: none; padding: 0.5rem; font-family: var(--font-mono, monospace);"></textarea>
+            <button class="btn btn--primary" type="submit">Recover account</button>
+          </form>
+        </div>
+
         <div style="background: var(--bg-raised); border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
           <p class="input-label__text" style="margin-bottom: 0.5rem;">Connect with Nostr</p>
           <p class="settings-hint" style="margin-bottom: 0.5rem;">Sync groups across devices via relays.</p>
@@ -1305,6 +1314,40 @@ function showLoginScreen(): void {
 
     // Show recovery phrase backup modal
     showRecoveryPhraseModal(mnemonic)
+  })
+
+  // Recovery phrase form submit
+  app.querySelector<HTMLFormElement>('#mnemonic-login-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const textarea = app.querySelector<HTMLTextAreaElement>('#login-mnemonic')
+    const phrase = textarea?.value.trim()
+    if (!phrase) return
+
+    const words = phrase.split(/\s+/)
+    if (words.length !== 12) {
+      alert('Recovery phrase must be exactly 12 words.')
+      return
+    }
+
+    try {
+      const { validateMnemonic, mnemonicToKeypair } = await import('./mnemonic.js')
+      if (!validateMnemonic(phrase)) {
+        alert('Invalid recovery phrase. Please check your words and try again.')
+        return
+      }
+
+      const { pubkey, privkey } = mnemonicToKeypair(phrase)
+      update({
+        identity: { pubkey, privkey, signerType: 'local', displayName: 'You' },
+      })
+
+      // Store mnemonic for later retrieval
+      localStorage.setItem('canary:mnemonic', phrase)
+
+      await bootApp()
+    } catch {
+      alert('Invalid recovery phrase.')
+    }
   })
 
   // nsec form submit
