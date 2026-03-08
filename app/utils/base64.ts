@@ -42,3 +42,22 @@ export function base64urlToJson(b64url: string): unknown {
   else if (pad === 3) b64 += '='
   return base64ToJson(b64)
 }
+
+/** Encode a Uint8Array to a base64url string (no padding). */
+export function bytesToBase64url(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/** Decode a base64url string to a Uint8Array. */
+export function base64urlToBytes(b64url: string): Uint8Array {
+  let b64 = b64url.replace(/-/g, '+').replace(/_/g, '/')
+  const pad = b64.length % 4
+  if (pad === 2) b64 += '=='
+  else if (pad === 3) b64 += '='
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}

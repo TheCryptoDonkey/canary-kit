@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { packInvite, unpackInvite } from './binary-invite.js'
+import { bytesToBase64url, base64urlToBytes } from './base64.js'
 import type { InvitePayload } from '../invite.js'
 
 const ADMIN_PUBKEY = '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
@@ -90,5 +91,25 @@ describe('packInvite / unpackInvite', () => {
   it('sets relays to empty array', () => {
     const unpacked = unpackInvite(packInvite(makePayload()))
     expect(unpacked.relays).toEqual([])
+  })
+})
+
+describe('bytesToBase64url / base64urlToBytes', () => {
+  it('round-trips binary data', () => {
+    const original = new Uint8Array([0, 1, 255, 128, 63, 62])
+    const encoded = bytesToBase64url(original)
+    expect(encoded).not.toMatch(/[+/=]/)
+    const decoded = base64urlToBytes(encoded)
+    expect(decoded).toEqual(original)
+  })
+
+  it('round-trips packed invite through base64url', () => {
+    const payload = makePayload()
+    const packed = packInvite(payload)
+    const encoded = bytesToBase64url(packed)
+    const decoded = base64urlToBytes(encoded)
+    const unpacked = unpackInvite(decoded)
+    expect(unpacked.seed).toBe(payload.seed)
+    expect(unpacked.groupName).toBe(payload.groupName)
   })
 })

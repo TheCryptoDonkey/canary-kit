@@ -10,7 +10,7 @@ import qrcode from 'qrcode-generator'
  * @returns     SVG markup string (scalable, no external dependencies).
  */
 export function generateQR(data: string, size = 4): string {
-  const qr = qrcode(0, 'M')
+  const qr = qrcode(0, 'L')
   qr.addData(data)
   qr.make()
   // createSvgTag with scalable:true lets CSS control the final size.
