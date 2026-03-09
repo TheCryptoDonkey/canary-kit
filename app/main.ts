@@ -1098,16 +1098,25 @@ async function bootSync(): Promise<void> {
     return
   }
 
-  if (!hasPrivkey) {
-    console.warn('[canary:boot] No privkey — sync disabled')
+  if (!hasPrivkey && identity?.signerType !== 'nip07') {
+    console.warn('[canary:boot] No privkey and no NIP-07 — sync disabled')
     showToast('Sync disabled — no private key', 'warning', 5000)
     return
   }
 
   console.warn('[canary:boot] Read relays:', Array.from(allReadRelays), 'Write relays:', Array.from(allWriteRelays))
-  await ensureTransport(Array.from(allReadRelays), Array.from(allWriteRelays))
-  subscribeToAllGroups()
-  showToast(`Syncing via ${totalRelays} relay(s)`, 'success', 2000)
+
+  if (hasPrivkey) {
+    // Full sync: transport + subscriptions + liveness heartbeat
+    await ensureTransport(Array.from(allReadRelays), Array.from(allWriteRelays))
+    subscribeToAllGroups()
+    showToast(`Syncing via ${totalRelays} relay(s)`, 'success', 2000)
+  } else {
+    // NIP-07: read-only relay connection for profile fetch (no sync transport)
+    const { connectRelays } = await import('./nostr/connect.js')
+    connectRelays(Array.from(allReadRelays), Array.from(allWriteRelays))
+    showToast(`Connected to ${totalRelays} relay(s)`, 'success', 2000)
+  }
 
   // Fetch the user's own kind 0 profile (name + avatar)
   const { fetchOwnProfile } = await import('./nostr/profiles.js')
@@ -1116,9 +1125,11 @@ async function bootSync(): Promise<void> {
   // Re-render now that pool is connected — fetchProfiles needs a live pool
   scheduleRender()
 
-  // Start heartbeat AFTER groups are registered (not inside ensureTransport)
-  const { startLivenessHeartbeat } = await import('./components/liveness.js')
-  startLivenessHeartbeat()
+  if (hasPrivkey) {
+    // Start heartbeat AFTER groups are registered (not inside ensureTransport)
+    const { startLivenessHeartbeat } = await import('./components/liveness.js')
+    startLivenessHeartbeat()
+  }
 }
 
 // ── Login screen ──────────────────────────────────────────────
