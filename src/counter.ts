@@ -2,6 +2,13 @@
 export const DEFAULT_ROTATION_INTERVAL = 604_800
 
 /**
+ * Maximum allowed usage offset above the current time-based counter.
+ * Implementations MUST reject counter updates where effective counter > time-based counter + MAX_COUNTER_OFFSET.
+ * See CANARY spec §Counter Acceptance.
+ */
+export const MAX_COUNTER_OFFSET = 100
+
+/**
  * Derive the current counter from a unix timestamp and rotation interval.
  * Counter = floor(timestamp / interval).
  */

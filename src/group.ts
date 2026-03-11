@@ -1,5 +1,5 @@
 import { randomSeed, hmacSha256, hexToBytes, bytesToHex } from './crypto.js'
-import { getCounter, DEFAULT_ROTATION_INTERVAL } from './counter.js'
+import { getCounter, DEFAULT_ROTATION_INTERVAL, MAX_COUNTER_OFFSET } from './counter.js'
 import { deriveToken, deriveDuressToken, MAX_TOLERANCE } from './token.js'
 import { GROUP_CONTEXT } from './derive.js'
 import { PRESETS, type PresetName } from './presets.js'
@@ -159,9 +159,19 @@ export function getCurrentDuressWord(state: GroupState, memberPubkey: string): s
 
 /**
  * Advance the usage offset by one, rotating the current word (burn-after-use).
+ * Throws a RangeError if the effective counter would exceed the current
+ * time-based counter plus MAX_COUNTER_OFFSET, per CANARY spec §Counter Acceptance.
  * Returns new state — does not mutate the input.
  */
 export function advanceCounter(state: GroupState): GroupState {
+  const timeBased = getCounter(Math.floor(Date.now() / 1000), state.rotationInterval)
+  const newEffective = state.counter + state.usageOffset + 1
+  if (newEffective > timeBased + MAX_COUNTER_OFFSET) {
+    throw new RangeError(
+      `Cannot advance counter: effective counter ${newEffective} would exceed ` +
+      `time-based counter ${timeBased} + MAX_COUNTER_OFFSET (${MAX_COUNTER_OFFSET})`,
+    )
+  }
   return { ...state, usageOffset: state.usageOffset + 1 }
 }
 

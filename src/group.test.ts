@@ -194,6 +194,19 @@ describe('advanceCounter', () => {
     const after = getCurrentWord(advanced)
     expect(after).not.toBe(before)
   })
+
+  it('throws when effective counter would exceed time-based counter plus MAX_COUNTER_OFFSET', () => {
+    const state = createGroup({ name: 'bound-test', members: [ALICE] })
+    const s = { ...state, usageOffset: 100 }
+    expect(() => advanceCounter(s)).toThrow(RangeError)
+  })
+
+  it('allows advancing up to MAX_COUNTER_OFFSET', () => {
+    const state = createGroup({ name: 'bound-test', members: [ALICE] })
+    const s = { ...state, usageOffset: 99 }
+    const result = advanceCounter(s)
+    expect(result.usageOffset).toBe(100)
+  })
 })
 
 describe('reseed', () => {

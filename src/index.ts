@@ -10,6 +10,7 @@ export {
   getCounter,
   counterToBytes,
   DEFAULT_ROTATION_INTERVAL,
+  MAX_COUNTER_OFFSET,
 } from './counter.js'
 
 export {
