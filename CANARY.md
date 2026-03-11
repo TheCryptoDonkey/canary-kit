@@ -717,6 +717,36 @@ the shared secret:
 - If the attacker demands the "real" token, the member can assert that the duress token
   is the real token. The attacker cannot refute this.
 
+### Threat-Profile Presets
+
+Implementations MAY provide named threat-profile presets that select a word count and
+rotation interval appropriate for a given risk level and operational context. These are
+recommendations, not requirements — implementations MAY define additional presets or
+allow operators to configure custom profiles.
+
+| Preset | Words | Rotation | Tolerance | Use case |
+|--------|-------|----------|-----------|----------|
+| `family` | 1 | 7 days | 1 | Casual family and friend groups |
+| `field-ops` | 2 | 24 hours | 1 | High-security field operations |
+| `enterprise` | 2 | 48 hours | 1 | Corporate and institutional use |
+| `event` | 1 | 4 hours | 1 | Temporary event-based groups |
+
+The `family` preset prioritises usability: a single word with a weekly rotation is easy
+to remember and sufficient for live voice calls where the attacker has at most one
+attempt. It is NOT suitable for text-based or asynchronous verification where an
+attacker can brute-force all 2,048 words offline.
+
+The `field-ops` preset prioritises security: two-word phrases (~22 bits of entropy)
+with daily rotation are recommended for journalism, activism, and operational contexts
+where the threat model includes motivated, resourced adversaries.
+
+The `enterprise` preset extends the rotation window to 48 hours, balancing security
+with operational convenience for larger teams where frequent re-verification is
+impractical.
+
+The `event` preset uses a 4-hour rotation aligned with typical conference or festival
+session schedules. It is intended for ephemeral groups formed at a specific event.
+
 ### Limitations
 
 - If the attacker has compromised the member's device AND obtained the shared secret, they
