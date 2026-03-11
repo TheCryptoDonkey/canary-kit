@@ -11,11 +11,41 @@ test.describe('Tolerance window', () => {
     expect(result).toBe('valid')
   })
 
-  test.fixme('±1 counter word is valid with tolerance=1', async () => {
-    // Need to derive the previous counter's word via SDK and verify it
+  test('±1 counter word is valid with tolerance=1', async ({ cleanPage: page }) => {
+    await loginOffline(page, 'Tester')
+    await createGroup(page, 'Tolerance')
+
+    // Capture the current word before advancing the counter
+    const word = await getDisplayedWord(page)
+
+    // Burn once to advance usageOffset by 1
+    await page.click('#burn-btn')
+    await page.waitForTimeout(300)
+
+    // Confirm the displayed word has changed
+    const newWord = await getDisplayedWord(page)
+    expect(newWord).not.toBe(word)
+
+    // The original word is now 1 counter behind — within ±1 tolerance, so still valid
+    const result = await verifyWord(page, word)
+    expect(result).toBe('valid')
   })
 
-  test.fixme('±2 counter word is invalid with tolerance=1', async () => {
-    // Need to derive counter-2 word and verify it fails
+  test('±2 counter word is invalid with tolerance=1', async ({ cleanPage: page }) => {
+    await loginOffline(page, 'Tester')
+    await createGroup(page, 'Tolerance')
+
+    // Capture the current word before advancing the counter
+    const word = await getDisplayedWord(page)
+
+    // Burn twice to advance usageOffset by 2
+    await page.click('#burn-btn')
+    await page.waitForTimeout(300)
+    await page.click('#burn-btn')
+    await page.waitForTimeout(300)
+
+    // The original word is now 2 counters behind — outside ±1 tolerance, so invalid
+    const result = await verifyWord(page, word)
+    expect(result).toBe('invalid')
   })
 })

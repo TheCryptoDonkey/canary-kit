@@ -35,6 +35,7 @@ export default defineConfig({
 
   use: {
     baseURL: 'http://localhost:5173',
+    bypassCSP: true,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },

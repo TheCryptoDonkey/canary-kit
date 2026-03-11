@@ -33,9 +33,14 @@ export class MockRelay {
     return `ws://localhost:${this.port}`
   }
 
+  /** Read-only access to stored events (for test assertions). */
+  get storedEvents(): readonly StoredEvent[] {
+    return this.events
+  }
+
   async start(): Promise<void> {
     return new Promise((resolve) => {
-      this.wss = new WebSocketServer({ port: 0 }, () => resolve())
+      this.wss = new WebSocketServer({ port: 0, host: '127.0.0.1' }, () => resolve())
       this.wss.on('connection', (ws) => this.handleConnection(ws))
     })
   }

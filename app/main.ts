@@ -595,8 +595,14 @@ function showBinaryJoinScreen(b64url: string): void {
         const members = new Set(validated.members)
         members.add(identity!.pubkey)
 
-        const writeRelays = validated.relays.length > 0 ? validated.relays : [DEFAULT_WRITE_RELAY]
-        const readRelays = Array.from(new Set([...WELL_KNOWN_READ_RELAYS, ...writeRelays]))
+        const settings = getState().settings
+        const writeRelays = validated.relays.length > 0
+          ? validated.relays
+          : (settings.defaultWriteRelays?.length ? [...settings.defaultWriteRelays] : [DEFAULT_WRITE_RELAY])
+        const readRelays = Array.from(new Set([
+          ...(settings.defaultReadRelays?.length ? settings.defaultReadRelays : WELL_KNOWN_READ_RELAYS),
+          ...writeRelays,
+        ]))
         const hasRelays = writeRelays.length > 0
 
         const appGroup = {

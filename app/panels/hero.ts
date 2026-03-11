@@ -1,8 +1,9 @@
 // app/panels/hero.ts — Hero panel: verification word display with press-and-hold reveal
 
-import { advanceCounter, syncCounter, getCounter } from 'canary-kit'
+import { syncCounter, getCounter } from 'canary-kit'
 import { deriveToken, deriveDuressToken } from 'canary-kit/token'
 import { getState, updateGroup } from '../state.js'
+import { burnWord } from '../actions/groups.js'
 import type { AppGroup } from '../types.js'
 import { toTokenEncoding, GROUP_CONTEXT, formatForDisplay } from '../utils/encoding.js'
 import { escapeHtml } from '../utils/escape.js'
@@ -239,11 +240,7 @@ export function renderHero(container: HTMLElement): void {
 
   const burnBtn = container.querySelector<HTMLButtonElement>('#burn-btn')
   burnBtn?.addEventListener('click', () => {
-    const { groups: currentGroups } = getState()
-    const currentGroup = currentGroups[activeGroupId]
-    if (!currentGroup) return
-    const advanced = advanceCounter(currentGroup)
-    updateGroup(activeGroupId, advanced)
+    burnWord(activeGroupId)
   })
 
   const inviteBtn = container.querySelector<HTMLButtonElement>('#hero-invite-btn')

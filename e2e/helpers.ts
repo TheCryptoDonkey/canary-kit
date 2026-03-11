@@ -386,6 +386,38 @@ export async function addSimulatedMember(page: Page): Promise<void> {
   }
 }
 
+/**
+ * Add N simulated members directly via localStorage, then reload once.
+ * More efficient than calling addSimulatedMember() multiple times.
+ */
+export async function addSimulatedMembers(page: Page, count: number): Promise<void> {
+  await waitForPersist(page)
+
+  const activeGroupName = await page.locator('.group-list__item--active .group-list__name').textContent()
+
+  const fakePubkeys = Array.from({ length: count }, () =>
+    Array.from({ length: 32 }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join(''),
+  )
+
+  await page.addInitScript((pubkeys: string[]) => {
+    const raw = localStorage.getItem('canary:groups')
+    if (!raw) return
+    const groups = JSON.parse(raw)
+    const groupId = Object.keys(groups)[0]
+    if (!groupId) return
+    const group = groups[groupId]
+    group.members = [...group.members, ...pubkeys]
+    localStorage.setItem('canary:groups', JSON.stringify(groups))
+  }, fakePubkeys)
+
+  await page.reload()
+  await page.waitForSelector('#sidebar', { timeout: 5000 })
+  if (activeGroupName) {
+    await page.click(`.group-list__item:has-text("${activeGroupName.trim()}")`)
+    await page.waitForSelector(`.group-list__item--active:has-text("${activeGroupName.trim()}")`)
+  }
+}
+
 // ── Settings ─────────────────────────────────────────────────
 
 /** Open the settings drawer if it's closed. */
@@ -416,6 +448,8 @@ export async function seedRelayUrl(page: Page, relayUrl: string): Promise<void> 
     const raw = localStorage.getItem('canary:settings')
     const settings = raw ? JSON.parse(raw) : {}
     settings.defaultRelays = [url]
+    settings.defaultReadRelays = [url]
+    settings.defaultWriteRelays = [url]
     localStorage.setItem('canary:settings', JSON.stringify(settings))
   }, relayUrl)
 }
@@ -431,14 +465,15 @@ export async function getGroupState(page: Page): Promise<Record<string, unknown>
     const raw = localStorage.getItem('canary:groups')
     if (!raw) return {}
     const groups = JSON.parse(raw)
-    const stateRaw = localStorage.getItem('canary:state')
-    const activeId = stateRaw ? JSON.parse(stateRaw).activeGroupId : null
-    if (!activeId) {
+    // Active group ID is stored in canary:active-group (JSON-stringified string)
+    const activeRaw = localStorage.getItem('canary:active-group')
+    const activeId = activeRaw ? JSON.parse(activeRaw) : null
+    if (!activeId || !groups[activeId]) {
       // fallback: use first group
       const keys = Object.keys(groups)
       return keys.length > 0 ? groups[keys[0]] : {}
     }
-    return groups[activeId] ?? {}
+    return groups[activeId]
   })
 }
 

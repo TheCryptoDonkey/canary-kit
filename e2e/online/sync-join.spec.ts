@@ -15,7 +15,7 @@ test.describe('Online sync: join', () => {
     const baseURL = 'http://localhost:5173'
 
     // User A: create context, seed relay, login, create online group
-    const ctxA = await browser.newContext({ baseURL })
+    const ctxA = await browser.newContext({ baseURL, bypassCSP: true })
     const pageA = await ctxA.newPage()
     await seedRelayUrl(pageA, relayUrl)
     await pageA.goto('/')
@@ -29,7 +29,7 @@ test.describe('Online sync: join', () => {
     const { inviteUrl, confirmCode } = await createInvite(pageA)
 
     // User B: create context, seed relay, login, accept invite
-    const ctxB = await browser.newContext({ baseURL })
+    const ctxB = await browser.newContext({ baseURL, bypassCSP: true })
     const pageB = await ctxB.newPage()
     await seedRelayUrl(pageB, relayUrl)
     await pageB.goto('/')
