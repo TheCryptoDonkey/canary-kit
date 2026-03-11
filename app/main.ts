@@ -23,7 +23,7 @@ import { renderHeader } from './components/header.js'
 import { renderSidebar } from './components/sidebar.js'
 import { showModal } from './components/modal.js'
 import { createNewGroup } from './actions/groups.js'
-import { groupMode, allRelaysForGroup, WELL_KNOWN_READ_RELAYS, DEFAULT_WRITE_RELAY } from './types.js'
+import { groupMode, allRelaysForGroup, dedupeRelays, WELL_KNOWN_READ_RELAYS, DEFAULT_WRITE_RELAY } from './types.js'
 import { renderWelcome } from './panels/welcome.js'
 import { renderHero } from './panels/hero.js'
 import { renderVerify } from './panels/verify.js'
@@ -1121,26 +1121,22 @@ async function bootSync(): Promise<void> {
   if (import.meta.env.DEV) console.warn('[canary:boot] bootSync — groups:', groupCount, 'identity:', identity?.pubkey?.slice(0, 8) ?? 'none', 'privkey:', hasPrivkey ? 'yes' : 'NO')
 
   // Collect unique read and write relays from all groups + defaults
-  const allReadRelays = new Set<string>()
-  const allWriteRelays = new Set<string>()
+  const rawRead: string[] = []
+  const rawWrite: string[] = []
   for (const group of Object.values(groups)) {
     if (import.meta.env.DEV) console.warn('[canary:boot]   group', group.id.slice(0, 8), 'mode:', groupMode(group), 'read:', JSON.stringify(group.readRelays), 'write:', JSON.stringify(group.writeRelays), 'members:', group.members.length)
-    for (const relay of group.readRelays ?? []) allReadRelays.add(relay)
-    for (const relay of group.writeRelays ?? []) allWriteRelays.add(relay)
+    rawRead.push(...(group.readRelays ?? []))
+    rawWrite.push(...(group.writeRelays ?? []))
     // Migration fallback: include legacy relays
-    for (const relay of group.relays ?? []) {
-      allReadRelays.add(relay)
-      allWriteRelays.add(relay)
-    }
+    rawRead.push(...(group.relays ?? []))
+    rawWrite.push(...(group.relays ?? []))
   }
   // Include default relays so profile fetch works even with no groups
-  for (const relay of settings.defaultReadRelays ?? settings.defaultRelays) {
-    allReadRelays.add(relay)
-  }
-  for (const relay of settings.defaultWriteRelays ?? settings.defaultRelays) {
-    allWriteRelays.add(relay)
-  }
-  const totalRelays = new Set([...allReadRelays, ...allWriteRelays]).size
+  rawRead.push(...(settings.defaultReadRelays ?? settings.defaultRelays))
+  rawWrite.push(...(settings.defaultWriteRelays ?? settings.defaultRelays))
+  const allReadRelays = dedupeRelays(rawRead)
+  const allWriteRelays = dedupeRelays(rawWrite)
+  const totalRelays = dedupeRelays([...allReadRelays, ...allWriteRelays]).length
   if (totalRelays === 0) {
     console.warn('[canary:boot] No relays found — sync disabled')
     if (groupCount > 0) {
@@ -1155,17 +1151,17 @@ async function bootSync(): Promise<void> {
     return
   }
 
-  console.warn('[canary:boot] Read relays:', Array.from(allReadRelays), 'Write relays:', Array.from(allWriteRelays))
+  console.warn('[canary:boot] Read relays:', allReadRelays, 'Write relays:', allWriteRelays)
 
   if (hasPrivkey) {
     // Full sync: transport + subscriptions + liveness heartbeat
-    await ensureTransport(Array.from(allReadRelays), Array.from(allWriteRelays))
+    await ensureTransport(allReadRelays, allWriteRelays)
     subscribeToAllGroups()
     showToast(`Syncing via ${totalRelays} relay(s)`, 'success', 2000)
   } else {
     // NIP-07: read-only relay connection for profile fetch (no sync transport)
     const { connectRelays } = await import('./nostr/connect.js')
-    connectRelays(Array.from(allReadRelays), Array.from(allWriteRelays))
+    connectRelays(allReadRelays, allWriteRelays)
     showToast(`Connected to ${totalRelays} relay(s)`, 'success', 2000)
   }
 

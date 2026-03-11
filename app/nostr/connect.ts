@@ -3,6 +3,7 @@
 // write relays for publishing. All relays share a single SimplePool.
 
 import { SimplePool } from 'nostr-tools/pool'
+import { dedupeRelays } from '../types.js'
 
 let _pool: SimplePool | null = null
 let _connected = false
@@ -29,8 +30,8 @@ let _connectPromise: Promise<void> = Promise.resolve()
  * Closes the old pool when relay URLs change.
  */
 export function connectRelays(readRelays: string[], writeRelays?: string[]): void {
-  const newRead = [...readRelays]
-  const newWrite = writeRelays ? [...writeRelays] : [...readRelays]
+  const newRead = dedupeRelays(readRelays)
+  const newWrite = writeRelays ? dedupeRelays(writeRelays) : [...newRead]
 
   // Skip if already connected to the exact same relay sets
   if (

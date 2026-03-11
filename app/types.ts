@@ -55,14 +55,38 @@ export function groupMode(group: Pick<AppGroup, 'relays' | 'readRelays' | 'write
   return hasRelays ? 'online' : 'offline'
 }
 
+/** Normalise a relay URL: lowercase, strip trailing slashes. */
+export function normaliseRelayUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    u.pathname = u.pathname.replace(/\/+$/, '')
+    return u.toString()
+  } catch {
+    return url.replace(/\/+$/, '')
+  }
+}
+
+/** Deduplicate relay URLs after normalisation. */
+export function dedupeRelays(urls: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of urls) {
+    const n = normaliseRelayUrl(raw)
+    if (!seen.has(n)) {
+      seen.add(n)
+      out.push(n)
+    }
+  }
+  return out
+}
+
 /** Get all unique relay URLs for a group (read + write combined). */
 export function allRelaysForGroup(group: Pick<AppGroup, 'relays' | 'readRelays' | 'writeRelays'>): string[] {
-  const set = new Set<string>()
-  for (const url of group.readRelays ?? []) set.add(url)
-  for (const url of group.writeRelays ?? []) set.add(url)
-  // Migration fallback: include legacy `relays` field
-  for (const url of group.relays ?? []) set.add(url)
-  return Array.from(set)
+  return dedupeRelays([
+    ...(group.readRelays ?? []),
+    ...(group.writeRelays ?? []),
+    ...(group.relays ?? []),
+  ])
 }
 
 /** The local identity (Nostr keypair) for this device. */

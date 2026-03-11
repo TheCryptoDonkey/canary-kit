@@ -5,6 +5,7 @@ import { encodeSyncMessage, decodeSyncMessage, hashGroupTag, encryptEnvelope, de
 import { bytesToHex, hexToBytes, sha256 } from 'canary-kit/crypto'
 import { schnorr } from '@noble/curves/secp256k1.js'
 import { getPool, isConnected, connectRelays, getReadRelayUrls, getWriteRelayUrls } from './connect.js'
+import { dedupeRelays } from '../types.js'
 import { verifyEvent, finalizeEvent } from 'nostr-tools/pure'
 import { encrypt as nip44Encrypt, decrypt as nip44Decrypt, getConversationKey } from 'nostr-tools/nip44'
 
@@ -82,20 +83,19 @@ export class NostrSyncTransport implements SyncTransport {
     private personalPubkey: string,
     private personalPrivkey: string,
   ) {
-    this.readRelays = [...readRelays]
-    this.writeRelays = [...writeRelays]
+    this.readRelays = dedupeRelays(readRelays)
+    this.writeRelays = dedupeRelays(writeRelays)
   }
 
   /** Update the relay URLs used for publishing and subscribing. */
   updateRelays(readRelays: string[], writeRelays?: string[]): void {
-    this.readRelays = [...readRelays]
-    this.writeRelays = writeRelays ? [...writeRelays] : [...readRelays]
+    this.readRelays = dedupeRelays(readRelays)
+    this.writeRelays = writeRelays ? dedupeRelays(writeRelays) : [...this.readRelays]
   }
 
   /** All unique relay URLs (read + write) for subscriptions that need full coverage. */
   private get allRelays(): string[] {
-    const set = new Set<string>([...this.readRelays, ...this.writeRelays])
-    return Array.from(set)
+    return dedupeRelays([...this.readRelays, ...this.writeRelays])
   }
 
   /** Register a group's seed so we can encrypt/decrypt and sign for it. */

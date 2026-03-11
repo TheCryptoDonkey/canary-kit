@@ -268,22 +268,6 @@ function showIdentityPopover(anchor: HTMLElement): void {
       <span class="identity-popover__value">${signerLabel}</span>
     </div>
 
-    <div class="identity-popover__divider"></div>
-
-    <div class="identity-popover__section">
-      <span class="identity-popover__label">Login with nsec</span>
-      <form id="nsec-login-form" autocomplete="off" style="display: flex; flex-direction: column; gap: 0.375rem; margin-top: 0.375rem;">
-        <input class="input" type="password" id="nsec-input" placeholder="nsec1..." autocomplete="off" style="width: 100%; font-size: 0.8125rem; padding: 0.5rem;" />
-        <button class="btn btn--sm btn--primary" type="submit" style="width: 100%;">Login</button>
-      </form>
-    </div>
-
-    <button class="btn btn--sm" id="nip07-connect-btn" type="button" style="width: 100%;">Use Browser Extension (NIP-07)</button>
-
-    ${identity?.signerType === 'nip07' ? `
-      <button class="btn btn--sm" id="nip07-disconnect-btn" type="button" style="width: 100%;">Use Local Key</button>
-    ` : ''}
-
     ${(identity?.mnemonic || identity?.privkey) ? `
       <div class="identity-popover__divider"></div>
       <div class="identity-popover__section">
@@ -306,16 +290,36 @@ function showIdentityPopover(anchor: HTMLElement): void {
     ` : ''}
 
     <div class="identity-popover__divider"></div>
-
-    <div class="identity-popover__section">
-      <span class="identity-popover__label">Demo accounts</span>
-      <div class="identity-popover__demos">
-        ${demoAccountsHtml}
-      </div>
-    </div>
-
-    <div class="identity-popover__divider"></div>
     <button class="btn btn--sm" id="identity-logout-btn" type="button" style="width: 100%; color: var(--failed);">Logout</button>
+
+    <details style="margin-top: 0.25rem;">
+      <summary class="btn btn--sm" style="width: 100%; text-align: center; cursor: pointer; list-style: none;">Switch account</summary>
+
+      <div style="margin-top: 0.5rem;">
+        <div class="identity-popover__section">
+          <span class="identity-popover__label">Login with nsec</span>
+          <form id="nsec-login-form" autocomplete="off" style="display: flex; flex-direction: column; gap: 0.375rem; margin-top: 0.375rem;">
+            <input class="input" type="password" id="nsec-input" placeholder="nsec1..." autocomplete="off" style="width: 100%; font-size: 0.8125rem; padding: 0.5rem;" />
+            <button class="btn btn--sm btn--primary" type="submit" style="width: 100%;">Login</button>
+          </form>
+        </div>
+
+        <button class="btn btn--sm" id="nip07-connect-btn" type="button" style="width: 100%;">Use Browser Extension (NIP-07)</button>
+
+        ${identity?.signerType === 'nip07' ? `
+          <button class="btn btn--sm" id="nip07-disconnect-btn" type="button" style="width: 100%;">Use Local Key</button>
+        ` : ''}
+
+        <div class="identity-popover__divider"></div>
+
+        <div class="identity-popover__section">
+          <span class="identity-popover__label">Demo accounts</span>
+          <div class="identity-popover__demos">
+            ${demoAccountsHtml}
+          </div>
+        </div>
+      </div>
+    </details>
   `
 
   anchor.parentElement?.appendChild(popover)
