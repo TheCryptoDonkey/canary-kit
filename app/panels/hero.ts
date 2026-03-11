@@ -187,7 +187,7 @@ export function renderHero(container: HTMLElement): void {
         <span class="hero__countdown-label" id="hero-countdown-label">${formatRotationLabel(secsLeft, group.rotationInterval)}</span>
       </div>
 
-      <p class="hero__hint">In this demo, press the right side of the reveal button to see your duress word.</p>
+      <p class="hero__hint">Press and hold to reveal. Tap the right side for your alternate word.</p>
 
       <button class="btn btn--ghost" id="burn-btn" type="button">I used this word</button>
       <button class="btn btn--outline" id="hero-invite-btn" type="button">Invite Someone</button>
