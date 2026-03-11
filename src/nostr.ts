@@ -148,7 +148,10 @@ export interface BeaconEventParams {
 /** Plaintext payload for kind 28800 (seed distribution). */
 export interface SeedDistributionPayload {
   seed: string
-  groupId: string
+  /** Allows re-seeding mid-window without waiting for the next natural time rotation. */
+  counter_offset: number
+  /** The group's d-tag value (group identifier). */
+  group_d: string
 }
 
 /** Plaintext payload for kind 28801 (reseed notification). */
