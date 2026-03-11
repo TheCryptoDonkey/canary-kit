@@ -2,6 +2,8 @@
 
 import { getPool, waitForConnection } from './connect.js'
 import { getState, update, updateGroup } from '../state.js'
+import { finalizeEvent } from 'nostr-tools/pure'
+import { dedupeRelays } from '../types.js'
 
 export interface NostrProfile {
   name?: string
@@ -109,12 +111,15 @@ export function fetchProfiles(pubkeys: string[], groupId?: string): void {
   )
 }
 
-/** Well-known public relays to query for kind 0 profiles as fallback. */
-const PROFILE_FALLBACK_RELAYS = [
+/** Well-known public relays used for kind 0 profile fetch and publish. */
+export const PROFILE_RELAYS = [
   'wss://purplepag.es',
   'wss://relay.damus.io',
   'wss://nos.lol',
 ]
+
+/** @deprecated Use PROFILE_RELAYS. */
+const PROFILE_FALLBACK_RELAYS = PROFILE_RELAYS
 
 /**
  * Fetch the local user's own kind 0 profile and update identity state.
@@ -191,4 +196,63 @@ function getGroupRelays(groupId?: string): string[] {
   // Fallback to default relay
   const settings = getState().settings
   return settings?.defaultRelays?.length ? settings.defaultRelays : []
+}
+
+// ── Kind 0 publishing ─────────────────────────────────────────
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16)
+  }
+  return bytes
+}
+
+/**
+ * Publish a minimal kind 0 profile event to well-known relays.
+ * Fire-and-forget — does not block the UI or throw on failure.
+ * Publishes to PROFILE_RELAYS + the configured write relay so other
+ * members can discover the user's display name.
+ *
+ * Skipped for NIP-07 users (their extension manages kind 0).
+ */
+export function publishKind0(name: string, privkeyHex: string): void {
+  // Delay slightly so relay connections can establish after bootApp()
+  setTimeout(async () => {
+    try {
+      const pool = getPool()
+      if (!pool) {
+        console.warn('[profiles] no pool — skipping kind 0 publish')
+        return
+      }
+
+      await waitForConnection()
+
+      const content = JSON.stringify({ name })
+      const unsigned = {
+        kind: 0,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [],
+        content,
+      }
+
+      const sk = hexToBytes(privkeyHex)
+      const signed = finalizeEvent(unsigned, sk)
+
+      // Publish to profile relays + configured write relays
+      const { settings } = getState()
+      const writeRelays = settings?.defaultWriteRelays?.length
+        ? settings.defaultWriteRelays
+        : (settings?.defaultRelays?.length ? settings.defaultRelays : [])
+      const relays = dedupeRelays([...PROFILE_RELAYS, ...writeRelays])
+
+      console.warn('[profiles] publishing kind 0 to', relays)
+      const results = pool.publish(relays, signed as any)
+      const settled = await Promise.allSettled(results)
+      const ok = settled.filter(r => r.status === 'fulfilled').length
+      console.warn(`[profiles] kind 0 published to ${ok}/${relays.length} relay(s)`)
+    } catch (err) {
+      console.warn('[profiles] kind 0 publish failed:', err)
+    }
+  }, 2000)
 }

@@ -1,7 +1,7 @@
 // app/components/header.ts — Header component: brand, theme toggle, relay status, identity
 
 import { getState, update } from '../state.js'
-import { hasNip07, resolveSigner } from '../nostr/signer.js'
+import { hasNip07 } from '../nostr/signer.js'
 import { teardownSync } from '../sync.js'
 import { isConnected, getRelayCount } from '../nostr/connect.js'
 import { DEMO_ACCOUNTS } from '../demo-accounts.js'
@@ -234,6 +234,10 @@ function loginWithNsec(nsec: string, displayName?: string): boolean {
     updateIdentityDisplay()
     // Re-connect relays and fetch kind 0 profile for the new identity
     document.dispatchEvent(new CustomEvent('canary:resync'))
+    // Publish kind 0 if we have a meaningful name
+    if (displayName && displayName !== 'You') {
+      import('../nostr/profiles.js').then(({ publishKind0 }) => publishKind0(displayName, privkey))
+    }
     return true
   } catch {
     alert('Invalid nsec format.')
@@ -305,10 +309,6 @@ function showIdentityPopover(anchor: HTMLElement): void {
         </div>
 
         <button class="btn btn--sm" id="nip07-connect-btn" type="button" style="width: 100%;">Use Browser Extension (NIP-07)</button>
-
-        ${identity?.signerType === 'nip07' ? `
-          <button class="btn btn--sm" id="nip07-disconnect-btn" type="button" style="width: 100%;">Use Local Key</button>
-        ` : ''}
 
         <div class="identity-popover__divider"></div>
 
@@ -436,21 +436,6 @@ function showIdentityPopover(anchor: HTMLElement): void {
     } catch {
       alert('Extension rejected the request.')
     }
-  })
-
-  // Disconnect NIP-07
-  popover.querySelector('#nip07-disconnect-btn')?.addEventListener('click', async () => {
-    teardownSync()
-    const resolved = await resolveSigner({ pubkey: '', privkey: identity?.privkey })
-    const newIdentity = preserveMnemonic({
-      pubkey: resolved.pubkey,
-      privkey: resolved.privkey,
-      signerType: 'local',
-      displayName: identity?.displayName ?? 'You',
-    }, identity)
-    update({ identity: newIdentity, groups: {}, activeGroupId: null })
-    updateIdentityDisplay()
-    popover.remove()
   })
 
   // Close on outside click

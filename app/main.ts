@@ -1367,6 +1367,10 @@ function showLoginScreen(): void {
 
     await bootApp()
 
+    // Publish kind 0 so other members can discover this user's name
+    const { publishKind0 } = await import('./nostr/profiles.js')
+    publishKind0(name, privkey)
+
     // Show recovery phrase backup modal
     showRecoveryPhraseModal(mnemonic)
   })
@@ -1432,6 +1436,8 @@ function showLoginScreen(): void {
       const pubkey = getPublicKey(privkeyBytes)
       update({ identity: preserveMnemonic({ pubkey, privkey, signerType: 'local', displayName: name }, currentIdentity) })
       await bootApp()
+      const { publishKind0 } = await import('./nostr/profiles.js')
+      publishKind0(name, privkey)
     })
   })
 
