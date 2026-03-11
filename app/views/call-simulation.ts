@@ -237,19 +237,9 @@ export function renderCallSimulation(container: HTMLElement): void {
         else agentVerified = true
         checkMutualVerification()
       } else if (result.status === 'duress') {
-        resultEl!.classList.add('call-sim__result--duress')
-        resultEl!.textContent = 'DURESS — silent alert triggered'
+        resultEl!.classList.add('call-sim__result--invalid')
+        resultEl!.textContent = 'Failed ✗'
         duressDetected = true
-        clearTick()
-        const banner = container.querySelector<HTMLElement>('#call-verified-banner')
-        if (banner) {
-          banner.hidden = false
-          banner.className = 'call-sim__banner call-sim__banner--duress'
-          banner.textContent = 'Duress Detected — silent alarm raised'
-        }
-        container.querySelectorAll('.call-sim__progress, .call-sim__countdown').forEach(el => {
-          (el as HTMLElement).hidden = true
-        })
       } else {
         resultEl!.classList.add('call-sim__result--invalid')
         resultEl!.textContent = 'Failed ✗'
