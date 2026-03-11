@@ -352,6 +352,75 @@ verifier's location, or unavailable.
 
 Beacon key derivation: `HMAC-SHA256(key=seed, data=utf8("canary:beacon:key"))`.
 
+### Sync Envelope Encryption
+
+Sync messages are protected by a symmetric envelope layer derived from the group seed.
+This is distinct from the beacon key and from NIP-44: NIP-44 encrypts Nostr event
+`content` fields point-to-point between two Nostr keys; envelope encryption wraps sync
+messages group-wide and is transport-agnostic.
+
+#### Group Key Derivation
+
+The symmetric key for envelope encryption is derived as:
+
+```
+group_key = HMAC-SHA256(key=hex_to_bytes(seed), data=utf8("canary:sync:key"))
+```
+
+Implementations MUST use this derivation and MUST NOT reuse the beacon key
+(`"canary:beacon:key"`) for sync envelopes.
+
+#### Group Signing Key
+
+Each participant derives a per-group signing identity by binding the group seed to their
+personal private key:
+
+```
+group_signing_key = HMAC-SHA256(key=hex_to_bytes(seed), data=utf8("canary:sync:sign:") || hex_to_bytes(personal_privkey))
+```
+
+Binding the personal private key ensures that each participant's signing identity within
+the group is unique, even across reseed events. Implementations MUST use the participant's
+32-byte private key (64-character lowercase hex) as the binding material.
+
+#### Group Tag Hashing
+
+To address a group on a relay without revealing the group identifier, implementations
+derive a public tag by hashing the group identifier:
+
+```
+group_tag = hex(SHA-256(utf8(group_id)))
+```
+
+The resulting 64-character lowercase hex string MAY be published in relay filter tags.
+Observers can query for group events without learning the group identifier from which the
+tag was derived.
+
+#### Envelope Format
+
+Sync payloads MUST be encrypted using AES-256-GCM:
+
+1. Generate a random 12-byte IV.
+2. Encrypt the UTF-8 plaintext with `AES-256-GCM(key=group_key, iv=iv, plaintext)`.
+3. The Web Crypto API returns `ciphertext || auth_tag` concatenated.
+4. Encode as `base64(iv || ciphertext || auth_tag)`.
+
+Decryption reverses this: base64-decode, split the leading 12 bytes as IV, pass the
+remainder to AES-256-GCM. Implementations MUST reject any payload where authentication
+fails.
+
+#### Relationship to NIP-44
+
+| Layer              | Algorithm    | Scope                              | Key source            |
+|--------------------|--------------|------------------------------------|-----------------------|
+| Nostr event content | NIP-44      | Point-to-point between Nostr keys  | Recipient's pubkey    |
+| Sync envelope       | AES-256-GCM | Group-wide; transport-agnostic     | `canary:sync:key` derivation |
+| Location beacon     | AES-256-GCM | Group-wide; ephemeral relay events | `canary:beacon:key` derivation |
+
+NIP-44 MUST be used for all Nostr event `content` fields (kinds 38800, 28800, 38801,
+28801, 28802). Envelope encryption MUST be used for sync-layer payloads that are not
+carried directly in a Nostr event `content` field.
+
 ## Group Lifecycle
 
 ### Creation

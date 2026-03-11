@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   createGroup,
   getCurrentWord,
@@ -9,6 +9,7 @@ import {
   removeMember,
   removeMemberAndReseed,
   syncCounter,
+  dissolveGroup,
   type GroupConfig,
   type GroupState,
 } from './group.js'
@@ -194,6 +195,19 @@ describe('advanceCounter', () => {
     const after = getCurrentWord(advanced)
     expect(after).not.toBe(before)
   })
+
+  it('throws when effective counter would exceed time-based counter plus MAX_COUNTER_OFFSET', () => {
+    const state = createGroup({ name: 'bound-test', members: [ALICE] })
+    const s = { ...state, usageOffset: 100 }
+    expect(() => advanceCounter(s)).toThrow(RangeError)
+  })
+
+  it('allows advancing up to MAX_COUNTER_OFFSET', () => {
+    const state = createGroup({ name: 'bound-test', members: [ALICE] })
+    const s = { ...state, usageOffset: 99 }
+    const result = advanceCounter(s)
+    expect(result.usageOffset).toBe(100)
+  })
 })
 
 describe('reseed', () => {
@@ -310,6 +324,23 @@ describe('authority model fields', () => {
   })
 })
 
+describe('dissolveGroup', () => {
+  it('returns state with zeroed seed, empty members, and empty admins', () => {
+    const state = createGroup({ name: 'dissolve-test', members: [ALICE, BOB] })
+    const dissolved = dissolveGroup(state)
+    expect(dissolved.seed).toBe('0'.repeat(64))
+    expect(dissolved.members).toEqual([])
+    expect(dissolved.admins).toEqual([])
+  })
+
+  it('preserves name and metadata for audit trail', () => {
+    const state = createGroup({ name: 'audit-trail', members: [ALICE] })
+    const dissolved = dissolveGroup(state)
+    expect(dissolved.name).toBe('audit-trail')
+    expect(dissolved.createdAt).toBe(state.createdAt)
+  })
+})
+
 describe('syncCounter', () => {
   it('syncCounter advances counter and resets usageOffset', () => {
     const state = createGroup({ name: 'test', members: ['a'.repeat(64)] })
@@ -339,5 +370,29 @@ describe('syncCounter', () => {
     const pastTime = Math.floor(Date.now() / 1000) - state.rotationInterval * 2
     const regressed = syncCounter(advanced, pastTime)
     expect(regressed.counter).toBe(advanced.counter)
+  })
+})
+
+describe('createGroup group size advisory', () => {
+  it('warns when creating a 1-word group with 10+ members via console.warn', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const members = Array.from({ length: 10 }, (_, i) =>
+      i.toString(16).padStart(2, '0').repeat(32)
+    )
+    createGroup({ name: 'large', members, wordCount: 1 })
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('2+ words')
+    )
+    spy.mockRestore()
+  })
+
+  it('does not warn for 2-word group with 10+ members', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const members = Array.from({ length: 10 }, (_, i) =>
+      i.toString(16).padStart(2, '0').repeat(32)
+    )
+    createGroup({ name: 'large', members, wordCount: 2 })
+    expect(spy).not.toHaveBeenCalled()
+    spy.mockRestore()
   })
 })

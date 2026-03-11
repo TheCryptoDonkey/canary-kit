@@ -31,7 +31,7 @@ export function renderWelcome(container: HTMLElement): void {
         </div>
         <div class="welcome__step">
           <span class="welcome__step-num">04</span>
-          <span class="welcome__step-text">Words rotate automatically. Duress words signal danger.</span>
+          <span class="welcome__step-text">Words rotate automatically. Emergency words signal danger.</span>
         </div>
       </div>
 

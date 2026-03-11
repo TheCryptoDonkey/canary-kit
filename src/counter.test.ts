@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getCounter, counterToBytes, DEFAULT_ROTATION_INTERVAL } from './counter.js'
+import { getCounter, counterToBytes, counterFromEventId, DEFAULT_ROTATION_INTERVAL } from './counter.js'
 
 describe('getCounter', () => {
   it('returns floor(timestamp / interval)', () => {
@@ -112,5 +112,31 @@ describe('getCounter input validation', () => {
 
   it('accepts valid positive inputs', () => {
     expect(getCounter(1_209_600, 604_800)).toBe(2)
+  })
+})
+
+describe('counterFromEventId', () => {
+  it('derives a deterministic non-negative integer from an event ID', () => {
+    const eventId = 'a'.repeat(64)
+    const counter = counterFromEventId(eventId)
+    expect(Number.isInteger(counter)).toBe(true)
+    expect(counter).toBeGreaterThanOrEqual(0)
+    expect(counter).toBeLessThanOrEqual(0xFFFFFFFF)
+  })
+
+  it('produces same counter for same event ID', () => {
+    const eventId = 'b'.repeat(64)
+    expect(counterFromEventId(eventId)).toBe(counterFromEventId(eventId))
+  })
+
+  it('produces different counters for different event IDs', () => {
+    const a = counterFromEventId('a'.repeat(64))
+    const b = counterFromEventId('b'.repeat(64))
+    expect(a).not.toBe(b)
+  })
+
+  // Golden test — SHA-256('hello') first 4 bytes = 0x2cf24dba → 754077114
+  it('produces known output for known input (golden test)', () => {
+    expect(counterFromEventId('hello')).toBe(754077114)
   })
 })

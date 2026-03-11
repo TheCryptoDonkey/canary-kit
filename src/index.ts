@@ -9,7 +9,9 @@ export {
 export {
   getCounter,
   counterToBytes,
+  counterFromEventId,
   DEFAULT_ROTATION_INTERVAL,
+  MAX_COUNTER_OFFSET,
 } from './counter.js'
 
 export {
@@ -37,6 +39,7 @@ export {
   removeMember,
   removeMemberAndReseed,
   syncCounter,
+  dissolveGroup,
   type GroupConfig,
   type GroupState,
 } from './group.js'

@@ -1,5 +1,14 @@
+import { sha256 } from './crypto.js'
+
 /** Default rotation interval: 7 days in seconds. */
 export const DEFAULT_ROTATION_INTERVAL = 604_800
+
+/**
+ * Maximum allowed usage offset above the current time-based counter.
+ * Implementations MUST reject counter updates where effective counter > time-based counter + MAX_COUNTER_OFFSET.
+ * See CANARY spec §Counter Acceptance.
+ */
+export const MAX_COUNTER_OFFSET = 100
 
 /**
  * Derive the current counter from a unix timestamp and rotation interval.
@@ -16,6 +25,17 @@ export function getCounter(
     throw new RangeError(`rotationIntervalSec must be a positive finite number, got ${rotationIntervalSec}`)
   }
   return Math.floor(timestampSec / rotationIntervalSec)
+}
+
+/**
+ * Derive a counter from an event identifier (e.g. a task ID or Nostr event ID).
+ * Uses SHA-256 truncated to 32 bits for a deterministic, uniformly distributed counter.
+ * Per CANARY spec §Counter Schemes: event-based counters are deterministic from event ID.
+ */
+export function counterFromEventId(eventId: string): number {
+  const hash = sha256(new TextEncoder().encode(eventId))
+  // Read first 4 bytes as unsigned 32-bit big-endian integer
+  return (hash[0] << 24 | hash[1] << 16 | hash[2] << 8 | hash[3]) >>> 0
 }
 
 /**

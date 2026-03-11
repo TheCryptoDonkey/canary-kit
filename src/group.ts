@@ -1,5 +1,5 @@
 import { randomSeed, hmacSha256, hexToBytes, bytesToHex } from './crypto.js'
-import { getCounter, DEFAULT_ROTATION_INTERVAL } from './counter.js'
+import { getCounter, DEFAULT_ROTATION_INTERVAL, MAX_COUNTER_OFFSET } from './counter.js'
 import { deriveToken, deriveDuressToken, MAX_TOLERANCE } from './token.js'
 import { GROUP_CONTEXT } from './derive.js'
 import { PRESETS, type PresetName } from './presets.js'
@@ -117,6 +117,13 @@ export function createGroup(config: GroupConfig): GroupState {
     }
   }
 
+  if (wordCount === 1 && config.members.length >= 10) {
+    console.warn(
+      `[canary-kit] Group "${config.name}" has ${config.members.length} members with 1-word encoding. ` +
+      `CANARY spec recommends 2+ words for groups of 10+ members to avoid duress collision (~2.2% at 10 members).`
+    )
+  }
+
   return {
     name: config.name,
     seed: randomSeed(),
@@ -159,9 +166,19 @@ export function getCurrentDuressWord(state: GroupState, memberPubkey: string): s
 
 /**
  * Advance the usage offset by one, rotating the current word (burn-after-use).
+ * Throws a RangeError if the effective counter would exceed the current
+ * time-based counter plus MAX_COUNTER_OFFSET, per CANARY spec §Counter Acceptance.
  * Returns new state — does not mutate the input.
  */
 export function advanceCounter(state: GroupState): GroupState {
+  const timeBased = getCounter(Math.floor(Date.now() / 1000), state.rotationInterval)
+  const newEffective = state.counter + state.usageOffset + 1
+  if (newEffective > timeBased + MAX_COUNTER_OFFSET) {
+    throw new RangeError(
+      `Cannot advance counter: effective counter ${newEffective} would exceed ` +
+      `time-based counter ${timeBased} + MAX_COUNTER_OFFSET (${MAX_COUNTER_OFFSET})`,
+    )
+  }
   return { ...state, usageOffset: state.usageOffset + 1 }
 }
 
@@ -231,6 +248,28 @@ export function removeMember(state: GroupState, pubkey: string): GroupState {
 export function removeMemberAndReseed(state: GroupState, pubkey: string): GroupState {
   const removed = removeMember(state, pubkey)
   return reseed(removed)
+}
+
+/**
+ * Dissolve a group, zeroing the seed and clearing all members.
+ * Per CANARY spec §Seed Storage: seed MUST be wiped on group dissolution.
+ * Preserves name and timestamps for audit trail.
+ *
+ * Note: zeroing the seed string prevents further token derivation. Full
+ * memory erasure of prior string values is not possible in JS — platform-level
+ * secure storage should handle that concern.
+ *
+ * Returns new state — does not mutate the input.
+ */
+export function dissolveGroup(state: GroupState): GroupState {
+  return {
+    ...state,
+    seed: '0'.repeat(64),
+    members: [],
+    admins: [],
+    usageOffset: 0,
+    consumedOps: [],
+  }
 }
 
 /** Refresh the counter to the current time window. Call after loading persisted state.

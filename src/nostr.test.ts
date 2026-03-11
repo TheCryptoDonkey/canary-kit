@@ -7,6 +7,8 @@ import {
   buildWordUsedEvent,
   buildBeaconEvent,
   KINDS,
+  SeedDistributionPayload,
+  GroupEventPayload,
 } from './nostr.js'
 
 const CREATOR = 'c'.repeat(64)
@@ -266,5 +268,31 @@ describe('expiration edge cases', () => {
       expiration: 0,
     })
     expect(event.tags).toContainEqual(['expiration', '0'])
+  })
+})
+
+describe('SeedDistributionPayload', () => {
+  it('has counter_offset and group_d fields matching NIP-CANARY spec', () => {
+    const payload: SeedDistributionPayload = {
+      seed: 'a'.repeat(64),
+      counter_offset: 0,
+      group_d: 'test-group',
+    }
+    expect(payload.counter_offset).toBe(0)
+    expect(payload.group_d).toBe('test-group')
+  })
+})
+
+describe('GroupEventPayload', () => {
+  it('matches NIP-CANARY encrypted content structure', () => {
+    const payload: GroupEventPayload = {
+      description: 'Family safety group',
+      policies: {
+        invite_by: 'creator',
+        reseed_by: 'creator',
+      },
+    }
+    expect(payload.description).toBe('Family safety group')
+    expect(payload.policies.invite_by).toBe('creator')
   })
 })
