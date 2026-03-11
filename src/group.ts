@@ -117,6 +117,13 @@ export function createGroup(config: GroupConfig): GroupState {
     }
   }
 
+  if (wordCount === 1 && config.members.length >= 10) {
+    console.warn(
+      `[canary-kit] Group "${config.name}" has ${config.members.length} members with 1-word encoding. ` +
+      `CANARY spec recommends 2+ words for groups of 10+ members to avoid duress collision (~2.2% at 10 members).`
+    )
+  }
+
   return {
     name: config.name,
     seed: randomSeed(),

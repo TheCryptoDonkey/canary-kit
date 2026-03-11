@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   createGroup,
   getCurrentWord,
@@ -370,5 +370,29 @@ describe('syncCounter', () => {
     const pastTime = Math.floor(Date.now() / 1000) - state.rotationInterval * 2
     const regressed = syncCounter(advanced, pastTime)
     expect(regressed.counter).toBe(advanced.counter)
+  })
+})
+
+describe('createGroup group size advisory', () => {
+  it('warns when creating a 1-word group with 10+ members via console.warn', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const members = Array.from({ length: 10 }, (_, i) =>
+      i.toString(16).padStart(2, '0').repeat(32)
+    )
+    createGroup({ name: 'large', members, wordCount: 1 })
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('2+ words')
+    )
+    spy.mockRestore()
+  })
+
+  it('does not warn for 2-word group with 10+ members', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const members = Array.from({ length: 10 }, (_, i) =>
+      i.toString(16).padStart(2, '0').repeat(32)
+    )
+    createGroup({ name: 'large', members, wordCount: 2 })
+    expect(spy).not.toHaveBeenCalled()
+    spy.mockRestore()
   })
 })
