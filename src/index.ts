@@ -9,6 +9,7 @@ export {
 export {
   getCounter,
   counterToBytes,
+  counterFromEventId,
   DEFAULT_ROTATION_INTERVAL,
   MAX_COUNTER_OFFSET,
 } from './counter.js'
