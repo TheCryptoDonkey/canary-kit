@@ -37,6 +37,14 @@ interface QueueEntry {
 
 // ── Internal helpers ─────────────────────────────────────────────
 
+/** Type guard: validate that a parsed value looks like a QueueEntry array. */
+function isQueueEntryArray(value: unknown): value is QueueEntry[] {
+  if (!Array.isArray(value)) return false
+  return value.every(
+    (e) => e != null && typeof e === 'object' && typeof e.groupId === 'string' && e.message != null,
+  )
+}
+
 function readRawQueue(): QueueEntry[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -45,7 +53,7 @@ function readRawQueue(): QueueEntry[] {
     const stored = JSON.parse(raw)
 
     // Legacy format: plain array of QueueEntry
-    if (Array.isArray(stored)) return stored
+    if (isQueueEntryArray(stored)) return stored
 
     // New format: { encrypted?, entries }
     if (stored && typeof stored === 'object' && typeof stored.entries === 'string') {
@@ -54,7 +62,8 @@ function readRawQueue(): QueueEntry[] {
         // Caller must use readQueueAsync() for encrypted queues.
         return []
       }
-      return JSON.parse(stored.entries)
+      const parsed = JSON.parse(stored.entries)
+      return isQueueEntryArray(parsed) ? parsed : []
     }
 
     return []
@@ -71,7 +80,7 @@ async function readQueueAsync(): Promise<QueueEntry[]> {
     const stored = JSON.parse(raw)
 
     // Legacy format: plain array of QueueEntry
-    if (Array.isArray(stored)) return stored
+    if (isQueueEntryArray(stored)) return stored
 
     // New format: { encrypted?, entries }
     if (stored && typeof stored === 'object' && typeof stored.entries === 'string') {
@@ -79,9 +88,11 @@ async function readQueueAsync(): Promise<QueueEntry[]> {
         const key = _getPinKey()
         if (!key) return [] // locked — cannot decrypt
         const plaintext = await _pinDecrypt(stored.entries, key)
-        return JSON.parse(plaintext)
+        const parsed = JSON.parse(plaintext)
+        return isQueueEntryArray(parsed) ? parsed : []
       }
-      return JSON.parse(stored.entries)
+      const parsed = JSON.parse(stored.entries)
+      return isQueueEntryArray(parsed) ? parsed : []
     }
 
     return []
