@@ -1,6 +1,6 @@
 # canary-kit
 
-> Deepfake-proof identity verification. Open protocol, zero dependencies.
+> Deepfake-proof identity verification. Open protocol, minimal dependencies.
 
 [![npm](https://img.shields.io/npm/v/canary-kit)](https://www.npmjs.com/package/canary-kit)
 [![CI](https://github.com/TheCryptoDonkey/canary-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/TheCryptoDonkey/canary-kit/actions)
@@ -100,7 +100,7 @@ getCurrentWord(group)  // "falcon"
 
 **Automatic rotation.** Configurable intervals — 30 seconds for phone calls, 7 days for family groups.
 
-**Zero dependencies.** Pure JavaScript — no runtime dependencies. Requires `globalThis.crypto` (Web Crypto API): all browsers, Node.js 22+, Deno, and edge runtimes.
+**Minimal dependencies.** Core crypto is pure JavaScript. Only `@scure/bip32` and `@scure/bip39` for mnemonic key recovery. Requires `globalThis.crypto` (Web Crypto API): all browsers, Node.js 22+, Deno, and edge runtimes.
 
 **Protocol-grade.** Formal specification with published test vectors and a curated 2048-word spoken-clarity wordlist.
 

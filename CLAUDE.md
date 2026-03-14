@@ -1,6 +1,6 @@
 # CLAUDE.md — canary-kit
 
-Deepfake-proof identity verification. Zero dependencies. Open protocol.
+Deepfake-proof identity verification. Minimal dependencies. Open protocol.
 
 ## Commands
 
@@ -37,7 +37,7 @@ Deepfake-proof identity verification. Zero dependencies. Open protocol.
 ## Conventions
 
 - **British English** — colour, initialise, behaviour, licence
-- **Zero dependencies** — no runtime deps, only vitest + typescript + vite as dev deps
+- **Minimal dependencies** — `@scure/bip32` and `@scure/bip39` for mnemonic key recovery; core crypto is pure JS
 - **ESM-only** — `"type": "module"` in package.json
 - **TDD** — write failing test first, then implement
 - **Pure functions** — group management returns new state, never mutates input

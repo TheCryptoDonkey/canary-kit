@@ -43,7 +43,7 @@ Seven subpath exports mirror the source modules: `canary-kit`, `canary-kit/token
 ## Conventions
 
 - **British English** — colour, initialise, behaviour, licence
-- **Zero dependencies** — no runtime deps. Only vitest, typescript, vite as dev deps.
+- **Minimal dependencies** — `@scure/bip32` and `@scure/bip39` for mnemonic key recovery; core crypto is pure JS.
 - **ESM-only** — `"type": "module"` in package.json
 - **TDD** — write a failing test first, then implement
 - **Input validation** — all public APIs validate inputs and throw on invalid parameters

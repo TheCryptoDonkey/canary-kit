@@ -327,7 +327,7 @@ The protocol is cryptographically sound. The implementation faithfully follows t
 
 ### Strengths
 
-- **Zero dependencies** — entire cryptographic stack is auditable in ~550 lines
+- **Minimal dependencies** — core cryptographic stack is auditable in ~550 lines; only `@scure/bip32` and `@scure/bip39` for mnemonic key recovery
 - **Timing-safe verification** — all token comparisons use constant-time operations
 - **Strong domain separation** — context strings prevent cross-purpose collisions
 - **Comprehensive sync protocol** — authority model with 6 invariants, replay protection, epoch boundaries
