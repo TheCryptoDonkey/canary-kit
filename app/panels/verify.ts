@@ -1,4 +1,4 @@
-// app/panels/verify.ts — Verify panel: tap-to-verify with multiple choice
+// app/panels/verify.ts — Verify panel: select member, then tap what you heard
 
 import { getCounter, deriveBeaconKey, buildDuressAlert, encryptDuressAlert } from 'canary-kit'
 import { deriveToken, deriveDuressToken, verifyToken } from 'canary-kit/token'
@@ -22,7 +22,6 @@ function resolveName(pubkey: string): string {
   return pubkey.slice(0, 8) + '\u2026'
 }
 
-/** Generate n unique random decoy words that don't collide with excluded words. */
 function randomDecoys(count: number, exclude: Set<string>): string[] {
   const decoys: string[] = []
   const used = new Set(exclude)
@@ -37,7 +36,6 @@ function randomDecoys(count: number, exclude: Set<string>): string[] {
   return decoys
 }
 
-/** Shuffle an array in place (Fisher-Yates). */
 function shuffle<T>(arr: T[]): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
@@ -46,7 +44,7 @@ function shuffle<T>(arr: T[]): T[] {
   return arr
 }
 
-// ── Duress handler (shared between tap and text paths) ──────
+// ── Duress handler ──────────────────────────────────────────
 
 function handleDuressResult(identities: string[], groupId: string): void {
   for (const memberId of identities) {
@@ -100,89 +98,99 @@ export function renderVerify(container: HTMLElement): void {
 
   const { identity } = getState()
   const others = group.members.filter(m => m !== identity?.pubkey)
-  const showMemberPicker = others.length > 1
 
-  // ── Derive the correct word + duress words for all members ──
-  const nowSec = Math.floor(Date.now() / 1000)
-  const counter = getCounter(nowSec, group.rotationInterval) + group.usageOffset
-  const encoding = toTokenEncoding(group)
-  const correctWord = deriveToken(group.seed, GROUP_CONTEXT, counter, encoding).toLowerCase()
-
-  // Collect all possible duress words (one per member)
-  const duressWords = new Set<string>()
-  for (const m of group.members) {
-    const dw = deriveDuressToken(group.seed, GROUP_CONTEXT, m, counter, encoding, group.tolerance)
-    if (dw) duressWords.add(dw.toLowerCase())
+  if (others.length === 0) {
+    container.innerHTML = `
+      <section class="panel verify-panel">
+        <h2 class="panel__title">Verify Someone</h2>
+        <p class="settings-hint">No other members to verify yet. Invite someone first.</p>
+      </section>
+    `
+    return
   }
 
-  // Build 4 choices: correct + 1 duress + 2 random decoys
-  // If no duress words available, use 3 decoys instead
-  const exclude = new Set([correctWord, ...duressWords])
-  const duressArr = Array.from(duressWords)
-  const pickedDuress = duressArr.length > 0 ? duressArr[Math.floor(Math.random() * duressArr.length)] : null
-  const decoyCount = pickedDuress ? 2 : 3
-  const decoys = randomDecoys(decoyCount, exclude)
-  const choices = shuffle([correctWord, ...(pickedDuress ? [pickedDuress] : []), ...decoys])
-
-  // Format for display
-  const formatted = choices.map(w => ({
-    raw: w,
-    display: formatForDisplay(w, group.encodingFormat),
-  }))
-
-  const memberOptions = others.map(pk =>
-    `<option value="${pk}">${resolveName(pk).replace(/</g, '&lt;')}</option>`
+  // ── Step 1: show member buttons ──────────────────────────
+  const memberButtons = others.map(pk =>
+    `<button class="verify-member-btn btn btn--outline" data-pubkey="${escapeHtml(pk)}" type="button">${escapeHtml(resolveName(pk))}</button>`
   ).join('')
-
-  const placeholder = group.encodingFormat === 'pin' ? 'Enter PIN' : group.encodingFormat === 'hex' ? 'Enter hex' : 'Enter word'
 
   container.innerHTML = `
     <section class="panel verify-panel">
       <h2 class="panel__title">Verify Someone</h2>
-      <p class="settings-hint">Someone told you a word? Tap what you heard.</p>
+      <p class="settings-hint">Who are you verifying?</p>
 
-      ${showMemberPicker ? `<select class="input" id="verify-member" style="margin-bottom: 0.75rem;">
-        <option value="">Who are you verifying?</option>
-        ${memberOptions}
-      </select>` : ''}
-
-      <div class="verify-choices" id="verify-choices">
-        ${formatted.map(({ raw, display }) =>
-          `<button class="verify-choice" data-word="${escapeHtml(raw)}" type="button">${escapeHtml(display)}</button>`
-        ).join('')}
+      <div class="verify-member-list" id="verify-member-list">
+        ${memberButtons}
       </div>
 
-      <div id="verify-result" class="verify-result" hidden></div>
+      <div id="verify-choices-area" hidden>
+        <p class="settings-hint" id="verify-prompt"></p>
+        <div class="verify-choices" id="verify-choices"></div>
+        <div id="verify-result" class="verify-result" hidden></div>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+          <button class="btn btn--ghost" id="verify-back" type="button">Verify another</button>
+        </div>
+      </div>
 
       <details class="verify-fallback" style="margin-top: 0.75rem;">
         <summary class="settings-hint" style="cursor: pointer;">Type manually</summary>
         <div class="verify-form" style="margin-top: 0.5rem;">
-          <input class="input" id="verify-input" type="text" placeholder="${placeholder}" autocomplete="off" spellcheck="false" />
+          <input class="input" id="verify-input" type="text" placeholder="${group.encodingFormat === 'pin' ? 'Enter PIN' : 'Enter word'}" autocomplete="off" spellcheck="false" />
           <button class="btn btn--primary" id="verify-btn" type="button">Verify</button>
         </div>
       </details>
     </section>
   `
 
-  const memberSelect = container.querySelector<HTMLSelectElement>('#verify-member')
-  const resultEl = container.querySelector<HTMLElement>('#verify-result')
-  if (!resultEl) return
+  const memberList = container.querySelector<HTMLElement>('#verify-member-list')!
+  const choicesArea = container.querySelector<HTMLElement>('#verify-choices-area')!
+  const choicesDiv = container.querySelector<HTMLElement>('#verify-choices')!
+  const promptEl = container.querySelector<HTMLElement>('#verify-prompt')!
+  const resultEl = container.querySelector<HTMLElement>('#verify-result')!
 
-  // ── Tap handler ─────────────────────────────────────────
+  // ── Step 2: on member click, show word choices ──────────
 
-  function handleTap(word: string, btn: HTMLButtonElement): void {
-    const { groups: currentGroups, activeGroupId: currentGroupId } = getState()
-    if (!currentGroupId) return
-    const currentGroup = currentGroups[currentGroupId]
+  function showChoicesFor(pubkey: string): void {
+    const { groups: g, activeGroupId: gid } = getState()
+    if (!gid) return
+    const currentGroup = g[gid]
     if (!currentGroup) return
 
-    const selectedMember = memberSelect?.value
-    if (memberSelect && !selectedMember) {
-      resultEl!.hidden = false
-      resultEl!.className = 'verify-result verify-result--invalid'
-      resultEl!.textContent = 'Pick who you\u2019re verifying first.'
-      return
-    }
+    const nowSec = Math.floor(Date.now() / 1000)
+    const counter = getCounter(nowSec, currentGroup.rotationInterval) + currentGroup.usageOffset
+    const encoding = toTokenEncoding(currentGroup)
+
+    const correctWord = deriveToken(currentGroup.seed, GROUP_CONTEXT, counter, encoding).toLowerCase()
+    const theirDuress = deriveDuressToken(currentGroup.seed, GROUP_CONTEXT, pubkey, counter, encoding, currentGroup.tolerance)?.toLowerCase()
+
+    const exclude = new Set([correctWord])
+    if (theirDuress) exclude.add(theirDuress)
+    const decoyCount = theirDuress ? 2 : 3
+    const decoys = randomDecoys(decoyCount, exclude)
+    const choices = shuffle([correctWord, ...(theirDuress ? [theirDuress] : []), ...decoys])
+
+    const memberName = resolveName(pubkey)
+    promptEl.textContent = `Tap the word ${memberName} just said:`
+    resultEl.hidden = true
+
+    choicesDiv.innerHTML = choices.map(w =>
+      `<button class="verify-choice" data-word="${escapeHtml(w)}" type="button">${escapeHtml(formatForDisplay(w, currentGroup.encodingFormat))}</button>`
+    ).join('')
+
+    memberList.hidden = true
+    choicesArea.hidden = false
+
+    // Wire tap handlers
+    choicesDiv.querySelectorAll<HTMLButtonElement>('.verify-choice').forEach(btn => {
+      btn.addEventListener('click', () => handleTap(btn.dataset.word ?? '', btn, pubkey))
+    })
+  }
+
+  function handleTap(word: string, btn: HTMLButtonElement, memberPubkey: string): void {
+    const { groups: g, activeGroupId: gid } = getState()
+    if (!gid) return
+    const currentGroup = g[gid]
+    if (!currentGroup) return
 
     const freshCounter = getCounter(Math.floor(Date.now() / 1000), currentGroup.rotationInterval) + currentGroup.usageOffset
     const result = verifyToken(
@@ -195,31 +203,37 @@ export function renderVerify(container: HTMLElement): void {
     )
 
     const isValid = result.status === 'valid'
-    const memberName = selectedMember ? resolveName(selectedMember) : 'Speaker'
+    const memberName = resolveName(memberPubkey)
 
-    // Highlight the tapped button
-    container.querySelectorAll('.verify-choice').forEach(b => b.classList.remove('verify-choice--correct', 'verify-choice--wrong'))
+    choicesDiv.querySelectorAll('.verify-choice').forEach(b => b.classList.remove('verify-choice--correct', 'verify-choice--wrong'))
     btn.classList.add(isValid ? 'verify-choice--correct' : 'verify-choice--wrong')
 
-    resultEl!.hidden = false
-    resultEl!.className = `verify-result verify-result--${isValid ? 'valid' : 'invalid'}`
-    resultEl!.textContent = isValid
+    resultEl.hidden = false
+    resultEl.className = `verify-result verify-result--${isValid ? 'valid' : 'invalid'}`
+    resultEl.textContent = isValid
       ? `${memberName} is verified.`
       : `${memberName} gave the wrong word.`
 
     if (result.status === 'duress') {
-      handleDuressResult(result.identities ?? [], currentGroupId)
+      handleDuressResult(result.identities ?? [], gid)
     }
   }
 
-  container.querySelectorAll<HTMLButtonElement>('.verify-choice').forEach(btn => {
+  // Wire member buttons
+  container.querySelectorAll<HTMLButtonElement>('.verify-member-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const word = btn.dataset.word ?? ''
-      handleTap(word, btn)
+      const pk = btn.dataset.pubkey
+      if (pk) showChoicesFor(pk)
     })
   })
 
-  // ── Text fallback handler ──────────────────────────────
+  // Back button
+  container.querySelector<HTMLButtonElement>('#verify-back')?.addEventListener('click', () => {
+    memberList.hidden = false
+    choicesArea.hidden = true
+  })
+
+  // ── Text fallback ─────────────────────────────────────────
 
   const input = container.querySelector<HTMLInputElement>('#verify-input')
   const verifyBtn = container.querySelector<HTMLButtonElement>('#verify-btn')
@@ -228,18 +242,10 @@ export function renderVerify(container: HTMLElement): void {
     const spokenWord = input?.value.trim().toLowerCase().replace(/-/g, '') ?? ''
     if (!spokenWord) return
 
-    const { groups: currentGroups, activeGroupId: currentGroupId } = getState()
-    if (!currentGroupId) return
-    const currentGroup = currentGroups[currentGroupId]
+    const { groups: g, activeGroupId: gid } = getState()
+    if (!gid) return
+    const currentGroup = g[gid]
     if (!currentGroup) return
-
-    const selectedMember = memberSelect?.value
-    if (memberSelect && !selectedMember) {
-      resultEl!.hidden = false
-      resultEl!.className = 'verify-result verify-result--invalid'
-      resultEl!.textContent = 'Pick who you\u2019re verifying first.'
-      return
-    }
 
     const freshCounter = getCounter(Math.floor(Date.now() / 1000), currentGroup.rotationInterval) + currentGroup.usageOffset
     const result = verifyToken(
@@ -252,16 +258,13 @@ export function renderVerify(container: HTMLElement): void {
     )
 
     const isValid = result.status === 'valid'
-    const memberName = selectedMember ? resolveName(selectedMember) : 'Speaker'
 
-    resultEl!.hidden = false
-    resultEl!.className = `verify-result verify-result--${isValid ? 'valid' : 'invalid'}`
-    resultEl!.textContent = isValid
-      ? `${memberName} is verified.`
-      : `${memberName} gave the wrong word.`
+    resultEl.hidden = false
+    resultEl.className = `verify-result verify-result--${isValid ? 'valid' : 'invalid'}`
+    resultEl.textContent = isValid ? 'Verified.' : 'Wrong word.'
 
     if (result.status === 'duress') {
-      handleDuressResult(result.identities ?? [], currentGroupId)
+      handleDuressResult(result.identities ?? [], gid)
     }
   }
 

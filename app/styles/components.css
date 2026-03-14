@@ -816,6 +816,19 @@ select.input option {
   flex: 1;
 }
 
+/* ── .verify-member-list ─────────────────────────────────── */
+
+.verify-member-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.verify-member-btn {
+  min-width: 120px;
+}
+
 /* ── .verify-choices ─────────────────────────────────────── */
 
 .verify-choices {
