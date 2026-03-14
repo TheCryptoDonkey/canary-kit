@@ -135,7 +135,11 @@ export async function publishVault(
   const ciphertext = encryptVault(json, privkey, pubkey)
   const event = buildVaultEvent(ciphertext, privkey)
 
+  document.dispatchEvent(new CustomEvent('canary:vault-syncing'))
   await Promise.allSettled(pool.publish(writeRelays, event))
+  document.dispatchEvent(new CustomEvent('canary:vault-synced', {
+    detail: { timestamp: Math.floor(Date.now() / 1000) },
+  }))
 }
 
 /**

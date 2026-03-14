@@ -282,6 +282,12 @@ button {
 .relay-dot--syncing { background: var(--duress); animation: pulse 1s ease-in-out infinite; }
 .relay-dot--offline { background: var(--failed); }
 
+.vault-sync-indicator {
+  font-size: 0.85rem;
+  opacity: 0.6;
+  transition: opacity 0.3s;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }

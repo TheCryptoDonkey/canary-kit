@@ -66,6 +66,7 @@ export function renderHeader(container: HTMLElement): void {
         <span class="relay-dot"></span>
         <span class="relay-label"></span>
       </span>
+      <span id="vault-sync-status" class="vault-sync-indicator" hidden title="Vault synced"></span>
       <button class="theme-toggle" id="theme-toggle" aria-label="Switch to light mode">&#9680;</button>
       <button class="theme-toggle" id="reset-btn" aria-label="Reset demo" title="Clear all data and reset">&#8634;</button>
     </div>
@@ -96,6 +97,15 @@ export function renderHeader(container: HTMLElement): void {
   if (isConnected()) {
     updateRelayStatus(true, getRelayCount())
   }
+
+  // Vault sync indicator — brief flash on successful sync
+  document.addEventListener('canary:vault-synced', () => {
+    const el = document.getElementById('vault-sync-status')
+    if (!el) return
+    el.hidden = false
+    el.textContent = '\u2601' // cloud icon
+    setTimeout(() => { el.hidden = true }, 3000)
+  })
 
   const nav = container.querySelector<HTMLElement>('#header-nav')
   nav?.addEventListener('click', (e) => {
