@@ -144,6 +144,11 @@ export function renderLiveness(container: HTMLElement): void {
         opId: crypto.randomUUID(),
       })
 
+      // Notify push server so it resets the liveness reminder timer
+      Promise.all([import('../push.js'), import('canary-kit/sync')]).then(([{ notifyCheckin }, { hashGroupTag }]) => {
+        notifyCheckin(hashGroupTag(gid))
+      }).catch(() => {})
+
       // Send a location beacon and scroll the map into view
       sendLocationPing()
 

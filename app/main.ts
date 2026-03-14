@@ -453,6 +453,21 @@ function showCreateGroupModal(): void {
       void ensureTransport(newGroup.readRelays ?? [], newGroup.writeRelays ?? [], groupId)
     }
     publishVaultNow()
+    // Frictionless notification prompt after first group
+    import('./push.js').then(({ shouldPromptForNotifications, subscribeToPush, registerWithPushServer }) => {
+      if (!shouldPromptForNotifications()) return
+      setTimeout(() => {
+        if (!confirm('Enable notifications? We\'ll alert you in emergencies and remind you to check in.')) return
+        subscribeToPush().then(async (sub) => {
+          if (!sub) return
+          const { hashGroupTag } = await import('canary-kit/sync')
+          const { groups: g } = getState()
+          const pushGroups = Object.values(g).map(gr => ({ tagHash: hashGroupTag(gr.id), livenessInterval: gr.livenessInterval }))
+          await registerWithPushServer(sub, pushGroups)
+          showToast('Notifications enabled', 'success')
+        })
+      }, 1000) // slight delay so the group creation toast shows first
+    }).catch(() => {})
   })
 
   requestAnimationFrame(() => {
@@ -1214,6 +1229,21 @@ async function bootSync(): Promise<void> {
 
     subscribeToAllGroups()
     showToast(`Syncing via ${totalRelays} relay(s)`, 'success', 2000)
+
+    // Auto-register for push notifications if previously granted
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      import('./push.js').then(async ({ getExistingSubscription, registerWithPushServer }) => {
+        const sub = await getExistingSubscription()
+        if (sub) {
+          const { hashGroupTag } = await import('canary-kit/sync')
+          const pushGroups = Object.values(groups).map(g => ({
+            tagHash: hashGroupTag(g.id),
+            livenessInterval: g.livenessInterval,
+          }))
+          await registerWithPushServer(sub, pushGroups)
+        }
+      }).catch(() => {})
+    }
   } else {
     // NIP-07: read-only relay connection for profile fetch (no sync transport)
     const { connectRelays } = await import('./nostr/connect.js')
