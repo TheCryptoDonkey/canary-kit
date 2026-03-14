@@ -43,6 +43,39 @@ function maskWord(word: string): string {
   return word.replace(/[a-zA-Z0-9]/g, '•')
 }
 
+const SCRAMBLE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789•·∘◦○●◈◆▪▫'
+
+/**
+ * Matrix-style scramble animation on a text element.
+ * Each character position cycles through random characters before settling
+ * to the final value, cascading left to right like a departure board.
+ */
+function scrambleText(el: HTMLElement, finalText: string, durationMs = 600): void {
+  const len = finalText.length
+  const frameMs = 30
+  const totalFrames = Math.ceil(durationMs / frameMs)
+  // Each position settles at a staggered time
+  const settleFrame = (i: number) => Math.floor((i / len) * totalFrames * 0.7) + Math.floor(totalFrames * 0.3)
+  let frame = 0
+
+  const interval = setInterval(() => {
+    frame++
+    let display = ''
+    for (let i = 0; i < len; i++) {
+      if (frame >= settleFrame(i)) {
+        display += finalText[i]
+      } else {
+        display += SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)]
+      }
+    }
+    el.textContent = display
+    if (frame >= totalFrames) {
+      clearInterval(interval)
+      el.textContent = finalText
+    }
+  }, frameMs)
+}
+
 /**
  * Format a duration in seconds as a human-readable countdown string.
  * Examples: "6d 2h", "2h 34m", "45s"
@@ -243,13 +276,15 @@ export function renderHero(container: HTMLElement): void {
   const burnBtn = container.querySelector<HTMLButtonElement>('#burn-btn')
   burnBtn?.addEventListener('click', () => {
     try {
-      // Animate the word change
+      burnWord(activeGroupId)
+      // Scramble animation on the masked word
       const heroWord = container.querySelector<HTMLElement>('#hero-word')
       if (heroWord) {
-        heroWord.classList.add('hero__word--rotating')
-        heroWord.addEventListener('animationend', () => heroWord.classList.remove('hero__word--rotating'), { once: true })
+        const { groups: g } = getState()
+        const updated = g[activeGroupId]
+        const newMasked = updated ? maskWord(formatForDisplay(getDisplayToken(updated), updated.encodingFormat)) : '••••••••'
+        scrambleText(heroWord, newMasked)
       }
-      burnWord(activeGroupId)
       const isOnline = groupMode(getState().groups[activeGroupId] ?? group) === 'online'
       showToast(isOnline ? 'Word rotated — syncing to group' : 'Word rotated', 'success', 2000)
       document.dispatchEvent(new CustomEvent('canary:vault-publish-now'))
