@@ -4,6 +4,7 @@ import { getCounter, deriveBeaconKey, buildDuressAlert, encryptDuressAlert } fro
 import { verifyToken } from 'canary-kit/token'
 import { getState } from '../state.js'
 import { broadcastAction } from '../sync.js'
+import { showDuressAlert } from '../components/duress-alert.js'
 import { toTokenEncoding, GROUP_CONTEXT } from '../utils/encoding.js'
 
 // ── Status display config ──────────────────────────────────
@@ -120,44 +121,42 @@ export function renderVerify(container: HTMLElement): void {
       { encoding, tolerance: currentGroup.tolerance },
     )
 
-    // CANARY-DURESS UX: duress result MUST appear identical to 'invalid' on the
-    // verifier's screen.  An attacker observing the screen must not see any
-    // difference between "wrong word" and "duress word".  The real duress
-    // response is delivered via background channels (sync broadcast, overlay
-    // on *other* group members' devices).
-    const displayStatus: VerifyDisplayStatus = result.status === 'duress' ? 'invalid' : result.status === 'valid' ? 'valid' : 'invalid'
+    const displayStatus: VerifyDisplayStatus = result.status === 'valid' ? 'valid' : 'invalid'
 
     resultEl!.className = 'verify-result'
     resultEl!.classList.add(`verify-result--${displayStatus}`)
 
     const memberName = selectedMember ? resolveName(selectedMember) : 'Speaker'
     const icon = STATUS_ICONS[displayStatus]
-    let message: string
-    if (displayStatus === 'valid') {
-      message = `${memberName} is verified — word is correct.`
-    } else {
-      message = `${memberName} gave the wrong word — they may not have the current group key.`
-    }
+    const message = displayStatus === 'valid'
+      ? `${memberName} is verified — word is correct.`
+      : `${memberName} gave the wrong word — they may not have the current group key.`
 
-    resultEl!.innerHTML = `<span class="verify-icon">${icon}</span><span class="verify-message"></span>`
-    const messageEl = resultEl!.querySelector<HTMLElement>('.verify-message')
-    if (messageEl) messageEl.textContent = message
+    const iconSpan = document.createElement('span')
+    iconSpan.className = 'verify-icon'
+    iconSpan.textContent = icon
+    const msgSpan = document.createElement('span')
+    msgSpan.className = 'verify-message'
+    msgSpan.textContent = message
+    resultEl!.replaceChildren(iconSpan, msgSpan)
     resultEl!.hidden = false
 
     if (result.status === 'duress') {
+      const duressMembers = result.identities ?? []
+
+      // Show duress overlay on the verifier's own screen
+      for (const memberId of duressMembers) {
+        showDuressAlert(memberId, currentGroupId, undefined, Math.floor(Date.now() / 1000))
+      }
+
       document.dispatchEvent(
         new CustomEvent('canary:duress', {
-          detail: { members: result.identities ?? [] },
+          detail: { members: duressMembers },
           bubbles: true,
         }),
       )
 
-      // Duress alert is broadcast silently — no local overlay shown to the
-      // verifier.  Other group members' devices will show the full-screen
-      // alert when they receive the sync message.
-      const duressMembers = result.identities ?? []
-
-      // Build and encrypt a duress alert for each identified member
+      // Broadcast to other group members' devices
       const beaconKey = deriveBeaconKey(currentGroup.seed)
       for (const memberId of duressMembers) {
         const alert = buildDuressAlert(memberId, null)
@@ -165,7 +164,6 @@ export function renderVerify(container: HTMLElement): void {
           console.info('[canary] Duress alert encrypted:', encrypted.slice(0, 32) + '…')
         })
 
-        // Broadcast duress alert to group members via sync transport
         broadcastAction(currentGroupId, {
           type: 'duress-alert',
           lat: 0,
