@@ -4,6 +4,31 @@ import { getState } from '../state.js'
 import { broadcastAction } from '../sync.js'
 import { showToast } from './toast.js'
 
+// ── Dismissed duress tracking ───────────────────────────────
+// Persists dismissed duress subjects so stored relay events don't
+// re-trigger the overlay on every reconnect.
+
+const DISMISSED_KEY = 'canary:duress-dismissed'
+
+function getDismissed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY)
+    return raw ? new Set(JSON.parse(raw)) : new Set()
+  } catch { return new Set() }
+}
+
+function addDismissed(subject: string): void {
+  const set = getDismissed()
+  set.add(subject)
+  localStorage.setItem(DISMISSED_KEY, JSON.stringify([...set]))
+}
+
+function removeDismissed(subject: string): void {
+  const set = getDismissed()
+  set.delete(subject)
+  localStorage.setItem(DISMISSED_KEY, JSON.stringify([...set]))
+}
+
 function memberName(pubkey: string, groupId: string): string {
   const group = getState().groups[groupId]
   if (!group) return pubkey.slice(0, 8)
@@ -35,7 +60,11 @@ export function showDuressAlert(
   groupId: string,
   location?: { lat: number; lon: number },
   timestampSec?: number,
+  force?: boolean,
 ): void {
+  // Skip if this subject was already dismissed (unless forced by local verifier)
+  if (!force && getDismissed().has(senderPubkey)) return
+
   // Don't stack multiple overlays for the same sender
   const existing = document.querySelector('.duress-overlay')
   if (existing) existing.remove()
@@ -86,6 +115,7 @@ export function showDuressAlert(
   respondBtn.textContent = "I'm Responding"
   respondBtn.title = 'Dismiss this alert on your screen only — does not clear the duress for others'
   respondBtn.addEventListener('click', () => {
+    addDismissed(senderPubkey)
     overlay.classList.remove('duress-overlay--visible')
     setTimeout(() => overlay.remove(), 300)
   })
@@ -96,6 +126,7 @@ export function showDuressAlert(
   standDownBtn.textContent = 'Stand Down — Person is Safe'
   standDownBtn.title = 'Broadcast to all group members that this person has been confirmed safe'
   standDownBtn.addEventListener('click', () => {
+    addDismissed(senderPubkey)
     broadcastAction(groupId, {
       type: 'duress-clear',
       subject: senderPubkey,
@@ -129,6 +160,8 @@ export function showDuressAlert(
 
 document.addEventListener('canary:duress-clear', ((e: CustomEvent) => {
   const { subject, clearedBy } = e.detail
+  // Clear dismissed state so a future duress for this person will show again
+  removeDismissed(subject)
   // Remove any active duress overlay for this subject
   const overlay = document.querySelector(`.duress-overlay[data-subject="${subject}"]`)
   if (overlay) {

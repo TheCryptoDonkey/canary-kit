@@ -48,7 +48,7 @@ function shuffle<T>(arr: T[]): T[] {
 
 function handleDuressResult(identities: string[], groupId: string): void {
   for (const memberId of identities) {
-    showDuressAlert(memberId, groupId, undefined, Math.floor(Date.now() / 1000))
+    showDuressAlert(memberId, groupId, undefined, Math.floor(Date.now() / 1000), true)
   }
 
   document.dispatchEvent(
