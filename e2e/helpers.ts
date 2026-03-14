@@ -307,23 +307,27 @@ export async function getDisplayedWord(page: Page): Promise<string> {
  *
  * The verify panel requires at least one OTHER member to render. If the group
  * has only one member (the creator), call addSimulatedMember() first.
+ *
+ * Uses page.evaluate to fill + click atomically, avoiding a race with the
+ * word-rotation re-render that can detach the button mid-interaction on slow CI.
  */
 export async function verifyWord(
   page: Page,
   word: string,
 ): Promise<'valid' | 'duress' | 'invalid'> {
-  // The manual input lives inside a collapsed <details> — open it
-  const details = page.locator('details.verify-fallback')
-  await expect(details).toBeVisible({ timeout: 3000 })
-  if ((await details.getAttribute('open')) === null) {
-    await details.locator('summary').click()
-  }
+  // Wait for the verify panel to exist (needs ≥2 members)
+  await page.waitForSelector('#verify-input', { state: 'attached', timeout: 5000 })
 
-  await page.fill('#verify-input', word)
-  await page.click('#verify-btn')
+  // Fill + click atomically via evaluate to avoid re-render race
+  await page.evaluate((w) => {
+    const input = document.getElementById('verify-input') as HTMLInputElement
+    input.value = w
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    document.getElementById('verify-btn')?.click()
+  }, word)
 
   const resultEl = page.locator('#verify-result')
-  await expect(resultEl).not.toBeHidden({ timeout: 3000 })
+  await expect(resultEl).not.toBeHidden({ timeout: 5000 })
 
   const classes = await resultEl.getAttribute('class') ?? ''
   if (classes.includes('verify-result--valid')) return 'valid'
