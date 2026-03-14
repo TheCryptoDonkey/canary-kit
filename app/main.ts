@@ -1075,6 +1075,10 @@ function wireGlobalEvents(): void {
     } else if (message.type === 'duress-alert') {
       // Use subject (person under duress) if available, fall back to sender
       const duressPubkey = message.subject || sender
+      // Never show duress overlay on the subject's own device — an attacker
+      // watching their screen must not learn that duress was detected.
+      const { identity: localIdentity } = getState()
+      if (localIdentity?.pubkey === duressPubkey) return
       showDuressAlert(duressPubkey, groupId, message.lat != null ? { lat: message.lat, lon: message.lon } : undefined, message.timestamp)
     }
   })
