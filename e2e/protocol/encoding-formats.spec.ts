@@ -1,11 +1,12 @@
 // e2e/protocol/encoding-formats.spec.ts — All encoding formats work E2E
 import { test, expect } from '../fixtures.js'
-import { loginOffline, createGroup, setEncodingFormat, getDisplayedWord, verifyWord } from '../helpers.js'
+import { loginOffline, createGroup, addSimulatedMember, setEncodingFormat, getDisplayedWord, verifyWord } from '../helpers.js'
 
 test.describe('Encoding formats', () => {
   test.beforeEach(async ({ cleanPage: page }) => {
     await loginOffline(page, 'Tester')
     await createGroup(page, 'Encoding Test', { preset: 'family' })
+    await addSimulatedMember(page)
   })
 
   test('words encoding shows readable word', async ({ cleanPage: page }) => {

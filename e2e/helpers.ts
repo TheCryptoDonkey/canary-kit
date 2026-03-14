@@ -301,22 +301,21 @@ export async function getDisplayedWord(page: Page): Promise<string> {
   return word
 }
 
-/** Type a word in the verify panel and click Verify. Returns the result status. */
+/**
+ * Type a word in the verify panel's manual fallback and click Verify.
+ * Returns the result status.
+ *
+ * The verify panel requires at least one OTHER member to render. If the group
+ * has only one member (the creator), call addSimulatedMember() first.
+ */
 export async function verifyWord(
   page: Page,
   word: string,
 ): Promise<'valid' | 'duress' | 'invalid'> {
-  // Select the first available member in the dropdown (if present)
-  const memberSelect = page.locator('#verify-member')
-  if (await memberSelect.count() > 0) {
-    const options = memberSelect.locator('option[value]:not([value=""])')
-    const firstValue = await options.first().getAttribute('value')
-    if (firstValue) await memberSelect.selectOption(firstValue)
-  }
-
-  // The manual input is inside a collapsed <details> — open it first
+  // The manual input lives inside a collapsed <details> — open it
   const details = page.locator('details.verify-fallback')
-  if (await details.count() > 0 && (await details.getAttribute('open')) === null) {
+  await expect(details).toBeVisible({ timeout: 3000 })
+  if ((await details.getAttribute('open')) === null) {
     await details.locator('summary').click()
   }
 

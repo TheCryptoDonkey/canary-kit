@@ -1,11 +1,12 @@
 // e2e/protocol/tolerance-window.spec.ts
 import { test, expect } from '../fixtures.js'
-import { loginOffline, createGroup, getDisplayedWord, verifyWord } from '../helpers.js'
+import { loginOffline, createGroup, addSimulatedMember, getDisplayedWord, verifyWord } from '../helpers.js'
 
 test.describe('Tolerance window', () => {
   test('current counter word is valid', async ({ cleanPage: page }) => {
     await loginOffline(page, 'Tester')
     await createGroup(page, 'Tolerance')
+    await addSimulatedMember(page)
     const word = await getDisplayedWord(page)
     const result = await verifyWord(page, word)
     expect(result).toBe('valid')
@@ -14,6 +15,7 @@ test.describe('Tolerance window', () => {
   test('±1 counter word is valid with tolerance=1', async ({ cleanPage: page }) => {
     await loginOffline(page, 'Tester')
     await createGroup(page, 'Tolerance')
+    await addSimulatedMember(page)
 
     // Capture the current word before advancing the counter
     const word = await getDisplayedWord(page)
@@ -34,6 +36,7 @@ test.describe('Tolerance window', () => {
   test('±2 counter word is invalid with tolerance=1', async ({ cleanPage: page }) => {
     await loginOffline(page, 'Tester')
     await createGroup(page, 'Tolerance')
+    await addSimulatedMember(page)
 
     // Capture the current word before advancing the counter
     const word = await getDisplayedWord(page)

@@ -1,11 +1,12 @@
 // e2e/protocol/multi-word.spec.ts — Multi-word phrase verification
 import { test, expect } from '../fixtures.js'
-import { loginOffline, createGroup, openSettings, getDisplayedWord, verifyWord } from '../helpers.js'
+import { loginOffline, createGroup, addSimulatedMember, openSettings, getDisplayedWord, verifyWord } from '../helpers.js'
 
 test.describe('Multi-word phrases', () => {
   test.beforeEach(async ({ cleanPage: page }) => {
     await loginOffline(page, 'Tester')
     await createGroup(page, 'Multi Word', { preset: 'family' })
+    await addSimulatedMember(page)
   })
 
   test('1-word: single word displayed', async ({ cleanPage: page }) => {

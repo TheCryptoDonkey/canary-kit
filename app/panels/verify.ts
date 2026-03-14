@@ -126,10 +126,6 @@ export function renderVerify(container: HTMLElement): void {
       <div id="verify-choices-area" hidden>
         <p class="settings-hint" id="verify-prompt"></p>
         <div class="verify-choices" id="verify-choices"></div>
-        <div id="verify-result" class="verify-result" hidden></div>
-        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
-          <button class="btn btn--ghost" id="verify-back" type="button">Verify another</button>
-        </div>
       </div>
 
       <details class="verify-fallback" style="margin-top: 0.75rem;">
@@ -139,6 +135,11 @@ export function renderVerify(container: HTMLElement): void {
           <button class="btn btn--primary" id="verify-btn" type="button">Verify</button>
         </div>
       </details>
+
+      <div id="verify-result" class="verify-result" hidden></div>
+      <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+        <button class="btn btn--ghost" id="verify-back" type="button" hidden>Verify another</button>
+      </div>
     </section>
   `
 
@@ -147,6 +148,7 @@ export function renderVerify(container: HTMLElement): void {
   const choicesDiv = container.querySelector<HTMLElement>('#verify-choices')!
   const promptEl = container.querySelector<HTMLElement>('#verify-prompt')!
   const resultEl = container.querySelector<HTMLElement>('#verify-result')!
+  const backBtn = container.querySelector<HTMLButtonElement>('#verify-back')!
 
   // ── Step 2: on member click, show word choices ──────────
 
@@ -213,6 +215,7 @@ export function renderVerify(container: HTMLElement): void {
     resultEl.textContent = isValid
       ? `${memberName} is verified.`
       : `${memberName} gave the wrong word.`
+    backBtn.hidden = false
 
     if (result.status === 'duress') {
       handleDuressResult(result.identities ?? [], gid)
@@ -228,9 +231,11 @@ export function renderVerify(container: HTMLElement): void {
   })
 
   // Back button
-  container.querySelector<HTMLButtonElement>('#verify-back')?.addEventListener('click', () => {
+  backBtn.addEventListener('click', () => {
     memberList.hidden = false
     choicesArea.hidden = true
+    resultEl.hidden = true
+    backBtn.hidden = true
   })
 
   // ── Text fallback ─────────────────────────────────────────
@@ -262,6 +267,7 @@ export function renderVerify(container: HTMLElement): void {
     resultEl.hidden = false
     resultEl.className = `verify-result verify-result--${isValid ? 'valid' : 'invalid'}`
     resultEl.textContent = isValid ? 'Verified.' : 'Wrong word.'
+    backBtn.hidden = false
 
     if (result.status === 'duress') {
       handleDuressResult(result.identities ?? [], gid)
