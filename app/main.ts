@@ -1093,6 +1093,16 @@ function wireGlobalEvents(): void {
 
   // Re-sync when identity changes (e.g. nsec login from header popover)
   document.addEventListener('canary:resync', () => void bootSync())
+
+  // Reconnect when app returns to foreground — mobile browsers kill WebSockets
+  // when backgrounded. Re-subscribing picks up stored messages (counter-advance,
+  // duress-alert, member changes) that arrived while the tab was suspended.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      console.info('[canary:boot] App foregrounded — reconnecting sync')
+      void bootSync()
+    }
+  })
 }
 
 // ── Local identity ────────────────────────────────────────────
