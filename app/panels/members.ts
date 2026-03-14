@@ -237,8 +237,18 @@ export function showInviteModal(group: import('../types.js').AppGroup, options?:
   // ── QR path ──────────────────────────────────────────────────
 
   function renderQRPath(): void {
-    const { payload, confirmCode } = createInviteRaw(group)
-    const packed = packInvite(payload)
+    let payload: import('../invite.js').InvitePayload
+    let confirmCode: string
+    let packed: Uint8Array
+    try {
+      const result = createInviteRaw(group)
+      payload = result.payload
+      confirmCode = result.confirmCode
+      packed = packInvite(payload)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to create invite.', 'error')
+      return
+    }
     const base = window.location.href.split('#')[0]
     const qrUrl = `${base}#inv/${bytesToBase64url(packed)}`
     const svgMarkup = generateQR(qrUrl)
@@ -273,7 +283,13 @@ export function showInviteModal(group: import('../types.js').AppGroup, options?:
   // ── Secure Channel path ──────────────────────────────────────
 
   function renderRemotePath(): void {
-    const remoteSession = startRemoteInviteSession(group)
+    let remoteSession: import('../invite.js').RemoteInviteSession
+    try {
+      remoteSession = startRemoteInviteSession(group)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to create remote invite.', 'error')
+      return
+    }
     const base = window.location.href.split('#')[0]
     const shortUrl = `${base}#j/${remoteSession.inviteId}`
 

@@ -1409,7 +1409,7 @@ function showLoginScreen(): void {
       const pubkey = getPublicKey(privkeyBytes)
       update({ identity: preserveMnemonic({ pubkey, privkey, signerType: 'local', displayName: 'You' }, currentIdentity) })
       await bootApp()
-    } catch { alert('Invalid nsec format.') }
+    } catch (err) { alert(err instanceof Error ? err.message : 'Invalid nsec format.') }
   })
 
   // NIP-07 extension

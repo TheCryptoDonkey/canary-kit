@@ -209,7 +209,9 @@ export function sendWelcomeOverRelay(opts: SendWelcomeOpts): void {
 
 // ── Relay-based invite discovery ──────────────────────────────
 
-const INVITE_PUBLISH_KIND = 25520
+// Parameterised replaceable (30000+) so relays store the token for later fetch.
+// Was 25520 (ephemeral) — relays discarded it before joiners could fetch.
+const INVITE_PUBLISH_KIND = 35520
 
 /**
  * Publish a seedless invite token to the relay so joiners can
@@ -227,10 +229,11 @@ export function publishInviteToken(opts: {
   const { token, writeRelays } = opts
   const content = JSON.stringify(token)
 
+  const expiration = String(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60)
   const event = finalizeEvent({
     kind: INVITE_PUBLISH_KIND,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['d', token.inviteId]],
+    tags: [['d', token.inviteId], ['expiration', expiration]],
     content,
   }, hexToBytes(identity.privkey))
 

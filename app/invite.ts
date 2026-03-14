@@ -256,8 +256,11 @@ export function confirmCodeFromPayload(payload: InvitePayload): string {
 export function createInvite(group: AppGroup): { payload: string; confirmCode: string } {
   // Only admins can create invites
   const { identity } = getState()
-  if (!identity?.pubkey || !identity?.privkey) {
-    throw new Error('No local identity — cannot create invite.')
+  if (!identity?.pubkey) {
+    throw new Error('No identity — sign in first.')
+  }
+  if (!identity.privkey) {
+    throw new Error('Invite creation requires a local key (nsec). NIP-07 extensions cannot sign invites.')
   }
   if (!group.admins.includes(identity.pubkey)) {
     throw new Error(`Not authorised — you are not an admin of "${group.name}".`)
@@ -306,8 +309,11 @@ export function createInvite(group: AppGroup): { payload: string; confirmCode: s
  */
 export function createInviteRaw(group: AppGroup): { payload: InvitePayload; confirmCode: string } {
   const { identity } = getState()
-  if (!identity?.pubkey || !identity?.privkey) {
-    throw new Error('No local identity — cannot create invite.')
+  if (!identity?.pubkey) {
+    throw new Error('No identity — sign in first.')
+  }
+  if (!identity.privkey) {
+    throw new Error('Invite creation requires a local key (nsec). NIP-07 extensions cannot sign invites.')
   }
   if (!group.admins.includes(identity.pubkey)) {
     throw new Error(`Not authorised — you are not an admin of "${group.name}".`)
@@ -647,8 +653,11 @@ let _activeRemoteSession: RemoteInviteSession | null = null
 
 export function startRemoteInviteSession(group: AppGroup): RemoteInviteSession {
   const { identity } = getState()
-  if (!identity?.pubkey || !identity?.privkey) {
-    throw new Error('No local identity — cannot create remote invite.')
+  if (!identity?.pubkey) {
+    throw new Error('No identity — sign in first.')
+  }
+  if (!identity.privkey) {
+    throw new Error('Invite creation requires a local key (nsec). NIP-07 extensions cannot sign invites.')
   }
   if (!group.admins.includes(identity.pubkey)) {
     throw new Error(`Not authorised — you are not an admin of "${group.name}".`)
