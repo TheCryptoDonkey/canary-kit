@@ -160,7 +160,7 @@ export function renderVerify(container: HTMLElement): void {
     const counter = getCounter(nowSec, currentGroup.rotationInterval) + currentGroup.usageOffset
     const encoding = toTokenEncoding(currentGroup)
 
-    const correctWord = deriveToken(currentGroup.seed, GROUP_CONTEXT, counter, encoding).toLowerCase()
+    const correctWord = deriveToken(currentGroup.seed, GROUP_CONTEXT, counter, encoding, pubkey).toLowerCase()
     const theirDuress = deriveDuressToken(currentGroup.seed, GROUP_CONTEXT, pubkey, counter, encoding, currentGroup.tolerance)?.toLowerCase()
 
     const exclude = new Set([correctWord])

@@ -41,28 +41,41 @@ function normaliseSecret(secret: Uint8Array | string): Uint8Array {
 /**
  * CANARY-DERIVE: Derive raw token bytes from a shared secret, context, and counter.
  *
- * Algorithm: HMAC-SHA256(secret, utf8(context) || counter_be32)
+ * When `identity` is omitted, derives a group-wide token:
+ *   HMAC-SHA256(secret, utf8(context) || counter_be32)
+ *
+ * When `identity` is provided, derives a per-member token:
+ *   HMAC-SHA256(secret, utf8(context) || 0x00 || utf8(identity) || counter_be32)
+ *
+ * The null-byte separator prevents concatenation ambiguity between context and identity.
  */
 export function deriveTokenBytes(
   secret: Uint8Array | string,
   context: string,
   counter: number,
+  identity?: string,
 ): Uint8Array {
   const key = normaliseSecret(secret)
-  const data = concatBytes(utf8(context), counterBe32(counter))
+  const data = identity
+    ? concatBytes(utf8(context), new Uint8Array([0x00]), utf8(identity), counterBe32(counter))
+    : concatBytes(utf8(context), counterBe32(counter))
   return hmacSha256(key, data)
 }
 
 /**
  * CANARY-DERIVE: Derive an encoded token string.
+ *
+ * When `identity` is provided, produces a per-member token unique to that member.
+ * When omitted, produces the group-wide token (backwards-compatible).
  */
 export function deriveToken(
   secret: Uint8Array | string,
   context: string,
   counter: number,
   encoding: TokenEncoding = DEFAULT_ENCODING,
+  identity?: string,
 ): string {
-  const bytes = deriveTokenBytes(secret, context, counter)
+  const bytes = deriveTokenBytes(secret, context, counter, identity)
   return encodeToken(bytes, encoding)
 }
 
@@ -201,13 +214,19 @@ export function verifyToken(
   // Compute all branches to prevent timing side-channels from revealing
   // which branch matched (valid vs duress vs invalid).
 
-  // 1. Check normal token at exact counter
-  const exactMatch = timingSafeStringEqual(normalised, deriveToken(secret, context, counter, encoding))
-
-  // 2. Check duress tokens for ALL identities across entire tolerance window
   const lo = Math.max(0, counter - tolerance)
   const hi = Math.min(0xFFFFFFFF, counter + tolerance)
-  const matches: string[] = []
+
+  // 1. Check per-member tokens at exact counter (each member has a unique word)
+  let exactMember: string | null = null
+  for (const identity of identities) {
+    if (timingSafeStringEqual(normalised, deriveToken(secret, context, counter, encoding, identity))) {
+      exactMember = identity
+    }
+  }
+
+  // 2. Check duress tokens for ALL identities across entire tolerance window
+  const duressMatches: string[] = []
   for (const identity of identities) {
     let found = false
     for (let c = lo; c <= hi; c++) {
@@ -215,22 +234,35 @@ export function verifyToken(
         found = true
       }
     }
-    if (found) matches.push(identity)
+    if (found) duressMatches.push(identity)
   }
 
-  // 3. Check normal token at remaining tolerance window (non-exact counters)
-  let toleranceMatch = false
-  for (let c = lo; c <= hi; c++) {
-    if (c === counter) continue // already checked in step 1
-    if (timingSafeStringEqual(normalised, deriveToken(secret, context, c, encoding))) {
-      toleranceMatch = true
+  // 3. Check per-member tokens at remaining tolerance window (non-exact counters)
+  let toleranceMember: string | null = null
+  for (const identity of identities) {
+    for (let c = lo; c <= hi; c++) {
+      if (c === counter) continue // already checked in step 1
+      if (timingSafeStringEqual(normalised, deriveToken(secret, context, c, encoding, identity))) {
+        toleranceMember = identity
+      }
     }
   }
 
-  // Return in priority order (collision avoidance guarantees no ambiguity at exact counter)
-  if (exactMatch) return { status: 'valid' }
-  if (matches.length > 0) return { status: 'duress', identities: matches }
-  if (toleranceMatch) return { status: 'valid' }
+  // 4. Also check group-wide token (backwards compat for anonymous verification)
+  let groupMatch = false
+  for (let c = lo; c <= hi; c++) {
+    if (timingSafeStringEqual(normalised, deriveToken(secret, context, c, encoding))) {
+      groupMatch = true
+    }
+  }
+
+  // Priority: duress always wins unless there's an exact-counter exact-member match
+  // (collision avoidance guarantees no ambiguity at the exact counter).
+  // An exact per-member match that also matches duress → duress wins (safety-first).
+  if (duressMatches.length > 0) return { status: 'duress', identities: duressMatches }
+  if (exactMember) return { status: 'valid', identities: [exactMember] }
+  if (toleranceMember) return { status: 'valid', identities: [toleranceMember] }
+  if (groupMatch) return { status: 'valid' }
   return { status: 'invalid' }
 }
 

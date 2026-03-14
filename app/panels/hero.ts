@@ -135,12 +135,13 @@ function formatRotationLabel(secsLeft: number, interval: number): string {
 // ── Display token derivation ────────────────────────────────────
 
 /**
- * Derive the current display token using the universal CANARY token API.
- * All encoding formats use the same derivation path.
+ * Derive the current display token for the local user.
+ * Per-member: each person sees their own unique word.
  */
 function getDisplayToken(group: AppGroup): string {
+  const { identity } = getState()
   const effectiveCounter = group.counter + group.usageOffset
-  return deriveToken(group.seed, GROUP_CONTEXT, effectiveCounter, toTokenEncoding(group))
+  return deriveToken(group.seed, GROUP_CONTEXT, effectiveCounter, toTokenEncoding(group), identity?.pubkey)
 }
 
 /**
