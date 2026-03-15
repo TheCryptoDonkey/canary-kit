@@ -475,14 +475,18 @@ context_b. Neither token can be derived from the other without the shared secret
 #### Example — Insurance Phone Call
 
 ```
-caller_word = HMAC-SHA256(secret, utf8("aviva:caller") || counter_be32)
-agent_word  = HMAC-SHA256(secret, utf8("aviva:agent")  || counter_be32)
+caller_word = HMAC-SHA256(secret, utf8("aviva\0caller") || counter_be32)
+agent_word  = HMAC-SHA256(secret, utf8("aviva\0agent")  || counter_be32)
 ```
 
+> **Note:** The null byte (`\0`) separator between namespace and role prevents
+> concatenation ambiguity (e.g. namespace `a:b` + role `c` vs namespace `a` +
+> role `b:c`).
+
 1. Agent: "What's your verification word?"
-2. Caller speaks **"bid"** — Agent verifies against `aviva:caller` context ✓
+2. Caller speaks their word — Agent verifies against `aviva\0caller` context ✓
 3. Caller: "And what's mine?"
-4. Agent speaks **"choose"** — Caller verifies against `aviva:agent` context ✓
+4. Agent speaks their word — Caller verifies against `aviva\0agent` context ✓
 
 An eavesdropper hearing "bid" cannot derive "choose". Both parties have
 independently proved knowledge of the shared secret.
@@ -492,8 +496,8 @@ independently proved knowledge of the shared secret.
 Each party's duress token is derived from their OWN directional context:
 
 ```
-caller_duress = HMAC-SHA256(secret, utf8("aviva:caller:duress") || 0x00 || utf8(caller_id) || counter_be32)
-agent_duress  = HMAC-SHA256(secret, utf8("aviva:agent:duress")  || 0x00 || utf8(agent_id)  || counter_be32)
+caller_duress = HMAC-SHA256(secret, utf8("aviva\0caller:duress") || 0x00 || utf8(caller_id) || counter_be32)
+agent_duress  = HMAC-SHA256(secret, utf8("aviva\0agent:duress")  || 0x00 || utf8(agent_id)  || counter_be32)
 ```
 
 If the caller speaks their duress word instead of their verification word, the
@@ -502,9 +506,9 @@ caller ever revealing they are under coercion.
 
 #### Convention
 
-Implementations SHOULD use the format `namespace:role` for directional context
-strings. The namespace identifies the application or domain. The roles identify
-the two parties. Example namespaces:
+Implementations MUST use a null-byte separator (`namespace\0role`) for directional
+context strings. The namespace identifies the application or domain. The roles
+identify the two parties. Example namespaces:
 
 | Namespace   | Roles                        | Use case                       |
 |-------------|------------------------------|--------------------------------|
