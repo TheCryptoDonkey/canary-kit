@@ -349,3 +349,32 @@ describe('input validation (security audit)', () => {
     }
   })
 })
+
+describe('buildGroupEvent validation (security audit)', () => {
+  it('rejects non-positive-integer rotationInterval', () => {
+    expect(() => buildGroupEvent({
+      groupId: 'g1', name: 'Test', members: [ALICE],
+      rotationInterval: 0, wordCount: 1, wordlist: 'en-v1', encryptedContent: 'x',
+    })).toThrow(/rotationInterval/)
+    expect(() => buildGroupEvent({
+      groupId: 'g1', name: 'Test', members: [ALICE],
+      rotationInterval: -5, wordCount: 1, wordlist: 'en-v1', encryptedContent: 'x',
+    })).toThrow(/rotationInterval/)
+  })
+
+  it('rejects invalid wordCount', () => {
+    expect(() => buildGroupEvent({
+      groupId: 'g1', name: 'Test', members: [ALICE],
+      rotationInterval: 300, wordCount: 5 as any, wordlist: 'en-v1', encryptedContent: 'x',
+    })).toThrow(/wordCount/)
+  })
+})
+
+describe('buildMemberUpdateEvent validation (security audit)', () => {
+  it('rejects invalid action at runtime', () => {
+    expect(() => buildMemberUpdateEvent({
+      groupId: 'g1', action: 'promote' as any, memberPubkey: ALICE,
+      reseed: false, encryptedContent: 'x',
+    })).toThrow(/action/)
+  })
+})

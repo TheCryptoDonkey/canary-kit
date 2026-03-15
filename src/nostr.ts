@@ -65,6 +65,12 @@ export function buildGroupEvent(params: GroupEventParams): UnsignedEvent {
   validateTagString(params.groupId, 'groupId')
   validateTagString(params.name, 'name')
   for (const m of params.members) validatePubkey(m, 'member pubkey')
+  if (!Number.isInteger(params.rotationInterval) || params.rotationInterval <= 0) {
+    throw new Error(`Invalid rotationInterval: must be a positive integer, got ${params.rotationInterval}`)
+  }
+  if (params.wordCount !== 1 && params.wordCount !== 2 && params.wordCount !== 3) {
+    throw new Error(`Invalid wordCount: must be 1, 2, or 3, got ${params.wordCount}`)
+  }
   const tags: string[][] = [
     ['d', params.groupId],
     ['name', params.name],
@@ -108,6 +114,9 @@ export interface MemberUpdateParams {
 }
 
 export function buildMemberUpdateEvent(params: MemberUpdateParams): UnsignedEvent {
+  if (params.action !== 'add' && params.action !== 'remove') {
+    throw new Error(`Invalid action: must be 'add' or 'remove', got '${params.action}'`)
+  }
   validatePubkey(params.memberPubkey, 'memberPubkey')
   validateTagString(params.groupId, 'groupId')
   return {

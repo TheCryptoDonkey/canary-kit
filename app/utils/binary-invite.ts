@@ -300,6 +300,9 @@ export function unpackInvite(data: Uint8Array): InvitePayload {
   for (let i = 0; i < adminCount; i++) {
     const idx = view.getUint8(offset)
     offset += 1
+    if (idx >= members.length) {
+      throw new Error(`Invalid admin index ${idx} in binary invite (${members.length} members)`)
+    }
     admins.push(members[idx])
   }
 

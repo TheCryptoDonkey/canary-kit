@@ -279,6 +279,11 @@ describe('removeMember', () => {
     expect(result.seed).toBe(state.seed)
     expect(result.members).toEqual(state.members)
   })
+
+  it('rejects invalid pubkey (security audit)', () => {
+    const state = createGroup({ name: 'test', members: ['a'.repeat(64)] })
+    expect(() => removeMember(state, 'not-a-hex-key')).toThrow(/hex/)
+  })
 })
 
 describe('removeMemberAndReseed', () => {

@@ -417,7 +417,12 @@ export function applySyncMessage(
 
   switch (msg.type) {
     case 'member-join': {
-      const updated = addMember(group, msg.pubkey)
+      let updated: GroupState
+      try {
+        updated = addMember(group, msg.pubkey)
+      } catch {
+        return group // invalid pubkey or MAX_MEMBERS exceeded — reject silently
+      }
       const ops = appendConsumedOp(updated.consumedOps, msg.opId, msg.timestamp, group.consumedOpsFloor)
       const names = msg.displayName
         ? { memberNames: { ...(updated as any).memberNames, [msg.pubkey]: msg.displayName } }

@@ -163,7 +163,9 @@ document.addEventListener('canary:duress-clear', ((e: CustomEvent) => {
   // Clear dismissed state so a future duress for this person will show again
   removeDismissed(subject)
   // Remove any active duress overlay for this subject
-  const overlay = document.querySelector(`.duress-overlay[data-subject="${subject}"]`)
+  // Use iteration instead of attribute selector to prevent CSS selector injection
+  const overlay = Array.from(document.querySelectorAll('.duress-overlay'))
+    .find(el => (el as HTMLElement).dataset.subject === subject)
   if (overlay) {
     overlay.classList.remove('duress-overlay--visible')
     setTimeout(() => overlay.remove(), 300)

@@ -220,6 +220,7 @@ export function addMember(state: GroupState, pubkey: string): GroupState {
  * Returns new state — does not mutate the input.
  */
 export function removeMember(state: GroupState, pubkey: string): GroupState {
+  validatePubkey(pubkey)
   return { ...state, members: state.members.filter((m) => m !== pubkey) }
 }
 

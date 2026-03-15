@@ -24,7 +24,11 @@ export function getCounter(
   if (!Number.isFinite(rotationIntervalSec) || rotationIntervalSec <= 0) {
     throw new RangeError(`rotationIntervalSec must be a positive finite number, got ${rotationIntervalSec}`)
   }
-  return Math.floor(timestampSec / rotationIntervalSec)
+  const result = Math.floor(timestampSec / rotationIntervalSec)
+  if (result > 0xFFFFFFFF) {
+    throw new RangeError(`Counter exceeds uint32 range (${result}). Use a larger rotation interval.`)
+  }
+  return result
 }
 
 /**
