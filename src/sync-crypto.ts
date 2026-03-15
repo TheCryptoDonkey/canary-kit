@@ -22,6 +22,20 @@ function utf8(str: string): Uint8Array {
   return new TextEncoder().encode(str)
 }
 
+const HEX_64_RE = /^[0-9a-f]{64}$/
+
+function validateSeedHex(seedHex: string): void {
+  if (!HEX_64_RE.test(seedHex)) {
+    throw new Error('seedHex must be a 64-character lowercase hex string (32 bytes)')
+  }
+}
+
+function validateAesKey(key: Uint8Array): void {
+  if (key.length !== 32) {
+    throw new Error('AES-256-GCM requires a 32-byte key')
+  }
+}
+
 // ── Task 1: Group key derivation ──────────────────────────────────────────────
 
 /**
@@ -30,6 +44,7 @@ function utf8(str: string): Uint8Array {
  * `HMAC-SHA256(hex_to_bytes(seed), utf8("canary:sync:key"))`
  */
 export function deriveGroupKey(seedHex: string): Uint8Array {
+  validateSeedHex(seedHex)
   return hmacSha256(hexToBytes(seedHex), utf8('canary:sync:key'))
 }
 
@@ -41,6 +56,7 @@ export function deriveGroupKey(seedHex: string): Uint8Array {
  * Returns `base64(IV || ciphertext || auth_tag)` where IV is a random 12-byte nonce.
  */
 export async function encryptEnvelope(groupKey: Uint8Array, plaintext: string): Promise<string> {
+  validateAesKey(groupKey)
   const iv = crypto.getRandomValues(new Uint8Array(12))
 
   const cryptoKey = await crypto.subtle.importKey(
@@ -69,6 +85,7 @@ export async function encryptEnvelope(groupKey: Uint8Array, plaintext: string): 
  * Throws on authentication failure (wrong key or tampered data).
  */
 export async function decryptEnvelope(groupKey: Uint8Array, encoded: string): Promise<string> {
+  validateAesKey(groupKey)
   const combined = base64ToBytes(encoded)
 
   // 12-byte IV + 16-byte GCM auth tag = 28 bytes minimum (matching beacon.ts)
@@ -112,6 +129,7 @@ export async function decryptEnvelope(groupKey: Uint8Array, encoded: string): Pr
  * identity is unique within the group, even across reseed events.
  */
 export function deriveGroupSigningKey(seedHex: string, personalPrivkeyHex: string): Uint8Array {
+  validateSeedHex(seedHex)
   if (!/^[0-9a-f]{64}$/.test(personalPrivkeyHex)) {
     throw new Error('personalPrivkeyHex must be a 64-character lowercase hex string (32 bytes)')
   }

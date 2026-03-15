@@ -20,11 +20,24 @@ const HEX_64_RE = /^[0-9a-f]{64}$/
 const BEACON_KEY_INFO = new TextEncoder().encode('canary:beacon:key')
 const DURESS_KEY_INFO = new TextEncoder().encode('canary:duress:key')
 
+function validateSeedHex(seedHex: string): void {
+  if (!HEX_64_RE.test(seedHex)) {
+    throw new Error('seedHex must be a 64-character lowercase hex string (32 bytes)')
+  }
+}
+
+function validateAesKey(key: Uint8Array): void {
+  if (key.length !== 32) {
+    throw new Error('AES-256-GCM requires a 32-byte key')
+  }
+}
+
 /**
  * Derive a 256-bit AES key from the group seed for beacon encryption.
  * Deterministic: same seed always produces the same key.
  */
 export function deriveBeaconKey(seedHex: string): Uint8Array {
+  validateSeedHex(seedHex)
   return hmacSha256(hexToBytes(seedHex), BEACON_KEY_INFO)
 }
 
@@ -34,6 +47,7 @@ export function deriveBeaconKey(seedHex: string): Uint8Array {
  * prevents cross-type key reuse between normal beacons and duress alerts.
  */
 export function deriveDuressKey(seedHex: string): Uint8Array {
+  validateSeedHex(seedHex)
   return hmacSha256(hexToBytes(seedHex), DURESS_KEY_INFO)
 }
 
@@ -42,6 +56,7 @@ export function deriveDuressKey(seedHex: string): Uint8Array {
 // ---------------------------------------------------------------------------
 
 async function aesGcmEncrypt(key: Uint8Array, plaintext: Uint8Array): Promise<string> {
+  validateAesKey(key)
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const cryptoKey = await crypto.subtle.importKey(
     'raw', key as Uint8Array<ArrayBuffer>, { name: 'AES-GCM' }, false, ['encrypt'],
@@ -57,6 +72,7 @@ async function aesGcmEncrypt(key: Uint8Array, plaintext: Uint8Array): Promise<st
 }
 
 async function aesGcmDecrypt(key: Uint8Array, content: string): Promise<Uint8Array> {
+  validateAesKey(key)
   const combined = base64ToBytes(content)
   const MIN_CIPHERTEXT_LEN = 28 // 12-byte IV + 16-byte GCM auth tag
   if (combined.length < MIN_CIPHERTEXT_LEN) {

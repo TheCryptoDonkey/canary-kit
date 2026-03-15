@@ -211,6 +211,30 @@ describe('integration: encrypt sync message → decrypt → apply', () => {
     await expect(decryptEnvelope(oldKey, encrypted)).rejects.toThrow()
   })
 
+  it('rejects short seed in deriveGroupKey (security audit)', () => {
+    expect(() => deriveGroupKey('ab')).toThrow('seedHex must be a 64-character')
+  })
+
+  it('rejects uppercase seed in deriveGroupKey (security audit)', () => {
+    expect(() => deriveGroupKey('A'.repeat(64))).toThrow('seedHex must be a 64-character')
+  })
+
+  it('rejects short seed in deriveGroupSigningKey (security audit)', () => {
+    expect(() => deriveGroupSigningKey('ab', 'c'.repeat(64))).toThrow('seedHex must be a 64-character')
+  })
+
+  it('rejects wrong-length AES key in encryptEnvelope (security audit)', async () => {
+    const shortKey = new Uint8Array(16)
+    await expect(encryptEnvelope(shortKey, 'test')).rejects.toThrow('AES-256-GCM requires a 32-byte key')
+  })
+
+  it('rejects wrong-length AES key in decryptEnvelope (security audit)', async () => {
+    const shortKey = new Uint8Array(16)
+    // Valid-looking base64 of 28+ bytes
+    const fakeEncoded = btoa(String.fromCharCode(...new Uint8Array(32)))
+    await expect(decryptEnvelope(shortKey, fakeEncoded)).rejects.toThrow('AES-256-GCM requires a 32-byte key')
+  })
+
   it('member-join round-trips through group key encryption', async () => {
     const seed = randomSeed()
     const key = deriveGroupKey(seed)

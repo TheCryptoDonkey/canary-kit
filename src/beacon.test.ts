@@ -246,3 +246,42 @@ describe('security audit fixes', () => {
     }
   })
 })
+
+// ── Security audit: seed and key validation ──────────────────────────────────
+
+describe('seed validation (security audit)', () => {
+  it('deriveBeaconKey rejects short seed', () => {
+    expect(() => deriveBeaconKey('ab')).toThrow('seedHex must be a 64-character')
+  })
+
+  it('deriveBeaconKey rejects uppercase seed', () => {
+    expect(() => deriveBeaconKey('A'.repeat(64))).toThrow('seedHex must be a 64-character')
+  })
+
+  it('deriveDuressKey rejects short seed', () => {
+    expect(() => deriveDuressKey('ab')).toThrow('seedHex must be a 64-character')
+  })
+
+  it('deriveDuressKey rejects uppercase seed', () => {
+    expect(() => deriveDuressKey('A'.repeat(64))).toThrow('seedHex must be a 64-character')
+  })
+})
+
+describe('AES key length validation (security audit)', () => {
+  it('encryptBeacon rejects 16-byte key (prevents silent AES-128 downgrade)', async () => {
+    const shortKey = new Uint8Array(16)
+    await expect(encryptBeacon(shortKey, 'gcpuuz', 6)).rejects.toThrow('AES-256-GCM requires a 32-byte key')
+  })
+
+  it('decryptBeacon rejects 16-byte key', async () => {
+    const shortKey = new Uint8Array(16)
+    const fakeEncoded = btoa(String.fromCharCode(...new Uint8Array(32)))
+    await expect(decryptBeacon(shortKey, fakeEncoded)).rejects.toThrow('AES-256-GCM requires a 32-byte key')
+  })
+
+  it('encryptDuressAlert rejects 16-byte key', async () => {
+    const shortKey = new Uint8Array(16)
+    const alert = buildDuressAlert(PUBKEY_A, null)
+    await expect(encryptDuressAlert(shortKey, alert)).rejects.toThrow('AES-256-GCM requires a 32-byte key')
+  })
+})
