@@ -55,6 +55,9 @@ export function deriveTokenBytes(
   counter: number,
   identity?: string,
 ): Uint8Array {
+  if (identity !== undefined && identity === '') {
+    throw new Error('identity must be non-empty when provided')
+  }
   const key = normaliseSecret(secret)
   const data = identity
     ? concatBytes(utf8(context), new Uint8Array([0x00]), utf8(identity), counterBe32(counter))
@@ -224,8 +227,10 @@ export function verifyToken(
   }
   const normalised = input.toLowerCase().trim().replace(/\s+/g, ' ')
 
-  // Compute all branches to prevent timing side-channels from revealing
-  // which branch matched (valid vs duress vs invalid).
+  // All branches are computed regardless of which matches first to reduce
+  // timing side-channels. Note: deriveDuressToken has variable cost due to
+  // its collision-avoidance retry loop, so timing protection is partial.
+  // For high-assurance use, pair with rate limiting.
 
   const lo = Math.max(0, counter - tolerance)
   const hi = Math.min(0xFFFFFFFF, counter + tolerance)
@@ -324,8 +329,14 @@ export function deriveDirectionalPair(
   if (!namespace) {
     throw new Error('namespace must be a non-empty string')
   }
+  if (namespace.includes('\0')) {
+    throw new Error('namespace must not contain null bytes')
+  }
   if (!roles[0] || !roles[1]) {
     throw new Error('Both roles must be non-empty strings')
+  }
+  if (roles[0].includes('\0') || roles[1].includes('\0')) {
+    throw new Error('Roles must not contain null bytes')
   }
   if (roles[0] === roles[1]) {
     throw new Error(`Roles must be distinct, got ["${roles[0]}", "${roles[1]}"]`)

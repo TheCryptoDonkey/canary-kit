@@ -167,10 +167,11 @@ export function hmacSha256(key: Uint8Array, data: Uint8Array): Uint8Array {
   // outer = sha256(opad || inner)
   const result = sha256(concatBytes(opad, inner))
 
-  // Best-effort zeroing of key material
+  // Best-effort zeroing of key material and intermediate state
   k.fill(0)
   ipad.fill(0)
   opad.fill(0)
+  inner.fill(0)
 
   return result
 }

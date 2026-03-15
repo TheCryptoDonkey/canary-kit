@@ -307,6 +307,24 @@ describe('createSession — handoff preset (fixed counter)', () => {
 describe('createSession — role validation', () => {
   const secret = generateSeed()
 
+  it('throws when namespace contains null bytes', () => {
+    expect(() => createSession({
+      secret,
+      namespace: 'aviva\0caller',
+      roles: ['caller', 'agent'],
+      myRole: 'caller',
+    })).toThrow('namespace must not contain null bytes')
+  })
+
+  it('throws when roles contain null bytes', () => {
+    expect(() => createSession({
+      secret,
+      namespace: 'test',
+      roles: ['caller\0x', 'agent'],
+      myRole: 'caller\0x',
+    })).toThrow('Roles must not contain null bytes')
+  })
+
   it('throws when roles are identical', () => {
     expect(() => createSession({
       secret,

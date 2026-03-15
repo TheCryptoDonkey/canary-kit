@@ -107,7 +107,14 @@ export interface SessionConfig {
   encoding?: TokenEncoding
   /** Counter tolerance window (default: from preset or 0). */
   tolerance?: number
-  /** Their identity string for duress detection (e.g. customer ID). */
+  /**
+   * Their identity string for duress detection (e.g. customer ID).
+   *
+   * **WARNING:** When omitted, duress detection is completely disabled —
+   * a duress token from the other party will return `'invalid'` instead of
+   * `'duress'`. If duress detection is safety-critical for your use case,
+   * always provide this field.
+   */
   theirIdentity?: string
   /** Session preset (overrides rotationSeconds, tolerance, encoding). */
   preset?: SessionPresetName
@@ -145,8 +152,14 @@ export function createSession(config: SessionConfig): Session {
   if (!config.namespace) {
     throw new Error('namespace must be a non-empty string')
   }
+  if (config.namespace.includes('\0')) {
+    throw new Error('namespace must not contain null bytes')
+  }
   if (!config.roles[0] || !config.roles[1]) {
     throw new Error('Both roles must be non-empty strings')
+  }
+  if (config.roles[0].includes('\0') || config.roles[1].includes('\0')) {
+    throw new Error('Roles must not contain null bytes')
   }
   if (config.roles[0] === config.roles[1]) {
     throw new Error(`Roles must be distinct, got ["${config.roles[0]}", "${config.roles[1]}"]`)

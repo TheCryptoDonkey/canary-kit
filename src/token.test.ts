@@ -541,6 +541,11 @@ describe('secret validation', () => {
     expect(() => deriveToken('', 'test', 0)).toThrow(RangeError)
   })
 
+  it('rejects empty identity string', () => {
+    expect(() => deriveTokenBytes(SECRET_1, 'test', 0, '')).toThrow('identity must be non-empty when provided')
+    expect(() => deriveToken(SECRET_1, 'test', 0, undefined, '')).toThrow('identity must be non-empty when provided')
+  })
+
   it('rejects short secret (< 16 bytes)', () => {
     const shortSecret = '00'.repeat(15) // 15 bytes = 30 hex chars
     expect(() => deriveToken(shortSecret, 'test', 0)).toThrow(RangeError)
@@ -623,6 +628,15 @@ describe('deriveDirectionalPair validation (security audit)', () => {
   it('rejects empty role', () => {
     expect(() => deriveDirectionalPair(SECRET_1, 'ns', ['', 'b'], 0)).toThrow(/non-empty/)
     expect(() => deriveDirectionalPair(SECRET_1, 'ns', ['a', ''], 0)).toThrow(/non-empty/)
+  })
+
+  it('rejects null bytes in namespace', () => {
+    expect(() => deriveDirectionalPair(SECRET_1, 'ns\0x', ['a', 'b'], 0)).toThrow(/null bytes/)
+  })
+
+  it('rejects null bytes in roles', () => {
+    expect(() => deriveDirectionalPair(SECRET_1, 'ns', ['a\0x', 'b'], 0)).toThrow(/null bytes/)
+    expect(() => deriveDirectionalPair(SECRET_1, 'ns', ['a', 'b\0x'], 0)).toThrow(/null bytes/)
   })
 
   it('rejects duplicate roles', () => {

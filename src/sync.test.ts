@@ -1616,6 +1616,29 @@ describe('duress-clear validation (security audit)', () => {
     expect(() => decodeSyncMessage(payload)).toThrow(/opId/)
   })
 
+  it('rejects duress-clear with oversized subject', () => {
+    const payload = JSON.stringify({
+      type: 'duress-clear', subject: 'x'.repeat(257), timestamp: 1000, opId: 'dc-1', protocolVersion: PROTOCOL_VERSION,
+    })
+    expect(() => decodeSyncMessage(payload)).toThrow(/subject/)
+  })
+
+  it('rejects duress-alert with oversized subject', () => {
+    const payload = JSON.stringify({
+      type: 'duress-alert', lat: 51.5, lon: -0.12, timestamp: 1000, opId: 'da-1',
+      subject: 'x'.repeat(257), protocolVersion: PROTOCOL_VERSION,
+    })
+    expect(() => decodeSyncMessage(payload)).toThrow(/subject/)
+  })
+
+  it('rejects duress-alert with non-string subject', () => {
+    const payload = JSON.stringify({
+      type: 'duress-alert', lat: 51.5, lon: -0.12, timestamp: 1000, opId: 'da-1',
+      subject: 123, protocolVersion: PROTOCOL_VERSION,
+    })
+    expect(() => decodeSyncMessage(payload)).toThrow(/subject/)
+  })
+
   it('accepts valid duress-clear', () => {
     const payload = JSON.stringify({
       type: 'duress-clear', subject: 'alice', timestamp: 1000, opId: 'dc-1', protocolVersion: PROTOCOL_VERSION,

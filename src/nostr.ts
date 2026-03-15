@@ -80,6 +80,9 @@ export function buildGroupEvent(params: GroupEventParams): UnsignedEvent {
     ['wordlist', params.wordlist],
   ]
   if (params.expiration !== undefined) {
+    if (!Number.isInteger(params.expiration) || params.expiration < 0) {
+      throw new Error('expiration must be a non-negative integer')
+    }
     tags.push(['expiration', String(params.expiration)])
   }
   return { kind: KINDS.group, content: params.encryptedContent, tags, created_at: now() }
@@ -138,8 +141,13 @@ export interface ReseedParams {
   encryptedContent: string
 }
 
+const VALID_RESEED_REASONS = new Set<string>(['member_removed', 'compromise', 'scheduled', 'duress'])
+
 export function buildReseedEvent(params: ReseedParams): UnsignedEvent {
   validateEventId(params.groupEventId, 'groupEventId')
+  if (!VALID_RESEED_REASONS.has(params.reason)) {
+    throw new Error(`Invalid reason: must be one of ${[...VALID_RESEED_REASONS].join(', ')}, got '${params.reason}'`)
+  }
   return {
     kind: KINDS.reseed,
     content: params.encryptedContent,
@@ -211,6 +219,9 @@ export function buildBeaconEvent(params: BeaconEventParams): UnsignedEvent {
   validateTagString(params.groupId, 'groupId')
   const tags: string[][] = [['h', params.groupId]]
   if (params.expiration !== undefined) {
+    if (!Number.isInteger(params.expiration) || params.expiration < 0) {
+      throw new Error('expiration must be a non-negative integer')
+    }
     tags.push(['expiration', String(params.expiration)])
   }
   return { kind: KINDS.beacon, content: params.encryptedContent, tags, created_at: now() }

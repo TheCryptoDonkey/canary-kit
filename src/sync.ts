@@ -42,6 +42,7 @@ export const STORED_MESSAGE_TYPES = new Set<string>([
 const HEX_64_RE = /^[0-9a-f]{64}$/
 const MAX_COUNTER_ADVANCE_OFFSET = 100
 const MAX_BEACON_ACCURACY_METERS = 20_000_000
+const MAX_TAG_LENGTH = 256
 
 /** Maximum age (in seconds) for fire-and-forget messages before they are dropped. */
 export const FIRE_AND_FORGET_FRESHNESS_SEC = 300
@@ -263,11 +264,17 @@ export function decodeSyncMessage(payload: string): SyncMessage {
       if (typeof parsed.opId !== 'string' || parsed.opId.length === 0 || parsed.opId.length > 128) {
         throw new Error('Invalid sync message: duress-alert requires a non-empty opId (max 128 chars)')
       }
+      if (parsed.subject !== undefined && (typeof parsed.subject !== 'string' || parsed.subject.length > MAX_TAG_LENGTH)) {
+        throw new Error(`Invalid sync message: duress-alert subject must be a string of at most ${MAX_TAG_LENGTH} characters`)
+      }
       break
 
     case 'duress-clear':
       if (typeof parsed.subject !== 'string' || parsed.subject.length === 0) {
         throw new Error('Invalid sync message: duress-clear requires a non-empty subject')
+      }
+      if (parsed.subject.length > MAX_TAG_LENGTH) {
+        throw new Error(`Invalid sync message: duress-clear subject exceeds maximum length of ${MAX_TAG_LENGTH} characters`)
       }
       if (typeof parsed.opId !== 'string' || parsed.opId.length === 0 || parsed.opId.length > 128) {
         throw new Error('Invalid sync message: duress-clear requires a non-empty opId (max 128 chars)')

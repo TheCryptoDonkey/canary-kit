@@ -269,6 +269,26 @@ describe('expiration edge cases', () => {
     })
     expect(event.tags).toContainEqual(['expiration', '0'])
   })
+
+  it('rejects negative expiration in buildGroupEvent', () => {
+    expect(() => buildGroupEvent({
+      groupId: GROUP_D, name: 'Test', members: [ALICE], rotationInterval: 604_800,
+      wordCount: 1, wordlist: 'en-v1', encryptedContent: '', expiration: -1,
+    })).toThrow(/non-negative integer/)
+  })
+
+  it('rejects NaN expiration in buildBeaconEvent', () => {
+    expect(() => buildBeaconEvent({
+      groupId: GROUP_D, encryptedContent: '', expiration: NaN,
+    })).toThrow(/non-negative integer/)
+  })
+
+  it('rejects fractional expiration in buildGroupEvent', () => {
+    expect(() => buildGroupEvent({
+      groupId: GROUP_D, name: 'Test', members: [ALICE], rotationInterval: 604_800,
+      wordCount: 1, wordlist: 'en-v1', encryptedContent: '', expiration: 1.5,
+    })).toThrow(/non-negative integer/)
+  })
 })
 
 describe('SeedDistributionPayload', () => {
@@ -308,6 +328,14 @@ describe('input validation (security audit)', () => {
     expect(() => buildReseedEvent({
       groupEventId: 'short', reason: 'compromise', encryptedContent: 'x',
     })).toThrow(/64/)
+  })
+
+  it('rejects invalid reason in buildReseedEvent', () => {
+    expect(() => buildReseedEvent({
+      groupEventId: GROUP_EVENT_ID,
+      reason: 'invalid_reason' as any,
+      encryptedContent: 'x',
+    })).toThrow(/Invalid reason/)
   })
 
   it('rejects invalid groupEventId in buildWordUsedEvent', () => {
