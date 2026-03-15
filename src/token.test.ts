@@ -345,8 +345,8 @@ describe('deriveDirectionalPair', () => {
 
   it('role tokens match individual deriveToken calls', () => {
     const pair = deriveDirectionalPair(SECRET_1, 'aviva', ['caller', 'agent'], 0)
-    expect(pair.caller).toBe(deriveToken(SECRET_1, 'aviva:caller', 0))
-    expect(pair.agent).toBe(deriveToken(SECRET_1, 'aviva:agent', 0))
+    expect(pair.caller).toBe(deriveToken(SECRET_1, 'aviva\0caller', 0))
+    expect(pair.agent).toBe(deriveToken(SECRET_1, 'aviva\0agent', 0))
   })
 
   it('works with PIN encoding', () => {
@@ -627,5 +627,12 @@ describe('deriveDirectionalPair validation (security audit)', () => {
 
   it('rejects duplicate roles', () => {
     expect(() => deriveDirectionalPair(SECRET_1, 'ns', ['x', 'x'], 0)).toThrow(/distinct/)
+  })
+
+  it('namespace:role concatenation is unambiguous (security audit)', () => {
+    // "a:b" + role "c" must differ from "a" + role "b:c"
+    const pair1 = deriveDirectionalPair(SECRET_1, 'a:b', ['c', 'd'], 0)
+    const pair2 = deriveDirectionalPair(SECRET_1, 'a', ['b:c', 'd'], 0)
+    expect(pair1.c).not.toBe(pair2['b:c'])
   })
 })

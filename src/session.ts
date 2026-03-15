@@ -177,8 +177,10 @@ export function createSession(config: SessionConfig): Session {
 
   const secret = typeof config.secret === 'string' ? hexToBytes(config.secret) : config.secret
   const theirRole = config.roles[0] === config.myRole ? config.roles[1] : config.roles[0]
-  const myContext = `${config.namespace}:${config.myRole}`
-  const theirContext = `${config.namespace}:${theirRole}`
+  // Use null-byte separator to match deriveDirectionalPair and prevent
+  // concatenation ambiguity (e.g. namespace "a:b" + role "c" vs "a" + "b:c")
+  const myContext = `${config.namespace}\0${config.myRole}`
+  const theirContext = `${config.namespace}\0${theirRole}`
 
   const isFixedCounter = rotationSeconds === 0
 

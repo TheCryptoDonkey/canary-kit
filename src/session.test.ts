@@ -177,8 +177,8 @@ describe('createSession — call preset', () => {
   it('tokens match raw deriveToken with correct context strings', () => {
     const session = makeSession('agent')
     const counter = session.counter(FIXED_NOW)
-    expect(session.myToken(FIXED_NOW)).toBe(deriveToken(SECRET, 'aviva:agent', counter))
-    expect(session.theirToken(FIXED_NOW)).toBe(deriveToken(SECRET, 'aviva:caller', counter))
+    expect(session.myToken(FIXED_NOW)).toBe(deriveToken(SECRET, 'aviva\0agent', counter))
+    expect(session.theirToken(FIXED_NOW)).toBe(deriveToken(SECRET, 'aviva\0caller', counter))
   })
 
   it('pair returns both tokens keyed by role', () => {
@@ -205,7 +205,7 @@ describe('createSession — call preset', () => {
   it('verify respects preset tolerance (±1 counter)', () => {
     const agent = makeSession('agent')
     const counter = agent.counter(FIXED_NOW)
-    const callerToken = deriveToken(SECRET, 'aviva:caller', counter)
+    const callerToken = deriveToken(SECRET, 'aviva\0caller', counter)
     const laterNow = FIXED_NOW + 30
     const result = agent.verify(callerToken, laterNow)
     expect(result.status).toBe('valid')
@@ -225,7 +225,7 @@ describe('createSession — duress detection', () => {
       theirIdentity: 'customer-123',
     })
     const counter = agent.counter(FIXED_NOW)
-    const duressWord = deriveDuressToken(SECRET, 'aviva:caller', 'customer-123', counter, undefined, 1)
+    const duressWord = deriveDuressToken(SECRET, 'aviva\0caller', 'customer-123', counter, undefined, 1)
     const result = agent.verify(duressWord, FIXED_NOW)
     expect(result.status).toBe('duress')
     expect(result.identities).toEqual(['customer-123'])
@@ -240,7 +240,7 @@ describe('createSession — duress detection', () => {
       preset: 'call',
     })
     const counter = agent.counter(FIXED_NOW)
-    const duressWord = deriveDuressToken(SECRET, 'aviva:caller', 'customer-123', counter, undefined, 1)
+    const duressWord = deriveDuressToken(SECRET, 'aviva\0caller', 'customer-123', counter, undefined, 1)
     const result = agent.verify(duressWord, FIXED_NOW)
     expect(result.status).toBe('invalid')
   })
@@ -440,7 +440,7 @@ describe('createSession — duress with tolerance drift', () => {
     // Derive duress at slightly earlier counter
     const counter = agent.counter(FIXED_NOW)
     const prevCounter = counter - 1
-    const duressWord = deriveDuressToken(SECRET, 'aviva:caller', 'customer-123', prevCounter, undefined, 1)
+    const duressWord = deriveDuressToken(SECRET, 'aviva\0caller', 'customer-123', prevCounter, undefined, 1)
     const result = agent.verify(duressWord, FIXED_NOW)
     expect(result.status).toBe('duress')
     expect(result.identities).toEqual(['customer-123'])
@@ -458,7 +458,7 @@ describe('createSession — handoff duress detection', () => {
       counter: 42,
       theirIdentity: 'rider-456',
     })
-    const duressWord = deriveDuressToken(SECRET, 'dispatch:requester', 'rider-456', 42, undefined, 0)
+    const duressWord = deriveDuressToken(SECRET, 'dispatch\0requester', 'rider-456', 42, undefined, 0)
     const result = provider.verify(duressWord)
     expect(result.status).toBe('duress')
     expect(result.identities).toEqual(['rider-456'])

@@ -330,8 +330,10 @@ export function deriveDirectionalPair(
   if (roles[0] === roles[1]) {
     throw new Error(`Roles must be distinct, got ["${roles[0]}", "${roles[1]}"]`)
   }
+  // Use null-byte separator to prevent concatenation ambiguity
+  // (e.g. namespace "a:b" + role "c" vs namespace "a" + role "b:c")
   return {
-    [roles[0]]: deriveToken(secret, `${namespace}:${roles[0]}`, counter, encoding),
-    [roles[1]]: deriveToken(secret, `${namespace}:${roles[1]}`, counter, encoding),
+    [roles[0]]: deriveToken(secret, `${namespace}\0${roles[0]}`, counter, encoding),
+    [roles[1]]: deriveToken(secret, `${namespace}\0${roles[1]}`, counter, encoding),
   }
 }
