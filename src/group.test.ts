@@ -253,6 +253,16 @@ describe('addMember', () => {
   })
 })
 
+describe('duplicate member validation (security audit)', () => {
+  it('rejects duplicate pubkeys in members array', () => {
+    expect(() => createGroup({ name: 'Test', members: [ALICE, ALICE] })).toThrow(/Duplicate/)
+  })
+
+  it('accepts unique pubkeys', () => {
+    expect(() => createGroup({ name: 'Test', members: [ALICE, BOB] })).not.toThrow()
+  })
+})
+
 describe('removeMember', () => {
   it('removes a member without reseeding', () => {
     const group = createGroup({ name: 'Test', members: [ALICE, BOB, CHARLIE] })

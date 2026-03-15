@@ -585,3 +585,42 @@ describe('MAX_TOLERANCE enforcement', () => {
     expect(() => verifyToken(SECRET_1, 'test', 0, token, [], { tolerance: 10 })).not.toThrow()
   })
 })
+
+describe('per-member collision avoidance (security audit)', () => {
+  it('deriveDuressToken with identities avoids per-member normal tokens', () => {
+    const identities = [IDENTITY_A, IDENTITY_B]
+    for (let c = 0; c < 200; c++) {
+      const duressA = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, c, undefined, 1, identities)
+      // Must not collide with any per-member normal token in the tolerance window
+      for (let adj = Math.max(0, c - 1); adj <= c + 1; adj++) {
+        for (const id of identities) {
+          const normal = deriveToken(SECRET_1, 'test', adj, undefined, id)
+          expect(duressA, `duress(A,${c}) collided with normal(${id},${adj})`).not.toBe(normal)
+        }
+      }
+    }
+  })
+
+  it('deriveDuressToken without identities still avoids group-wide token', () => {
+    for (let c = 0; c < 100; c++) {
+      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, c, undefined, 1)
+      const normal = deriveToken(SECRET_1, 'test', c)
+      expect(duress).not.toBe(normal)
+    }
+  })
+})
+
+describe('deriveDirectionalPair validation (security audit)', () => {
+  it('rejects empty namespace', () => {
+    expect(() => deriveDirectionalPair(SECRET_1, '', ['a', 'b'], 0)).toThrow(/non-empty/)
+  })
+
+  it('rejects empty role', () => {
+    expect(() => deriveDirectionalPair(SECRET_1, 'ns', ['', 'b'], 0)).toThrow(/non-empty/)
+    expect(() => deriveDirectionalPair(SECRET_1, 'ns', ['a', ''], 0)).toThrow(/non-empty/)
+  })
+
+  it('rejects duplicate roles', () => {
+    expect(() => deriveDirectionalPair(SECRET_1, 'ns', ['x', 'x'], 0)).toThrow(/distinct/)
+  })
+})

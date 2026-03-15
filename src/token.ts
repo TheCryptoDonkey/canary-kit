@@ -115,6 +115,11 @@ export function deriveDuressTokenBytes(
  * **maxTolerance is required** — it must match the tolerance used by verifiers.
  * Using an insufficient value allows duress tokens to collide with normal tokens
  * at distant counters, causing silent alarm suppression.
+ *
+ * **identities** — when provided, the forbidden set also includes per-member
+ * normal tokens for all identities across the collision avoidance window.
+ * Without this, a duress token for identity A could collide with the normal
+ * per-member token for identity B, causing false duress detection.
  */
 export function deriveDuressToken(
   secret: Uint8Array | string,
@@ -123,6 +128,7 @@ export function deriveDuressToken(
   counter: number,
   encoding: TokenEncoding = DEFAULT_ENCODING,
   maxTolerance: number,
+  identities?: string[],
 ): string {
   if (!Number.isInteger(maxTolerance) || maxTolerance < 0) {
     throw new RangeError('maxTolerance must be a non-negative integer')
@@ -137,7 +143,14 @@ export function deriveDuressToken(
   const lo = Math.max(0, counter - window)
   const hi = Math.min(0xFFFFFFFF, counter + window)
   for (let c = lo; c <= hi; c++) {
+    // Group-wide (anonymous) token
     forbidden.add(deriveToken(secret, context, c, encoding))
+    // Per-member tokens for all known identities
+    if (identities) {
+      for (const id of identities) {
+        forbidden.add(deriveToken(secret, context, c, encoding, id))
+      }
+    }
   }
 
   const key = normaliseSecret(secret)
@@ -308,6 +321,15 @@ export function deriveDirectionalPair(
   counter: number,
   encoding: TokenEncoding = DEFAULT_ENCODING,
 ): DirectionalPair {
+  if (!namespace) {
+    throw new Error('namespace must be a non-empty string')
+  }
+  if (!roles[0] || !roles[1]) {
+    throw new Error('Both roles must be non-empty strings')
+  }
+  if (roles[0] === roles[1]) {
+    throw new Error(`Roles must be distinct, got ["${roles[0]}", "${roles[1]}"]`)
+  }
   return {
     [roles[0]]: deriveToken(secret, `${namespace}:${roles[0]}`, counter, encoding),
     [roles[1]]: deriveToken(secret, `${namespace}:${roles[1]}`, counter, encoding),

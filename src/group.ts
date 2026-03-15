@@ -110,6 +110,11 @@ export function createGroup(config: GroupConfig): GroupState {
     validatePubkey(pubkey)
   }
 
+  const uniqueMembers = new Set(config.members)
+  if (uniqueMembers.size !== config.members.length) {
+    throw new Error('Duplicate pubkeys in members array')
+  }
+
   if (config.creator !== undefined) {
     validatePubkey(config.creator)
     if (!config.members.includes(config.creator)) {
@@ -161,7 +166,7 @@ export function getCurrentWord(state: GroupState): string {
 export function getCurrentDuressWord(state: GroupState, memberPubkey: string): string {
   const counter = effectiveCounter(state)
   const encoding = state.wordCount === 1 ? undefined : { format: 'words' as const, count: state.wordCount }
-  return deriveDuressToken(state.seed, GROUP_CONTEXT, memberPubkey, counter, encoding, state.tolerance)
+  return deriveDuressToken(state.seed, GROUP_CONTEXT, memberPubkey, counter, encoding, state.tolerance, state.members)
 }
 
 /**
