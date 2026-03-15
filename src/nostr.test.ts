@@ -296,3 +296,56 @@ describe('GroupEventPayload', () => {
     expect(payload.policies.invite_by).toBe('creator')
   })
 })
+
+describe('input validation (security audit)', () => {
+  it('rejects invalid groupEventId in buildSeedDistributionEvent', () => {
+    expect(() => buildSeedDistributionEvent({
+      recipientPubkey: ALICE, groupEventId: 'not-hex', encryptedContent: 'x',
+    })).toThrow(/64/)
+  })
+
+  it('rejects invalid groupEventId in buildReseedEvent', () => {
+    expect(() => buildReseedEvent({
+      groupEventId: 'short', reason: 'compromise', encryptedContent: 'x',
+    })).toThrow(/64/)
+  })
+
+  it('rejects invalid groupEventId in buildWordUsedEvent', () => {
+    expect(() => buildWordUsedEvent({
+      groupEventId: 'bad', encryptedContent: 'x',
+    })).toThrow(/64/)
+  })
+
+  it('rejects empty groupId in buildGroupEvent', () => {
+    expect(() => buildGroupEvent({
+      groupId: '', name: 'Test', members: [ALICE], rotationInterval: 604800,
+      wordCount: 1, wordlist: 'en-v1', encryptedContent: 'x',
+    })).toThrow(/non-empty/)
+  })
+
+  it('rejects empty groupId in buildBeaconEvent', () => {
+    expect(() => buildBeaconEvent({
+      groupId: '', encryptedContent: 'x',
+    })).toThrow(/non-empty/)
+  })
+
+  it('rejects overly long groupId', () => {
+    expect(() => buildGroupEvent({
+      groupId: 'x'.repeat(257), name: 'Test', members: [ALICE], rotationInterval: 604800,
+      wordCount: 1, wordlist: 'en-v1', encryptedContent: 'x',
+    })).toThrow(/maximum length/)
+  })
+
+  it('error message does not leak pubkey content', () => {
+    const fakeSecret = 'a'.repeat(100) // looks like a secret
+    try {
+      buildSeedDistributionEvent({
+        recipientPubkey: fakeSecret, groupEventId: GROUP_EVENT_ID, encryptedContent: 'x',
+      })
+    } catch (e: any) {
+      // Should only contain length, not the actual value
+      expect(e.message).toContain('100 chars')
+      expect(e.message).not.toContain(fakeSecret)
+    }
+  })
+})

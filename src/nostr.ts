@@ -27,10 +27,26 @@ function now(): number {
 }
 
 const HEX_64_RE = /^[0-9a-f]{64}$/
+const MAX_TAG_LENGTH = 256
 
 function validatePubkey(pubkey: string, label: string): void {
   if (!HEX_64_RE.test(pubkey)) {
-    throw new Error(`Invalid ${label}: expected 64 lowercase hex characters, got "${pubkey.length > 80 ? pubkey.slice(0, 20) + '…' : pubkey}"`)
+    throw new Error(`Invalid ${label}: expected 64 lowercase hex characters, got ${pubkey.length} chars`)
+  }
+}
+
+function validateEventId(eventId: string, label: string): void {
+  if (!HEX_64_RE.test(eventId)) {
+    throw new Error(`Invalid ${label}: expected 64 lowercase hex characters, got ${eventId.length} chars`)
+  }
+}
+
+function validateTagString(value: string, label: string): void {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`Invalid ${label}: must be a non-empty string`)
+  }
+  if (value.length > MAX_TAG_LENGTH) {
+    throw new Error(`Invalid ${label}: exceeds maximum length of ${MAX_TAG_LENGTH} characters`)
   }
 }
 
@@ -46,6 +62,8 @@ export interface GroupEventParams {
 }
 
 export function buildGroupEvent(params: GroupEventParams): UnsignedEvent {
+  validateTagString(params.groupId, 'groupId')
+  validateTagString(params.name, 'name')
   for (const m of params.members) validatePubkey(m, 'member pubkey')
   const tags: string[][] = [
     ['d', params.groupId],
@@ -69,6 +87,7 @@ export interface SeedDistributionParams {
 
 export function buildSeedDistributionEvent(params: SeedDistributionParams): UnsignedEvent {
   validatePubkey(params.recipientPubkey, 'recipientPubkey')
+  validateEventId(params.groupEventId, 'groupEventId')
   return {
     kind: KINDS.seedDistribution,
     content: params.encryptedContent,
@@ -90,6 +109,7 @@ export interface MemberUpdateParams {
 
 export function buildMemberUpdateEvent(params: MemberUpdateParams): UnsignedEvent {
   validatePubkey(params.memberPubkey, 'memberPubkey')
+  validateTagString(params.groupId, 'groupId')
   return {
     kind: KINDS.memberUpdate,
     content: params.encryptedContent,
@@ -110,6 +130,7 @@ export interface ReseedParams {
 }
 
 export function buildReseedEvent(params: ReseedParams): UnsignedEvent {
+  validateEventId(params.groupEventId, 'groupEventId')
   return {
     kind: KINDS.reseed,
     content: params.encryptedContent,
@@ -127,6 +148,7 @@ export interface WordUsedParams {
 }
 
 export function buildWordUsedEvent(params: WordUsedParams): UnsignedEvent {
+  validateEventId(params.groupEventId, 'groupEventId')
   return {
     kind: KINDS.wordUsed,
     content: params.encryptedContent,
@@ -177,6 +199,7 @@ export interface WordUsedPayload {
 }
 
 export function buildBeaconEvent(params: BeaconEventParams): UnsignedEvent {
+  validateTagString(params.groupId, 'groupId')
   const tags: string[][] = [['h', params.groupId]]
   if (params.expiration !== undefined) {
     tags.push(['expiration', String(params.expiration)])

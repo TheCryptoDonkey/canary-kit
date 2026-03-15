@@ -42,10 +42,9 @@ export function verifyWord(
   wordCount: 1 | 2 | 3 = 1,
   tolerance: number = 1,
 ): VerifyResult {
-  const encoding: TokenEncoding = wordCount === 1
-    ? undefined as unknown as TokenEncoding  // default single-word encoding
+  const encodingOpt: TokenEncoding | undefined = wordCount === 1
+    ? undefined
     : { format: 'words', count: wordCount }
-  const encodingOpt = wordCount === 1 ? undefined : encoding
 
   const result = verifyToken(seedHex, GROUP_CONTEXT, counter, spokenWord, memberPubkeys, {
     encoding: encodingOpt,
