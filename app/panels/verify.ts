@@ -1,6 +1,6 @@
 // app/panels/verify.ts — Verify panel: select member, then tap what you heard
 
-import { getCounter, deriveBeaconKey, buildDuressAlert, encryptDuressAlert } from 'canary-kit'
+import { getCounter, deriveDuressKey, buildDuressAlert, encryptDuressAlert } from 'canary-kit'
 import { deriveToken, deriveDuressToken, verifyToken } from 'canary-kit/token'
 import { getWord, WORDLIST_SIZE } from 'canary-kit/wordlist'
 import { getState } from '../state.js'
@@ -62,10 +62,10 @@ function handleDuressResult(identities: string[], groupId: string): void {
   const group = groups[groupId]
   if (!group) return
 
-  const beaconKey = deriveBeaconKey(group.seed)
+  const duressKey = deriveDuressKey(group.seed)
   for (const memberId of identities) {
     const alert = buildDuressAlert(memberId, null)
-    void encryptDuressAlert(beaconKey, alert).then((encrypted) => {
+    void encryptDuressAlert(duressKey, alert).then((encrypted) => {
       console.info('[canary] Duress alert encrypted:', encrypted.slice(0, 32) + '…')
     })
 

@@ -178,7 +178,7 @@ export function buildDuressAlert(
 }
 
 /**
- * Encrypt a duress alert with the group's beacon key.
+ * Encrypt a duress alert with the group's duress key (from deriveDuressKey).
  * Returns a base64 string for the Nostr event's `content` field.
  */
 export async function encryptDuressAlert(

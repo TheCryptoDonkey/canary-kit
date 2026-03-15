@@ -176,7 +176,7 @@ describe('decryptBeacon validation', () => {
 
 describe('encryptDuressAlert / decryptDuressAlert', () => {
   it('round-trips a duress alert with location', async () => {
-    const key = deriveBeaconKey(SEED_1)
+    const key = deriveDuressKey(SEED_1)
     const alert = buildDuressAlert(PUBKEY_A, {
       geohash: 'gcpuuzwjzpb',
       precision: 11,
@@ -192,7 +192,7 @@ describe('encryptDuressAlert / decryptDuressAlert', () => {
   })
 
   it('round-trips a duress alert with no location', async () => {
-    const key = deriveBeaconKey(SEED_1)
+    const key = deriveDuressKey(SEED_1)
     const alert = buildDuressAlert(PUBKEY_A, null)
     const encrypted = await encryptDuressAlert(key, alert)
     const decrypted = await decryptDuressAlert(key, encrypted)
@@ -201,8 +201,8 @@ describe('encryptDuressAlert / decryptDuressAlert', () => {
   })
 
   it('wrong key fails to decrypt', async () => {
-    const key1 = deriveBeaconKey(SEED_1)
-    const key2 = deriveBeaconKey(SEED_2)
+    const key1 = deriveDuressKey(SEED_1)
+    const key2 = deriveDuressKey(SEED_2)
     const alert = buildDuressAlert(PUBKEY_A, {
       geohash: 'gcpuuzwjzpb',
       precision: 11,
