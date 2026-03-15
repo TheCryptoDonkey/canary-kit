@@ -142,6 +142,12 @@ export function createSession(config: SessionConfig): Session {
   const wordCount = preset?.wordCount ?? 1
   const encoding: TokenEncoding = config.encoding ?? { format: 'words', count: wordCount }
 
+  if (!config.namespace) {
+    throw new Error('namespace must be a non-empty string')
+  }
+  if (!config.roles[0] || !config.roles[1]) {
+    throw new Error('Both roles must be non-empty strings')
+  }
   if (config.roles[0] === config.roles[1]) {
     throw new Error(`Roles must be distinct, got ["${config.roles[0]}", "${config.roles[1]}"]`)
   }

@@ -243,7 +243,7 @@ export function verifyToken(
   for (const identity of identities) {
     let found = false
     for (let c = lo; c <= hi; c++) {
-      if (timingSafeStringEqual(normalised, deriveDuressToken(secret, context, identity, c, encoding, tolerance))) {
+      if (timingSafeStringEqual(normalised, deriveDuressToken(secret, context, identity, c, encoding, tolerance, identities))) {
         found = true
       }
     }

@@ -400,8 +400,9 @@ describe('cross-counter collision avoidance', () => {
 
   it('verifyToken: duress at exact counter wins over normal at adjacent counter', () => {
     // Even with tolerance, a duress token at the exact counter must be detected
-    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 10, undefined, 1)
-    const result = verifyToken(SECRET_1, 'test', 10, duress, [IDENTITY_A, IDENTITY_B], { tolerance: 1 })
+    const ids = [IDENTITY_A, IDENTITY_B]
+    const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, 10, undefined, 1, ids)
+    const result = verifyToken(SECRET_1, 'test', 10, duress, ids, { tolerance: 1 })
     expect(result.status).toBe('duress')
     expect(result.identities).toEqual([IDENTITY_A])
   })
@@ -411,10 +412,11 @@ describe('cross-counter collision avoidance', () => {
     // If verifyToken doesn't pass tolerance as maxTolerance, a duress token
     // derived with default maxTolerance=1 could collide with normal at ±2.
     const tolerance = 2
+    const ids = [IDENTITY_A]
 
     for (let c = 2; c < 100; c++) {
-      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, c, undefined, tolerance)
-      const result = verifyToken(SECRET_1, 'test', c, duress, [IDENTITY_A], { tolerance })
+      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, c, undefined, tolerance, ids)
+      const result = verifyToken(SECRET_1, 'test', c, duress, ids, { tolerance })
       expect(
         result.status,
         `counter=${c}: duress token "${duress}" classified as "${result.status}" with tolerance=${tolerance}`,
@@ -427,8 +429,9 @@ describe('cross-counter collision avoidance', () => {
     // in the range ±2T, because the verifier's counter can drift by ±T from
     // the deriver's counter, expanding the normal-token window to ±2T.
     const tolerance = 2
+    const ids = [IDENTITY_A]
     for (let d = 4; d < 200; d++) {
-      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, d, undefined, tolerance)
+      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, d, undefined, tolerance, ids)
       // Check the full ±2T window
       const lo = Math.max(0, d - 2 * tolerance)
       const hi = d + 2 * tolerance
@@ -442,11 +445,12 @@ describe('cross-counter collision avoidance', () => {
   it('verifyToken detects duress when verifier counter drifts by tolerance (P2 regression)', () => {
     // The exact reproduction: deriver at c=74, verifier at c=72, tolerance=2
     const tolerance = 2
+    const ids = [IDENTITY_A]
     for (let d = tolerance; d < 100; d++) {
-      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, d, undefined, tolerance)
+      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, d, undefined, tolerance, ids)
       // Verifier counter can be anywhere in [d-tolerance, d+tolerance]
       for (let v = Math.max(0, d - tolerance); v <= d + tolerance; v++) {
-        const result = verifyToken(SECRET_1, 'test', v, duress, [IDENTITY_A], { tolerance })
+        const result = verifyToken(SECRET_1, 'test', v, duress, ids, { tolerance })
         expect(
           result.status,
           `deriver=${d}, verifier=${v}, token="${duress}": expected duress, got ${result.status}`,
@@ -460,10 +464,11 @@ describe('cross-counter collision avoidance', () => {
     // Before fix: duress token classified as 'valid' because collision avoidance
     // window was insufficient for the verifier's tolerance.
     const tolerance = 3
+    const ids = [IDENTITY_A]
     for (let d = tolerance; d < 80; d++) {
-      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, d, undefined, tolerance)
+      const duress = deriveDuressToken(SECRET_1, 'test', IDENTITY_A, d, undefined, tolerance, ids)
       for (let v = Math.max(0, d - tolerance); v <= d + tolerance; v++) {
-        const result = verifyToken(SECRET_1, 'test', v, duress, [IDENTITY_A], { tolerance })
+        const result = verifyToken(SECRET_1, 'test', v, duress, ids, { tolerance })
         expect(
           result.status,
           `deriver=${d}, verifier=${v}, token="${duress}": expected duress, got ${result.status}`,

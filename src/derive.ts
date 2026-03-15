@@ -50,8 +50,9 @@ export function deriveDuressWord(
   memberPubkeyHex: string,
   counter: number,
   maxTolerance: number = DEFAULT_GROUP_TOLERANCE,
+  identities?: string[],
 ): string {
-  return deriveDuressToken(seedHex, GROUP_CONTEXT, memberPubkeyHex, counter, undefined, maxTolerance)
+  return deriveDuressToken(seedHex, GROUP_CONTEXT, memberPubkeyHex, counter, undefined, maxTolerance, identities)
 }
 
 /**
@@ -65,9 +66,10 @@ export function deriveDuressPhrase(
   counter: number,
   wordCount: 1 | 2 | 3,
   maxTolerance: number = DEFAULT_GROUP_TOLERANCE,
+  identities?: string[],
 ): string[] {
-  if (wordCount === 1) return [deriveDuressWord(seedHex, memberPubkeyHex, counter, maxTolerance)]
-  return deriveDuressToken(seedHex, GROUP_CONTEXT, memberPubkeyHex, counter, wordEncoding(wordCount), maxTolerance).split(' ')
+  if (wordCount === 1) return [deriveDuressWord(seedHex, memberPubkeyHex, counter, maxTolerance, identities)]
+  return deriveDuressToken(seedHex, GROUP_CONTEXT, memberPubkeyHex, counter, wordEncoding(wordCount), maxTolerance, identities).split(' ')
 }
 
 /**
