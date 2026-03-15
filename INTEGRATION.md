@@ -245,6 +245,55 @@ if (result.status === 'valid') {
 }
 ```
 
+## Beacon Privacy: Timing Correlation
+
+Location beacons (`encryptBeacon`) encrypt the geohash payload with AES-256-GCM,
+but the Nostr event metadata — `created_at`, publisher pubkey, and the `h` group
+tag — is visible to relay operators and traffic analysts.
+
+**Risk:** If beacons are published at a fixed interval (e.g. every 300 seconds),
+an observer can:
+
+- **Link beacons over time** by matching the regular cadence from a single pubkey
+- **Detect online/offline transitions** when the cadence stops or resumes
+- **Correlate pubkey rotations** by matching timing patterns across old and new keys
+
+The content (location) remains encrypted, but the *pattern of publishing* leaks
+information about a member's connectivity and movement schedule.
+
+### Mitigation: Publish Jitter
+
+Applications SHOULD add random jitter to the beacon publish interval. canary-kit
+encrypts beacon payloads but does not control scheduling — jitter must be applied
+at the application layer.
+
+Recommended jitter by threat profile:
+
+| Preset       | Jitter              | Rationale                                    |
+|--------------|---------------------|----------------------------------------------|
+| `family`     | None required       | Members know each other; timing is not sensitive |
+| `enterprise` | ±20% of interval    | Reduces cadence fingerprinting across employees |
+| `field-ops`  | ±30–50% of interval | Online/offline patterns are operationally sensitive |
+
+Example (applying jitter in your publish loop):
+
+```typescript
+const baseInterval = group.beaconInterval // e.g. 300
+const jitterFraction = 0.3 // ±30% for field-ops
+const jitter = baseInterval * jitterFraction * (2 * Math.random() - 1)
+const nextPublishIn = baseInterval + jitter
+setTimeout(() => publishBeacon(), nextPublishIn * 1000)
+```
+
+For high-threat deployments, also consider:
+
+- **Variable-rate publishing** — draw intervals from an exponential distribution
+  rather than a jittered fixed interval
+- **Relay diversity** — publish each beacon to a different relay to prevent any
+  single operator from seeing the full cadence
+- **Batch windows** — all members publish within a coordinated time window so
+  individual cadences are masked by group activity
+
 ## Cross-Device State Sync
 
 Group-based deployments (family safety, field operations) must consider how

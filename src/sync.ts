@@ -447,6 +447,22 @@ export function applySyncMessage(
       }
 
     case 'counter-advance': {
+      // NOTE: counter-advance intentionally has no epoch field (unlike other
+      // mutation messages). This was evaluated during security audit 2026-03-15.
+      //
+      // Why this is safe without epoch:
+      // 1. Envelope encryption: messages travel inside AES-GCM envelopes keyed
+      //    by deriveGroupKey(seed). After a reseed the key changes, so captured
+      //    ciphertext from epoch N cannot be injected into epoch N+1.
+      // 2. Active replay requires a current member who survived the reseed —
+      //    but such a member could just send a *new* counter-advance with any
+      //    values they want. Epoch wouldn't stop a malicious current member.
+      // 3. Monotonic check rejects old effective counters (reseeds preserve the
+      //    effective counter, so old values are always <=).
+      // 4. Time-based bound caps damage to +MAX_COUNTER_ADVANCE_OFFSET.
+      //
+      // Adding epoch is planned for protocol v3 for conceptual consistency.
+
       // Require sender to be a current group member
       if (!sender || !group.members.includes(sender)) return group
 

@@ -27,7 +27,17 @@ export interface GroupConfig {
   wordlist?: string
   /** Counter tolerance for verification: accept tokens within ±tolerance counter values (default: 1). */
   tolerance?: number
-  /** Beacon broadcast interval in seconds (default: 300 = 5 minutes). */
+  /**
+   * Beacon broadcast interval in seconds (default: 300 = 5 minutes).
+   *
+   * **Privacy note:** Fixed-interval beacons are correlatable by timing.
+   * A relay observer who knows the group's `h` tag can cluster sequential
+   * events by publishing cadence to identify individual members or detect
+   * when a member goes offline. Applications SHOULD add random jitter to
+   * the publish schedule — e.g. ±20–30% of the interval — to reduce
+   * timing correlation. The library does not add jitter because it
+   * encrypts payloads but does not control publish scheduling.
+   */
   beaconInterval?: number
   /** Geohash precision for normal beacons, 1–11 (default: 6 ≈ 1.2km). */
   beaconPrecision?: number
