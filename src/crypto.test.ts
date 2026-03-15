@@ -68,6 +68,10 @@ describe('readUint16BE', () => {
     expect(() => readUint16BE(new Uint8Array([0x01]), 0)).toThrow(RangeError)
     expect(() => readUint16BE(new Uint8Array([0x01, 0x02]), 1)).toThrow(RangeError)
   })
+
+  it('throws on negative offset (security audit)', () => {
+    expect(() => readUint16BE(new Uint8Array([0x01, 0x02]), -1)).toThrow(RangeError)
+  })
 })
 
 describe('sha256', () => {

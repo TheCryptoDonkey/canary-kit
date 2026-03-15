@@ -221,7 +221,7 @@ export function bytesToHex(bytes: Uint8Array): string {
  * Replaces `buffer.readUInt16BE(offset)`.
  */
 export function readUint16BE(bytes: Uint8Array, offset: number): number {
-  if (offset + 1 >= bytes.length) throw new RangeError(`readUint16BE: offset ${offset} out of bounds for length ${bytes.length}`)
+  if (offset < 0 || offset + 1 >= bytes.length) throw new RangeError(`readUint16BE: offset ${offset} out of bounds for length ${bytes.length}`)
   return ((bytes[offset] << 8) | bytes[offset + 1]) >>> 0
 }
 
@@ -257,19 +257,24 @@ export function base64ToBytes(base64: string): Uint8Array {
 
 /**
  * Best-effort constant-time comparison of two byte arrays.
- * Pads the shorter array to the longer length to avoid leaking length via timing.
+ * Pads both arrays to equal length to avoid leaking length via timing.
  *
  * **Caveat:** JavaScript runtimes do not guarantee constant-time execution —
- * JIT compilation, speculative execution, and the `??` fallback branch may
- * introduce timing variation. This is a defence-in-depth measure, not a
- * cryptographic guarantee. For high-assurance environments, pair with rate
- * limiting and consider platform-native constant-time primitives.
+ * JIT compilation and speculative execution may introduce timing variation.
+ * This is a defence-in-depth measure, not a cryptographic guarantee. For
+ * high-assurance environments, pair with rate limiting and consider
+ * platform-native constant-time primitives.
  */
 export function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   const len = Math.max(a.length, b.length)
+  // Pre-allocate zero-padded copies to eliminate branch in the comparison loop
+  const paddedA = new Uint8Array(len)
+  const paddedB = new Uint8Array(len)
+  paddedA.set(a)
+  paddedB.set(b)
   let diff = a.length ^ b.length // non-zero if lengths differ
   for (let i = 0; i < len; i++) {
-    diff |= (a[i] ?? 0) ^ (b[i] ?? 0)
+    diff |= paddedA[i] ^ paddedB[i]
   }
   return diff === 0
 }

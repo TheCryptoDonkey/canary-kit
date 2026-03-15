@@ -63,6 +63,17 @@ describe('deriveSeed', () => {
     const oneComponent = deriveSeed(MASTER_KEY, 'ab')
     expect(bytesToHex(twoComponents)).not.toBe(bytesToHex(oneComponent))
   })
+
+  it('rejects master key shorter than 16 bytes (security audit)', () => {
+    const shortKey = '00'.repeat(15)
+    expect(() => deriveSeed(shortKey, 'test')).toThrow(RangeError)
+    expect(() => deriveSeed(new Uint8Array(15), 'test')).toThrow(RangeError)
+  })
+
+  it('accepts 16-byte master key (security audit)', () => {
+    const minKey = '00'.repeat(16)
+    expect(() => deriveSeed(minKey, 'test')).not.toThrow()
+  })
 })
 
 describe('SESSION_PRESETS', () => {

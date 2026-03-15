@@ -33,6 +33,9 @@ export function deriveSeed(
   ...components: string[]
 ): Uint8Array {
   const key = typeof masterKey === 'string' ? hexToBytes(masterKey) : masterKey
+  if (key.length < 16) {
+    throw new RangeError(`Master key must be at least 16 bytes, got ${key.length}`)
+  }
   const parts: Uint8Array[] = []
   for (let i = 0; i < components.length; i++) {
     if (i > 0) parts.push(new Uint8Array([0x00]))
