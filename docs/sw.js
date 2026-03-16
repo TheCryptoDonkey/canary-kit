@@ -54,8 +54,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'CANARY Alert'
   const options = {
     body: data.body || 'Something needs your attention.',
-    icon: './icon-192.svg',
-    badge: './icon-192.svg',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
     tag: data.tag || 'canary-alert',
     renotify: true,
     vibrate: [200, 100, 200],

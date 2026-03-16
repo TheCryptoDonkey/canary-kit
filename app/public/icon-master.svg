@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#0f172a" rx="76.8"/>
+
+  <!-- Simplified canary, flat fills for clean rasterisation -->
+  <g transform="translate(100, 95)">
+    <!-- Tail -->
+    <polygon points="30,200 10,260 80,245 90,200" fill="#d97706"/>
+    <polygon points="30,200 80,245 105,215 90,185" fill="#e5a00a"/>
+
+    <!-- Body lower -->
+    <polygon points="90,185 105,215 195,245 220,215 205,175" fill="#e5a00a"/>
+    <polygon points="90,185 205,175 190,140 115,148" fill="#f59e0b"/>
+
+    <!-- Body upper / back -->
+    <polygon points="115,148 190,140 220,108 160,92" fill="#f59e0b"/>
+    <polygon points="160,92 220,108 250,92 225,68" fill="#fbbf24"/>
+
+    <!-- Belly -->
+    <polygon points="195,245 220,215 265,222 250,255" fill="#d97706"/>
+    <polygon points="220,215 205,175 250,155 265,200 265,222" fill="#e5a00a"/>
+
+    <!-- Chest -->
+    <polygon points="205,175 250,155 265,122 235,108 220,108 190,140" fill="#fbbf24"/>
+
+    <!-- Wing -->
+    <polygon points="115,155 95,200 150,232 205,215 190,170 145,148" fill="#b45309" opacity="0.6"/>
+    <polygon points="115,155 145,148 190,170 160,185 122,178" fill="#d97706" opacity="0.5"/>
+
+    <!-- Head -->
+    <polygon points="235,108 265,122 298,100 290,68 250,60 225,68" fill="#fbbf24"/>
+    <polygon points="250,60 290,68 282,44 242,44" fill="#f59e0b"/>
+
+    <!-- Beak (open) -->
+    <polygon points="298,76 325,73 305,84" fill="#92400e"/>
+    <polygon points="298,90 325,96 305,84" fill="#78350f"/>
+
+    <!-- Eye -->
+    <circle cx="270" cy="74" r="8" fill="#0f172a"/>
+    <circle cx="272" cy="72" r="2.5" fill="#f8fafc"/>
+
+    <!-- Legs -->
+    <line x1="180" y1="240" x2="176" y2="300" stroke="#92400e" stroke-width="4" stroke-linecap="round"/>
+    <line x1="210" y1="244" x2="207" y2="300" stroke="#92400e" stroke-width="4" stroke-linecap="round"/>
+    <!-- Feet -->
+    <line x1="176" y1="300" x2="163" y2="304" stroke="#92400e" stroke-width="3" stroke-linecap="round"/>
+    <line x1="176" y1="300" x2="183" y2="308" stroke="#92400e" stroke-width="3" stroke-linecap="round"/>
+    <line x1="207" y1="300" x2="196" y2="304" stroke="#92400e" stroke-width="3" stroke-linecap="round"/>
+    <line x1="207" y1="300" x2="214" y2="308" stroke="#92400e" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <!-- Sound waves from beak -->
+  <g transform="translate(428, 168)" stroke="#fbbf24" fill="none" stroke-linecap="round">
+    <path d="M 0,0 Q 12,-10 12,-22 Q 12,-34 0,-44" stroke-width="5" opacity="0.7"/>
+    <path d="M 10,7 Q 27,-10 27,-26 Q 27,-42 10,-59" stroke-width="4" opacity="0.4"/>
+  </g>
+</svg>
