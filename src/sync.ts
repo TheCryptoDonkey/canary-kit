@@ -225,8 +225,8 @@ export function decodeSyncMessage(payload: string): SyncMessage {
       break
 
     case 'counter-advance':
-      if (!isNonNegativeInt(parsed.counter)) {
-        throw new Error('Invalid sync message: counter-advance requires a non-negative counter')
+      if (!isNonNegativeInt(parsed.counter) || parsed.counter > 0xFFFFFFFF) {
+        throw new Error('Invalid sync message: counter-advance requires a non-negative counter within uint32 range')
       }
       if (!isNonNegativeInt(parsed.usageOffset)) {
         throw new Error('Invalid sync message: counter-advance requires a non-negative usageOffset')
@@ -573,6 +573,12 @@ export function applySyncMessage(
       // must be re-invited. This eliminates the stale-admin hijack
       // attack surface entirely.
       return group
+    }
+
+    case 'duress-clear': {
+      // Consume opId to prevent replay (duress-clear is safety-critical)
+      const ops = appendConsumedOp(group.consumedOps, msg.opId, msg.timestamp, group.consumedOpsFloor)
+      return { ...group, ...ops }
     }
 
     case 'beacon':

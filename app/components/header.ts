@@ -370,6 +370,7 @@ function showIdentityPopover(anchor: HTMLElement): void {
         await navigator.clipboard.writeText(mnemonic)
         copyBtn.textContent = 'Copied!'
         setTimeout(() => { copyBtn.textContent = 'Copy words' }, 2000)
+        setTimeout(() => { navigator.clipboard.writeText('').catch(() => {}) }, 30_000)
       } catch {}
     })
     area.appendChild(copyBtn)
@@ -390,6 +391,7 @@ function showIdentityPopover(anchor: HTMLElement): void {
         await navigator.clipboard.writeText(nsec)
         btn.textContent = 'Copied!'
         setTimeout(() => { btn.textContent = 'Copy nsec' }, 2000)
+        setTimeout(() => { navigator.clipboard.writeText('').catch(() => {}) }, 30_000)
       } catch { /* clipboard may be blocked */ }
     })
   })

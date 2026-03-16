@@ -179,6 +179,7 @@ export function hmacSha256(key: Uint8Array, data: Uint8Array): Uint8Array {
   ipad.fill(0)
   opad.fill(0)
   inner.fill(0)
+  if (normalised !== key) normalised.fill(0) // zero hashed key if we created a new buffer
 
   return result
 }

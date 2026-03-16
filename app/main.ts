@@ -18,7 +18,7 @@ import {
   disablePin,
   flushPersist,
 } from './storage.js'
-import { getState, subscribe, update, updateGroup } from './state.js'
+import { getState, subscribe, update, updateGroup, clearSensitiveState } from './state.js'
 import { renderHeader } from './components/header.js'
 import { renderSidebar } from './components/sidebar.js'
 import { showModal } from './components/modal.js'
@@ -126,6 +126,7 @@ function resetAutoLockTimer(): void {
 
   _autoLockTimer = setTimeout(() => {
     clearPinKey()
+    clearSensitiveState()
     showLockScreen()
   }, settings.autoLockMinutes * 60 * 1000)
 }
@@ -1341,6 +1342,7 @@ function showRecoveryPhraseModal(mnemonic: string): void {
       await navigator.clipboard.writeText(mnemonic)
       copyBtn.textContent = 'Copied!'
       setTimeout(() => { copyBtn.textContent = 'Copy words' }, 2000)
+      setTimeout(() => { navigator.clipboard.writeText('').catch(() => {}) }, 30_000)
     } catch { /* clipboard may be blocked */ }
   })
 

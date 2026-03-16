@@ -1670,3 +1670,55 @@ describe('duress-clear validation (security audit)', () => {
     expect(msg.type).toBe('duress-clear')
   })
 })
+
+describe('duress-clear apply (security audit)', () => {
+  const admin = 'a'.repeat(64)
+  const base = createGroup({ name: 'test', members: [admin], creator: admin })
+  const nowSec = Math.floor(Date.now() / 1000)
+
+  it('consumes opId on duress-clear', () => {
+    const msg: SyncMessage = {
+      type: 'duress-clear', subject: 'alice', timestamp: nowSec, opId: 'dc-apply-1', protocolVersion: PROTOCOL_VERSION,
+    }
+    const result = applySyncMessage(base, msg, nowSec, admin)
+    expect(result.consumedOps).toContain('dc-apply-1')
+  })
+
+  it('rejects replayed duress-clear with same opId', () => {
+    const msg: SyncMessage = {
+      type: 'duress-clear', subject: 'alice', timestamp: nowSec, opId: 'dc-replay-1', protocolVersion: PROTOCOL_VERSION,
+    }
+    const after = applySyncMessage(base, msg, nowSec, admin)
+    const replayed = applySyncMessage(after, msg, nowSec, admin)
+    // Second apply should return unchanged state (rejected)
+    expect(replayed).toBe(after)
+  })
+
+  it('applySyncMessageWithResult reports applied: true for fresh duress-clear', () => {
+    const msg: SyncMessage = {
+      type: 'duress-clear', subject: 'bob', timestamp: nowSec, opId: 'dc-result-1', protocolVersion: PROTOCOL_VERSION,
+    }
+    const { state, applied } = applySyncMessageWithResult(base, msg, nowSec, admin)
+    expect(applied).toBe(true)
+    expect(state.consumedOps).toContain('dc-result-1')
+  })
+})
+
+describe('counter-advance uint32 bound (security audit)', () => {
+  it('rejects counter exceeding uint32 max', () => {
+    const payload = JSON.stringify({
+      type: 'counter-advance', counter: 0xFFFFFFFF + 1, usageOffset: 0,
+      timestamp: 1000, protocolVersion: PROTOCOL_VERSION,
+    })
+    expect(() => decodeSyncMessage(payload)).toThrow(/counter/)
+  })
+
+  it('accepts counter at uint32 max', () => {
+    const payload = JSON.stringify({
+      type: 'counter-advance', counter: 0xFFFFFFFF, usageOffset: 0,
+      timestamp: 1000, protocolVersion: PROTOCOL_VERSION,
+    })
+    const msg = decodeSyncMessage(payload)
+    expect(msg.type).toBe('counter-advance')
+  })
+})

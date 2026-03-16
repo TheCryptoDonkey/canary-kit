@@ -125,6 +125,27 @@ describe('cross-counter collision avoidance (verifyWord)', () => {
   })
 })
 
+describe('verifyWord input validation (security audit)', () => {
+  it('rejects tolerance exceeding MAX_TOLERANCE via downstream verifyToken', () => {
+    const word = deriveVerificationWord(TEST_SEED, COUNTER)
+    expect(() => verifyWord(word, TEST_SEED, MEMBERS, COUNTER, 1, 20))
+      .toThrow()
+  })
+
+  it('rejects more than 100 member pubkeys via downstream verifyToken', () => {
+    const word = deriveVerificationWord(TEST_SEED, COUNTER)
+    const manyMembers = Array.from({ length: 101 }, (_, i) => i.toString(16).padStart(64, '0'))
+    expect(() => verifyWord(word, TEST_SEED, manyMembers, COUNTER))
+      .toThrow()
+  })
+
+  it('rejects negative tolerance via downstream verifyToken', () => {
+    const word = deriveVerificationWord(TEST_SEED, COUNTER)
+    expect(() => verifyWord(word, TEST_SEED, MEMBERS, COUNTER, 1, -1))
+      .toThrow()
+  })
+})
+
 describe('verifyWord multi-word', () => {
   it('returns verified for correct 2-word verification phrase', () => {
     const phrase = deriveVerificationPhrase(TEST_SEED, COUNTER, 2).join(' ')

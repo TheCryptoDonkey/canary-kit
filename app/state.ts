@@ -88,3 +88,25 @@ export function loadState(loaded: AppState): void {
   _state = loaded
   _notify()
 }
+
+/**
+ * Clear sensitive material from the in-memory state on lock.
+ * Seeds, private keys, and mnemonics are wiped so a heap dump after
+ * auto-lock cannot extract secrets. State is restored from encrypted
+ * localStorage on unlock.
+ */
+export function clearSensitiveState(): void {
+  const scrubbed = { ..._state }
+  // Wipe identity secrets
+  if (scrubbed.identity) {
+    scrubbed.identity = { ...scrubbed.identity, privkey: '', mnemonic: undefined }
+  }
+  // Wipe group seeds
+  const groups: typeof scrubbed.groups = {}
+  for (const [id, g] of Object.entries(scrubbed.groups)) {
+    groups[id] = { ...g, seed: '' }
+  }
+  scrubbed.groups = groups
+  _state = scrubbed
+  _notify()
+}
