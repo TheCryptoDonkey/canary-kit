@@ -7,7 +7,7 @@ import {
   type TokenVerifyResult,
   type DirectionalPair,
 } from './token.js'
-import { type TokenEncoding, DEFAULT_ENCODING } from './encoding.js'
+import type { TokenEncoding } from './encoding.js'
 
 const encoder = new TextEncoder()
 

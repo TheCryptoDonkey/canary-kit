@@ -109,7 +109,7 @@ export function createGroup(config: GroupConfig): GroupState {
     }
   }
   const now = Math.floor(Date.now() / 1000)
-  const base = config.preset !== undefined ? PRESETS[config.preset as keyof typeof PRESETS] : undefined
+  const base = config.preset !== undefined ? PRESETS[config.preset] : undefined
   const interval = config.rotationInterval ?? base?.rotationInterval ?? DEFAULT_ROTATION_INTERVAL
   const wordCount = config.wordCount ?? base?.wordCount ?? 1
   const tolerance = config.tolerance ?? 1
@@ -119,7 +119,7 @@ export function createGroup(config: GroupConfig): GroupState {
     throw new Error(`rotationInterval must be a positive integer, got ${interval}`)
   }
   if (wordCount !== 1 && wordCount !== 2 && wordCount !== 3) {
-    throw new Error(`wordCount must be 1, 2, or 3, got ${wordCount}`)
+    throw new Error(`wordCount must be 1, 2, or 3, got ${wordCount as number}`)
   }
   if (!Number.isInteger(tolerance) || tolerance < 0 || tolerance > MAX_TOLERANCE) {
     throw new RangeError(`tolerance must be an integer 0–${MAX_TOLERANCE}, got ${tolerance}`)

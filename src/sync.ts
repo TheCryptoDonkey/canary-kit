@@ -93,7 +93,7 @@ function isNonNegativeInt(value: unknown): value is number {
 export function encodeSyncMessage(msg: SyncMessage): string {
   const versioned = { ...msg, protocolVersion: PROTOCOL_VERSION }
   if (msg.type === 'reseed') {
-    const { seed, ...rest } = versioned as typeof msg & { protocolVersion: number }
+    const { seed: _seed, ...rest } = versioned as typeof msg & { protocolVersion: number }
     return JSON.stringify({ ...rest, seed: bytesToHex(msg.seed) })
   }
   return JSON.stringify(versioned)
@@ -159,7 +159,7 @@ export function canonicaliseSyncMessage(msg: SyncMessage): string {
 export function decodeSyncMessage(payload: string): SyncMessage {
   let parsed: Record<string, unknown>
   try {
-    parsed = JSON.parse(payload)
+    parsed = JSON.parse(payload) as Record<string, unknown>
   } catch {
     throw new Error('Invalid sync message: not valid JSON')
   }
@@ -181,7 +181,7 @@ export function decodeSyncMessage(payload: string): SyncMessage {
     throw new Error('Invalid sync message: protocolVersion is required')
   }
   if (version !== PROTOCOL_VERSION) {
-    throw new Error(`Unsupported protocol version: ${version} (expected: ${PROTOCOL_VERSION})`)
+    throw new Error(`Unsupported protocol version: ${JSON.stringify(version)} (expected: ${PROTOCOL_VERSION})`)
   }
 
   switch (type) {
@@ -261,7 +261,7 @@ export function decodeSyncMessage(payload: string): SyncMessage {
       return {
         type, seed: hexToBytes(parsed.seed), counter: parsed.counter, timestamp: ts,
         epoch: parsed.epoch, opId: parsed.opId,
-        admins: [...parsed.admins], members: [...parsed.members],
+        admins: [...parsed.admins as string[]], members: [...parsed.members as string[]],
         protocolVersion: PROTOCOL_VERSION,
       }
 
@@ -470,7 +470,7 @@ export function applySyncMessage(
       }
       const ops = appendConsumedOp(updated.consumedOps, msg.opId, msg.timestamp, group.consumedOpsFloor)
       const names = msg.displayName
-        ? { memberNames: { ...(updated as any).memberNames, [msg.pubkey]: msg.displayName } }
+        ? { memberNames: { ...(updated as unknown as Record<string, unknown>).memberNames as Record<string, string> | undefined, [msg.pubkey]: msg.displayName } }
         : {}
       return { ...updated, ...ops, ...names }
     }

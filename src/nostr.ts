@@ -76,7 +76,7 @@ export function buildGroupEvent(params: GroupEventParams): UnsignedEvent {
     throw new Error(`Invalid rotationInterval: must be a positive integer, got ${params.rotationInterval}`)
   }
   if (params.wordCount !== 1 && params.wordCount !== 2 && params.wordCount !== 3) {
-    throw new Error(`Invalid wordCount: must be 1, 2, or 3, got ${params.wordCount}`)
+    throw new Error(`Invalid wordCount: must be 1, 2, or 3, got ${params.wordCount as number}`)
   }
   const tags: string[][] = [
     ['d', params.groupId],
@@ -139,7 +139,7 @@ export interface MemberUpdateParams {
  */
 export function buildMemberUpdateEvent(params: MemberUpdateParams): UnsignedEvent {
   if (params.action !== 'add' && params.action !== 'remove') {
-    throw new Error(`Invalid action: must be 'add' or 'remove', got '${params.action}'`)
+    throw new Error(`Invalid action: must be 'add' or 'remove', got '${params.action as string}'`)
   }
   validatePubkey(params.memberPubkey, 'memberPubkey')
   validateTagString(params.groupId, 'groupId')

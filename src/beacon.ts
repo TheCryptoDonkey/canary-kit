@@ -92,7 +92,7 @@ async function aesGcmDecrypt(key: Uint8Array, content: string): Promise<Uint8Arr
     'raw', key as Uint8Array<ArrayBuffer>, { name: 'AES-GCM' }, false, ['decrypt'],
   )
   return new Uint8Array(
-    await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, cryptoKey, ciphertext as Uint8Array<ArrayBuffer>),
+    await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, cryptoKey, ciphertext),
   )
 }
 
