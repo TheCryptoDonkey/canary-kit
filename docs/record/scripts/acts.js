@@ -250,12 +250,12 @@ export async function actClose(page, { narrate, pause }) {
   await hideCursor(page)
 
   await showCodeOverlay(page, {
-    title: 'Deepfake-proof. Duress-aware. Zero dependencies.',
+    title: 'Deepfake-proof. Duress-aware. Minimal dependencies.',
     code: 'npm install canary-kit',
     duration: 1,
   })
 
-  await narrate('Deepfake proof. Duress aware. Zero dependencies. canary-kit. npm install and go.')
+  await narrate('Deepfake proof. Duress aware. Minimal dependencies. canary-kit. npm install and go.')
   await pause(1000)
 }
 

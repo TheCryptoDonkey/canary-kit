@@ -1,6 +1,6 @@
 # canary-kit — Full API Reference
 
-> Deepfake-proof spoken-word identity verification. Open protocol, zero dependencies.
+> Deepfake-proof spoken-word identity verification. Open protocol, minimal dependencies.
 
 Zero dependencies. ESM-only. TypeScript native.
 

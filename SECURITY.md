@@ -81,7 +81,7 @@ The browser app mitigates this with:
 
 ### Supply Chain
 
-- **Zero runtime dependencies.** The published package contains only our code.
+- **Minimal runtime dependencies.** Only `@scure/bip32` and `@scure/bip39` for mnemonic key recovery; core crypto is pure JS.
 - **Automated publishing.** Releases are built and published via GitHub Actions with OIDC trusted publishing — no npm tokens stored.
 - **Provenance signed.** npm provenance attestation is enabled.
 

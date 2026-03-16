@@ -293,7 +293,7 @@ export default async function extended({ alice, bob }, { narrate, pause, waitFor
   await hideCursor(bob)
 
   await showCodeOverlay(alice, {
-    title: 'Deepfake-proof. Duress-aware. Zero dependencies.',
+    title: 'Deepfake-proof. Duress-aware. Minimal dependencies.',
     code: 'npm install canary-kit',
     duration: 1,
   })
@@ -303,6 +303,6 @@ export default async function extended({ alice, bob }, { narrate, pause, waitFor
     duration: 1,
   })
 
-  await narrate('Zero dependencies. Open protocol. Offline-first. npm install canary-kit.')
+  await narrate('Minimal dependencies. Open protocol. Offline-first. npm install canary-kit.')
   await pause(600)
 }

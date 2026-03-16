@@ -4,7 +4,7 @@ Instructions for AI coding agents working on this repository.
 
 ## What This Project Is
 
-Deepfake-proof identity verification library. Derives spoken words from shared secrets using HMAC-SHA256 counters. Supports bidirectional verification, duress signalling, encrypted location beacons, and Nostr event building. Zero runtime dependencies. ESM-only. TypeScript native.
+Deepfake-proof identity verification library. Derives spoken words from shared secrets using HMAC-SHA256 counters. Supports bidirectional verification, duress signalling, encrypted location beacons, and Nostr event building. Minimal dependencies (`@scure/bip32`, `@scure/bip39` for mnemonic key recovery; core crypto is pure JS). ESM-only. TypeScript native.
 
 ## Commands
 

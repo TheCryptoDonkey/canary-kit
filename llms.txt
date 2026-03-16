@@ -1,6 +1,6 @@
 # canary-kit
 
-> Need to verify a caller is really your bank — not a deepfake? canary-kit is a zero-dependency, open-protocol TypeScript library for spoken-word identity verification using HMAC-SHA256 token derivation with built-in duress signalling, dead man's switch, and encrypted location beacons.
+> Spoken secrets. Silent alerts. Dead man's switch. canary-kit is a minimal-dependency TypeScript library for deepfake-proof identity verification — spoken-word tokens derived from shared secrets, with built-in duress signalling, liveness heartbeats, and encrypted location beacons. Open protocol.
 
 Interactive demo: https://thecryptodonkey.github.io/canary-kit/
 GitHub: https://github.com/TheCryptoDonkey/canary-kit

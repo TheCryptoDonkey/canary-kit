@@ -6,7 +6,6 @@
 [![CI](https://github.com/TheCryptoDonkey/canary-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/TheCryptoDonkey/canary-kit/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-native-blue)](https://www.typescriptlang.org/)
-[![Zero Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](package.json)
 
 **[Interactive Demo](https://thecryptodonkey.github.io/canary-kit/)** · [Protocol Spec](CANARY.md) · [Nostr Binding](NIP-CANARY.md) · [Integration Guide](INTEGRATION.md)
 
@@ -129,7 +128,7 @@ import { applySyncMessage } from 'canary-kit/sync'     // just sync protocol
 
 ## Security
 
-- **Zero runtime dependencies** — the published package contains only our code
+- **Minimal runtime dependencies** — only `@scure/bip32` and `@scure/bip39` for mnemonic key recovery; core crypto is pure JS
 - **Automated publishing** — GitHub Actions with OIDC trusted publishing, no stored tokens
 - **Provenance signed** — npm provenance attestation enabled
 - **Protocol-grade test vectors** — frozen canonical vectors in both CANARY.md and NIP-CANARY.md; any conformant implementation must produce identical results

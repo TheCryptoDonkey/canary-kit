@@ -1,7 +1,7 @@
 {
   "name": "canary-kit",
   "version": "0.1.0",
-  "description": "Deepfake-proof identity verification. Open protocol, zero dependencies.",
+  "description": "Deepfake-proof identity verification. Open protocol, minimal dependencies.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -92,7 +92,7 @@
     "spoken-word",
     "bidirectional-verification",
     "offline-first",
-    "zero-dependency"
+    "minimal-dependencies"
   ],
   "author": "TheCryptoDonkey",
   "license": "MIT",
