@@ -46,6 +46,9 @@ function rotr32(x: number, n: number): number {
 /**
  * Compute SHA-256 of `data`.
  * Implements FIPS 180-4 sections 5 (padding), 6.2 (hash computation).
+ *
+ * @param data - Input bytes to hash.
+ * @returns 32-byte SHA-256 digest.
  */
 export function sha256(data: Uint8Array): Uint8Array {
   // --- Pre-processing: padding (FIPS 180-4 §5.1.1) ---
@@ -144,6 +147,10 @@ const BLOCK_SIZE = 64 // SHA-256 block size in bytes
  *   ipad = 0x36 repeated, opad = 0x5c repeated.
  *   Keys longer than the block size are hashed first.
  *   Keys shorter than the block size are zero-padded on the right.
+ *
+ * @param key - HMAC key bytes (hashed if longer than 64 bytes, zero-padded if shorter).
+ * @param data - Input data bytes.
+ * @returns 32-byte HMAC-SHA256 digest.
  */
 export function hmacSha256(key: Uint8Array, data: Uint8Array): Uint8Array {
   // If the key is longer than the block size, hash it first.
@@ -183,6 +190,8 @@ export function hmacSha256(key: Uint8Array, data: Uint8Array): Uint8Array {
 /**
  * Generate a cryptographically secure 32-byte seed as a 64-character hex string.
  * Uses the global `crypto.getRandomValues` (Web Crypto API).
+ *
+ * @returns 64-character lowercase hex string (32 random bytes).
  */
 export function randomSeed(): string {
   const bytes = new Uint8Array(32)
@@ -194,7 +203,14 @@ export function randomSeed(): string {
 // Byte / hex utilities
 // ---------------------------------------------------------------------------
 
-/** Convert a hex string to a Uint8Array. Replaces `Buffer.from(hex, 'hex')`. */
+/**
+ * Convert a hex string to a Uint8Array. Replaces `Buffer.from(hex, 'hex')`.
+ *
+ * @param hex - Even-length hex string (case-insensitive).
+ * @returns Decoded byte array.
+ * @throws {Error} If hex has odd length.
+ * @throws {TypeError} If hex contains invalid characters.
+ */
 export function hexToBytes(hex: string): Uint8Array {
   if (hex.length % 2 !== 0) {
     throw new Error(`hexToBytes: odd-length hex string (${hex.length} chars)`)
@@ -208,7 +224,12 @@ export function hexToBytes(hex: string): Uint8Array {
   return bytes
 }
 
-/** Convert a Uint8Array to a lowercase hex string. Replaces `buffer.toString('hex')`. */
+/**
+ * Convert a Uint8Array to a lowercase hex string. Replaces `buffer.toString('hex')`.
+ *
+ * @param bytes - Input byte array.
+ * @returns Lowercase hex string (2 characters per byte).
+ */
 export function bytesToHex(bytes: Uint8Array): string {
   let hex = ''
   for (let i = 0; i < bytes.length; i++) {
@@ -220,6 +241,11 @@ export function bytesToHex(bytes: Uint8Array): string {
 /**
  * Read an unsigned 16-bit big-endian integer from `bytes` at `offset`.
  * Replaces `buffer.readUInt16BE(offset)`.
+ *
+ * @param bytes - Source byte array.
+ * @param offset - Byte offset to read from.
+ * @returns Unsigned 16-bit integer value.
+ * @throws {RangeError} If offset is out of bounds.
  */
 export function readUint16BE(bytes: Uint8Array, offset: number): number {
   if (offset < 0 || offset + 1 >= bytes.length) throw new RangeError(`readUint16BE: offset ${offset} out of bounds for length ${bytes.length}`)
@@ -229,6 +255,9 @@ export function readUint16BE(bytes: Uint8Array, offset: number): number {
 /**
  * Concatenate multiple Uint8Arrays into one.
  * Replaces `Buffer.concat([...])`.
+ *
+ * @param arrays - One or more Uint8Arrays to concatenate.
+ * @returns A single Uint8Array containing all input bytes in order.
  */
 export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
   const total = arrays.reduce((n, a) => n + a.length, 0)
@@ -241,14 +270,24 @@ export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
   return out
 }
 
-/** Encode a Uint8Array as a base64 string. Available in Node 16+ and all browsers. */
+/**
+ * Encode a Uint8Array as a base64 string. Available in Node 16+ and all browsers.
+ *
+ * @param bytes - Input byte array.
+ * @returns Base64-encoded string.
+ */
 export function bytesToBase64(bytes: Uint8Array): string {
   let binary = ''
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
   return btoa(binary)
 }
 
-/** Decode a base64 string to a Uint8Array. */
+/**
+ * Decode a base64 string to a Uint8Array.
+ *
+ * @param base64 - Base64-encoded string.
+ * @returns Decoded byte array.
+ */
 export function base64ToBytes(base64: string): Uint8Array {
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
@@ -265,6 +304,10 @@ export function base64ToBytes(base64: string): Uint8Array {
  * This is a defence-in-depth measure, not a cryptographic guarantee. For
  * high-assurance environments, pair with rate limiting and consider
  * platform-native constant-time primitives.
+ *
+ * @param a - First byte array.
+ * @param b - Second byte array.
+ * @returns `true` if arrays are equal in length and content, `false` otherwise.
  */
 export function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   const len = Math.max(a.length, b.length)
@@ -282,7 +325,14 @@ export function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
 
 const stringEncoder = new TextEncoder()
 
-/** Best-effort constant-time comparison of two strings (UTF-8 encoded, then byte-compared). See `timingSafeEqual` caveats. */
+/**
+ * Best-effort constant-time comparison of two strings (UTF-8 encoded, then byte-compared).
+ * See {@link timingSafeEqual} caveats.
+ *
+ * @param a - First string.
+ * @param b - Second string.
+ * @returns `true` if strings are equal, `false` otherwise.
+ */
 export function timingSafeStringEqual(a: string, b: string): boolean {
   return timingSafeEqual(stringEncoder.encode(a), stringEncoder.encode(b))
 }

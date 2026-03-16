@@ -14,6 +14,8 @@ const encoder = new TextEncoder()
 /**
  * Generate a cryptographically secure 256-bit seed.
  * Uses the global `crypto.getRandomValues` (Web Crypto API).
+ *
+ * @returns A 32-byte Uint8Array containing cryptographically secure random bytes.
  */
 export function generateSeed(): Uint8Array {
   const bytes = new Uint8Array(32)
@@ -27,6 +29,11 @@ export function generateSeed(): Uint8Array {
  * Algorithm: HMAC-SHA256(masterKey, utf8(components[0]) || 0x00 || utf8(components[1]) || ...)
  *
  * Null-byte separators prevent concatenation ambiguity.
+ *
+ * @param masterKey - Master key (hex string or Uint8Array, minimum 16 bytes).
+ * @param components - One or more string components for domain separation.
+ * @returns A deterministic 32-byte seed derived via HMAC-SHA256.
+ * @throws {RangeError} If master key is shorter than 16 bytes.
  */
 export function deriveSeed(
   masterKey: Uint8Array | string,

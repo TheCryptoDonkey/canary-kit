@@ -51,6 +51,14 @@ function normaliseSecret(secret: Uint8Array | string): Uint8Array {
  *   HMAC-SHA256(secret, utf8(context) || 0x00 || utf8(identity) || counter_be32)
  *
  * The null-byte separator prevents concatenation ambiguity between context and identity.
+ *
+ * @param secret - Shared secret (hex string or Uint8Array, minimum 16 bytes).
+ * @param context - Context string for domain separation (e.g. `'canary:group'`).
+ * @param counter - Time-based or usage counter (uint32).
+ * @param identity - Optional member pubkey for per-member tokens.
+ * @returns Raw 32-byte HMAC-SHA256 digest.
+ * @throws {RangeError} If secret is too short or counter is out of range.
+ * @throws {Error} If identity is provided but empty.
  */
 export function deriveTokenBytes(
   secret: Uint8Array | string,
@@ -109,6 +117,13 @@ export function deriveToken(
  *
  * NOTE: Returns raw bytes without collision avoidance. Use deriveDuressToken()
  * for encoded output with guaranteed non-collision against the normal token.
+ *
+ * @param secret - Shared secret (hex string or Uint8Array, minimum 16 bytes).
+ * @param context - Context string for domain separation (e.g. `'canary:group'`).
+ * @param identity - Member pubkey or identifier (must be non-empty).
+ * @param counter - Time-based or usage counter (uint32).
+ * @returns Raw 32-byte HMAC-SHA256 digest.
+ * @throws {RangeError} If secret is too short or counter is out of range.
  */
 export function deriveDuressTokenBytes(
   secret: Uint8Array | string,
@@ -140,6 +155,17 @@ export function deriveDuressTokenBytes(
  * normal tokens for all identities across the collision avoidance window.
  * Without this, a duress token for identity A could collide with the normal
  * per-member token for identity B, causing false duress detection.
+ *
+ * @param secret - Shared secret (hex string or Uint8Array, minimum 16 bytes).
+ * @param context - Context string for domain separation (e.g. `'canary:group'`).
+ * @param identity - Member pubkey or identifier for the duress signaller.
+ * @param counter - Time-based or usage counter (uint32).
+ * @param encoding - Output encoding format (default: single word from en-v1 wordlist).
+ * @param maxTolerance - Counter tolerance window used by verifiers; must match their value.
+ * @param identities - All group member pubkeys for cross-member collision avoidance.
+ * @returns Encoded duress token string guaranteed distinct from all normal tokens in the window.
+ * @throws {RangeError} If maxTolerance is negative, exceeds MAX_TOLERANCE, or is not an integer.
+ * @throws {Error} If collision avoidance fails after 255 retries.
  */
 export function deriveDuressToken(
   secret: Uint8Array | string,
@@ -329,6 +355,13 @@ export function verifyToken(
  *
  * The liveness token proves both identity and knowledge of the secret.
  * If heartbeats stop arriving, the implementation triggers its DMS response.
+ *
+ * @param secret - Shared secret (hex string or Uint8Array, minimum 16 bytes).
+ * @param context - Context string for domain separation (e.g. `'canary:group'`).
+ * @param identity - Member pubkey or identifier of the heartbeat sender.
+ * @param counter - Time-based or usage counter (uint32).
+ * @returns Raw 32-byte HMAC-SHA256 digest for the liveness heartbeat.
+ * @throws {RangeError} If secret is too short or counter is out of range.
  */
 export function deriveLivenessToken(
   secret: Uint8Array | string,

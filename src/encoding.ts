@@ -40,6 +40,11 @@ export function encodeAsWords(
  * Encode raw bytes as a numeric PIN with leading zeros.
  * Uses the first ceil(digits * 0.415) bytes, interpreted as a big-endian
  * integer, reduced modulo 10^digits.
+ *
+ * @param bytes - Raw bytes to encode (must be non-empty).
+ * @param digits - Number of PIN digits to produce (integer 1-10, default: 4).
+ * @returns Zero-padded numeric string of the specified length.
+ * @throws {RangeError} If digits is not an integer 1-10 or bytes is empty.
  */
 export function encodeAsPin(bytes: Uint8Array, digits: number = 4): string {
   if (!Number.isInteger(digits) || digits < 1 || digits > 10) throw new RangeError('PIN digits must be an integer 1–10')
@@ -63,6 +68,11 @@ export function encodeAsPin(bytes: Uint8Array, digits: number = 4): string {
 
 /**
  * Encode raw bytes as a lowercase hex string.
+ *
+ * @param bytes - Raw bytes to encode.
+ * @param length - Number of hex characters to produce (integer 1-64, default: 8).
+ * @returns Lowercase hex string of the specified length.
+ * @throws {RangeError} If length is not an integer 1-64 or insufficient bytes are provided.
  */
 export function encodeAsHex(bytes: Uint8Array, length: number = 8): string {
   if (!Number.isInteger(length) || length < 1 || length > 64) throw new RangeError('Hex length must be an integer 1–64')
@@ -78,6 +88,11 @@ export function encodeAsHex(bytes: Uint8Array, length: number = 8): string {
 /**
  * Encode raw bytes using the specified encoding format.
  * Returns a single string (words are space-joined).
+ *
+ * @param bytes - Raw bytes to encode.
+ * @param encoding - Encoding format: words, pin, or hex (default: single word).
+ * @returns Encoded token string (space-joined words, zero-padded PIN, or hex).
+ * @throws {RangeError} If encoding parameters are out of range or bytes are insufficient.
  */
 export function encodeToken(bytes: Uint8Array, encoding: TokenEncoding = DEFAULT_ENCODING): string {
   switch (encoding.format) {

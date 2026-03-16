@@ -21,6 +21,10 @@ function wordEncoding(wordCount: 1 | 2 | 3): TokenEncoding {
 /**
  * Derive the verification word for a given seed and counter.
  * All group members derive the same word.
+ *
+ * @param seedHex - Group seed as a hex string (minimum 32 hex characters / 16 bytes).
+ * @param counter - Current time-based or usage counter.
+ * @returns A single lowercase word from the en-v1 wordlist.
  */
 export function deriveVerificationWord(seedHex: string, counter: number): string {
   return deriveToken(seedHex, GROUP_CONTEXT, counter)
@@ -29,6 +33,11 @@ export function deriveVerificationWord(seedHex: string, counter: number): string
 /**
  * Derive a multi-word verification phrase.
  * Each word is derived from a consecutive 2-byte slice of the HMAC-SHA256 digest.
+ *
+ * @param seedHex - Group seed as a hex string (minimum 32 hex characters / 16 bytes).
+ * @param counter - Current time-based or usage counter.
+ * @param wordCount - Number of words to produce (1, 2, or 3).
+ * @returns Array of lowercase words from the en-v1 wordlist.
  */
 export function deriveVerificationPhrase(
   seedHex: string,
@@ -44,6 +53,14 @@ export function deriveVerificationPhrase(
  * Unique per member, derivable by all group members who know the seed.
  * Collision avoidance ensures the duress word never matches any verification
  * word within the ±(2 × maxTolerance) window.
+ *
+ * @param seedHex - Group seed as a hex string (minimum 32 hex characters / 16 bytes).
+ * @param memberPubkeyHex - 64-character hex pubkey of the member.
+ * @param counter - Current time-based or usage counter.
+ * @param maxTolerance - Counter tolerance used by verifiers (default: 1).
+ * @param identities - All group member pubkeys for cross-member collision avoidance.
+ * @returns A single lowercase duress word distinct from all verification words in the window.
+ * @throws {Error} If collision avoidance fails after 255 retries.
  */
 export function deriveDuressWord(
   seedHex: string,
@@ -59,6 +76,15 @@ export function deriveDuressWord(
  * Derive a multi-word duress phrase for a given member.
  * Collision avoidance ensures the phrase never matches any verification
  * phrase within the ±(2 × maxTolerance) window.
+ *
+ * @param seedHex - Group seed as a hex string (minimum 32 hex characters / 16 bytes).
+ * @param memberPubkeyHex - 64-character hex pubkey of the member.
+ * @param counter - Current time-based or usage counter.
+ * @param wordCount - Number of words to produce (1, 2, or 3).
+ * @param maxTolerance - Counter tolerance used by verifiers (default: 1).
+ * @param identities - All group member pubkeys for cross-member collision avoidance.
+ * @returns Array of lowercase duress words distinct from all verification phrases in the window.
+ * @throws {Error} If collision avoidance fails after 255 retries.
  */
 export function deriveDuressPhrase(
   seedHex: string,
@@ -74,6 +100,9 @@ export function deriveDuressPhrase(
 
 /**
  * Derive the current verification word for a group.
+ *
+ * @param group - Object with `seed` (hex string) and `counter` (current counter value).
+ * @returns A single lowercase verification word from the en-v1 wordlist.
  */
 export function deriveCurrentWord(group: { seed: string; counter: number }): string {
   return deriveVerificationWord(group.seed, group.counter)

@@ -33,6 +33,21 @@ export interface VerifyResult {
  *
  * Per CANARY-DURESS: the verifier MUST check all identities and collect all matches.
  * The verifier MUST NOT short-circuit after the first duress match.
+ *
+ * @param spokenWord - The word or phrase spoken/entered by the user (case-insensitive, trimmed).
+ * @param seedHex - Group seed as a hex string.
+ * @param memberPubkeys - Array of member pubkeys for per-member and duress checking.
+ * @param counter - Current effective counter for the group.
+ * @param wordCount - Number of words in the token (1, 2, or 3; default: 1).
+ * @param tolerance - Counter tolerance window: accept tokens within ±tolerance (default: 1).
+ * @returns `{ status: 'verified' | 'duress' | 'stale' | 'failed', members?: string[] }`.
+ * @throws {RangeError} If tolerance exceeds MAX_TOLERANCE or memberPubkeys exceeds 100.
+ *
+ * @example
+ * ```ts
+ * const result = verifyWord('falcon', seedHex, [alicePubkey, bobPubkey], counter)
+ * if (result.status === 'duress') alert(`Duress from: ${result.members}`)
+ * ```
  */
 export function verifyWord(
   spokenWord: string,

@@ -42,6 +42,10 @@ function validateAesKey(key: Uint8Array): void {
  * Derive a 32-byte symmetric group key from a seed.
  *
  * `HMAC-SHA256(hex_to_bytes(seed), utf8("canary:sync:key"))`
+ *
+ * @param seedHex - Group seed as a 64-character lowercase hex string (32 bytes).
+ * @returns 32-byte AES-256 group key for envelope encryption.
+ * @throws {Error} If seedHex is not a valid 64-character hex string.
  */
 export function deriveGroupKey(seedHex: string): Uint8Array {
   validateSeedHex(seedHex)
@@ -54,6 +58,11 @@ export function deriveGroupKey(seedHex: string): Uint8Array {
  * Encrypt a plaintext string with AES-256-GCM using the provided group key.
  *
  * Returns `base64(IV || ciphertext || auth_tag)` where IV is a random 12-byte nonce.
+ *
+ * @param groupKey - 32-byte AES-256 key from {@link deriveGroupKey}.
+ * @param plaintext - UTF-8 string to encrypt.
+ * @returns Base64-encoded ciphertext (12-byte IV prepended to AES-GCM output).
+ * @throws {Error} If groupKey is not 32 bytes.
  */
 export async function encryptEnvelope(groupKey: Uint8Array, plaintext: string): Promise<string> {
   validateAesKey(groupKey)
@@ -83,6 +92,11 @@ export async function encryptEnvelope(groupKey: Uint8Array, plaintext: string): 
  *
  * Expects `base64(IV || ciphertext || auth_tag)`.
  * Throws on authentication failure (wrong key or tampered data).
+ *
+ * @param groupKey - 32-byte AES-256 key from {@link deriveGroupKey}.
+ * @param encoded - Base64-encoded ciphertext from {@link encryptEnvelope}.
+ * @returns Decrypted plaintext string.
+ * @throws {Error} If groupKey is not 32 bytes, data is too short, or decryption fails.
  */
 export async function decryptEnvelope(groupKey: Uint8Array, encoded: string): Promise<string> {
   validateAesKey(groupKey)
@@ -127,6 +141,11 @@ export async function decryptEnvelope(groupKey: Uint8Array, encoded: string): Pr
  *
  * Binding the personal private key ensures that each participant's signing
  * identity is unique within the group, even across reseed events.
+ *
+ * @param seedHex - Group seed as a 64-character lowercase hex string (32 bytes).
+ * @param personalPrivkeyHex - Participant's private key as a 64-character lowercase hex string.
+ * @returns 32-byte signing key unique to this participant within this group epoch.
+ * @throws {Error} If seedHex or personalPrivkeyHex are not valid 64-character hex strings.
  */
 export function deriveGroupSigningKey(seedHex: string, personalPrivkeyHex: string): Uint8Array {
   validateSeedHex(seedHex)
@@ -146,6 +165,9 @@ export function deriveGroupSigningKey(seedHex: string, personalPrivkeyHex: strin
  *
  * Publishing the hash rather than the group ID prevents observers from
  * correlating events to a known group name.
+ *
+ * @param groupId - The group identifier string.
+ * @returns 64-character lowercase hex string (SHA-256 hash of the group ID).
  */
 export function hashGroupTag(groupId: string): string {
   return bytesToHex(sha256(utf8(groupId)))

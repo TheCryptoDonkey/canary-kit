@@ -13,6 +13,11 @@ export const MAX_COUNTER_OFFSET = 100
 /**
  * Derive the current counter from a unix timestamp and rotation interval.
  * Counter = floor(timestamp / interval).
+ *
+ * @param timestampSec - Unix timestamp in seconds (non-negative finite number).
+ * @param rotationIntervalSec - Rotation interval in seconds (positive finite number, default: 604800 = 7 days).
+ * @returns Integer counter value within uint32 range.
+ * @throws {RangeError} If timestampSec is negative/non-finite, rotationIntervalSec is non-positive/non-finite, or counter exceeds uint32.
  */
 export function getCounter(
   timestampSec: number,
@@ -35,6 +40,9 @@ export function getCounter(
  * Derive a counter from an event identifier (e.g. a task ID or Nostr event ID).
  * Uses SHA-256 truncated to 32 bits for a deterministic, uniformly distributed counter.
  * Per CANARY spec §Counter Schemes: event-based counters are deterministic from event ID.
+ *
+ * @param eventId - String identifier to derive the counter from (e.g. a Nostr event ID).
+ * @returns Unsigned 32-bit integer derived from SHA-256 of the event ID.
  */
 export function counterFromEventId(eventId: string): number {
   const hash = sha256(new TextEncoder().encode(eventId))
@@ -45,6 +53,10 @@ export function counterFromEventId(eventId: string): number {
 /**
  * Serialise a counter to an 8-byte big-endian Uint8Array.
  * Same encoding as TOTP (RFC 6238).
+ *
+ * @param counter - Non-negative safe integer to serialise.
+ * @returns 8-byte big-endian Uint8Array representation of the counter.
+ * @throws {RangeError} If counter is negative, not an integer, or exceeds Number.MAX_SAFE_INTEGER.
  */
 export function counterToBytes(counter: number): Uint8Array {
   if (!Number.isInteger(counter) || counter < 0 || counter > Number.MAX_SAFE_INTEGER) {

@@ -279,7 +279,10 @@ for (let i = 0; i < WORDLIST.length; i++) {
 
 /**
  * Return the word at the given index.
- * @throws {RangeError} if index is outside 0-2047.
+ *
+ * @param index - Zero-based index into the wordlist (0-2047).
+ * @returns The word at the specified index.
+ * @throws {RangeError} If index is outside 0-2047.
  */
 export function getWord(index: number): string {
   if (index < 0 || index >= WORDLIST_SIZE) {
@@ -290,6 +293,9 @@ export function getWord(index: number): string {
 
 /**
  * Return the index of a word, or -1 if it is not in the wordlist.
+ *
+ * @param word - The word to look up (must match exactly, case-sensitive).
+ * @returns Zero-based index (0-2047) or -1 if not found.
  */
 export function indexOf(word: string): number {
   return indexMap.get(word) ?? -1

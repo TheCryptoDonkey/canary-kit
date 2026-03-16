@@ -180,6 +180,15 @@ export function createGroup(config: GroupConfig): GroupState {
 /**
  * Return the current verification word (or space-joined phrase) that all
  * group members should use to authenticate with one another.
+ *
+ * @param state - Current group state.
+ * @returns The current verification word or space-joined phrase.
+ *
+ * @example
+ * ```ts
+ * const group = createGroup({ name: 'Family', members: [alice, bob] })
+ * const word = getCurrentWord(group)  // e.g. "falcon"
+ * ```
  */
 export function getCurrentWord(state: GroupState): string {
   const counter = effectiveCounter(state)
@@ -191,6 +200,10 @@ export function getCurrentWord(state: GroupState): string {
  * Return the duress word (or phrase) for a specific member at the current
  * counter. Duress words are member-specific and distinct from the verification
  * word, allowing silent distress signalling.
+ *
+ * @param state - Current group state.
+ * @param memberPubkey - 64-character hex pubkey of the member requesting their duress word.
+ * @returns The member's duress word or space-joined phrase, distinct from the verification word.
  */
 export function getCurrentDuressWord(state: GroupState, memberPubkey: string): string {
   const counter = effectiveCounter(state)
@@ -203,6 +216,10 @@ export function getCurrentDuressWord(state: GroupState, memberPubkey: string): s
  * Throws a RangeError if the effective counter would exceed the current
  * time-based counter plus MAX_COUNTER_OFFSET, per CANARY spec §Counter Acceptance.
  * Returns new state — does not mutate the input.
+ *
+ * @param state - Current group state.
+ * @returns New group state with usageOffset incremented by one.
+ * @throws {RangeError} If advancing would exceed the time-based counter plus MAX_COUNTER_OFFSET.
  */
 export function advanceCounter(state: GroupState): GroupState {
   const timeBased = getCounter(Math.floor(Date.now() / 1000), state.rotationInterval)
@@ -220,6 +237,9 @@ export function advanceCounter(state: GroupState): GroupState {
  * Generate a fresh seed and reset the usage offset to zero.
  * Call this after a security event (e.g. suspected compromise).
  * Returns new state — does not mutate the input.
+ *
+ * @param state - Current group state.
+ * @returns New group state with a fresh cryptographically secure seed and usageOffset reset to zero.
  */
 export function reseed(state: GroupState): GroupState {
   return { ...state, seed: randomSeed(), usageOffset: 0 }
@@ -229,6 +249,11 @@ export function reseed(state: GroupState): GroupState {
  * Add a member to the group. If the pubkey is already present, returns the
  * existing state unchanged (idempotent).
  * Returns new state — does not mutate the input.
+ *
+ * @param state - Current group state.
+ * @param pubkey - 64-character lowercase hex pubkey of the member to add.
+ * @returns New group state with the member added, or unchanged state if already present.
+ * @throws {Error} If pubkey is not a valid 64-character hex string or group is at maximum capacity.
  */
 export function addMember(state: GroupState, pubkey: string): GroupState {
   validatePubkey(pubkey)
@@ -247,6 +272,11 @@ export function addMember(state: GroupState, pubkey: string): GroupState {
  * `removeMemberAndReseed()` instead unless you have a specific reason not to.
  *
  * Returns new state — does not mutate the input.
+ *
+ * @param state - Current group state.
+ * @param pubkey - 64-character lowercase hex pubkey of the member to remove.
+ * @returns New group state with the member removed (no-op if not found).
+ * @throws {Error} If pubkey is not a valid 64-character hex string.
  */
 export function removeMember(state: GroupState, pubkey: string): GroupState {
   validatePubkey(pubkey)
@@ -260,6 +290,11 @@ export function removeMember(state: GroupState, pubkey: string): GroupState {
  * future beacons.
  *
  * Returns new state — does not mutate the input.
+ *
+ * @param state - Current group state.
+ * @param pubkey - 64-character lowercase hex pubkey of the member to remove.
+ * @returns New group state with the member removed and a fresh seed.
+ * @throws {Error} If pubkey is not a valid 64-character hex string.
  */
 export function removeMemberAndReseed(state: GroupState, pubkey: string): GroupState {
   const removed = removeMember(state, pubkey)
@@ -277,6 +312,9 @@ export function removeMemberAndReseed(state: GroupState, pubkey: string): GroupS
  * persisted record (IndexedDB, localStorage, backend) after calling this.
  *
  * Returns new state — does not mutate the input.
+ *
+ * @param state - Current group state.
+ * @returns New group state with seed zeroed, members and admins cleared, and offsets reset.
  */
 export function dissolveGroup(state: GroupState): GroupState {
   return {
@@ -289,8 +327,14 @@ export function dissolveGroup(state: GroupState): GroupState {
   }
 }
 
-/** Refresh the counter to the current time window. Call after loading persisted state.
- * Enforces monotonicity: the counter never regresses, preventing clock rollback attacks. */
+/**
+ * Refresh the counter to the current time window. Call after loading persisted state.
+ * Enforces monotonicity: the counter never regresses, preventing clock rollback attacks.
+ *
+ * @param state - Current group state.
+ * @param nowSec - Current unix timestamp in seconds (default: `Date.now() / 1000`).
+ * @returns New group state with counter updated and usageOffset reset, or unchanged if counter has not advanced.
+ */
 export function syncCounter(
   state: GroupState,
   nowSec: number = Math.floor(Date.now() / 1000),

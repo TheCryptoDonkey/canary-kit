@@ -61,6 +61,13 @@ export interface GroupEventParams {
   expiration?: number
 }
 
+/**
+ * Build an unsigned kind 38800 group definition event.
+ *
+ * @param params - Group event parameters including groupId, name, members, and encrypted content.
+ * @returns An {@link UnsignedEvent} ready to be signed and published.
+ * @throws {Error} If groupId/name are invalid, member pubkeys are malformed, rotationInterval is non-positive, or wordCount is not 1/2/3.
+ */
 export function buildGroupEvent(params: GroupEventParams): UnsignedEvent {
   validateTagString(params.groupId, 'groupId')
   validateTagString(params.name, 'name')
@@ -94,6 +101,13 @@ export interface SeedDistributionParams {
   encryptedContent: string
 }
 
+/**
+ * Build an unsigned kind 28800 seed distribution event.
+ *
+ * @param params - Seed distribution parameters including recipient pubkey, group event ID, and encrypted seed.
+ * @returns An {@link UnsignedEvent} ready to be signed and published.
+ * @throws {Error} If recipientPubkey or groupEventId are not valid 64-character hex strings.
+ */
 export function buildSeedDistributionEvent(params: SeedDistributionParams): UnsignedEvent {
   validatePubkey(params.recipientPubkey, 'recipientPubkey')
   validateEventId(params.groupEventId, 'groupEventId')
@@ -116,6 +130,13 @@ export interface MemberUpdateParams {
   encryptedContent: string
 }
 
+/**
+ * Build an unsigned kind 38801 member update event (add or remove).
+ *
+ * @param params - Member update parameters including groupId, action ('add' | 'remove'), member pubkey, and reseed flag.
+ * @returns An {@link UnsignedEvent} ready to be signed and published.
+ * @throws {Error} If action is not 'add' or 'remove', or pubkey/groupId are invalid.
+ */
 export function buildMemberUpdateEvent(params: MemberUpdateParams): UnsignedEvent {
   if (params.action !== 'add' && params.action !== 'remove') {
     throw new Error(`Invalid action: must be 'add' or 'remove', got '${params.action}'`)
@@ -143,6 +164,13 @@ export interface ReseedParams {
 
 const VALID_RESEED_REASONS = new Set<string>(['member_removed', 'compromise', 'scheduled', 'duress'])
 
+/**
+ * Build an unsigned kind 28801 reseed notification event.
+ *
+ * @param params - Reseed parameters including group event ID, reason, and encrypted new seed.
+ * @returns An {@link UnsignedEvent} ready to be signed and published.
+ * @throws {Error} If groupEventId is not a valid 64-character hex string or reason is invalid.
+ */
 export function buildReseedEvent(params: ReseedParams): UnsignedEvent {
   validateEventId(params.groupEventId, 'groupEventId')
   if (!VALID_RESEED_REASONS.has(params.reason)) {
@@ -164,6 +192,13 @@ export interface WordUsedParams {
   encryptedContent: string
 }
 
+/**
+ * Build an unsigned kind 28802 word-used (burn-after-use) event.
+ *
+ * @param params - Word-used parameters including group event ID and encrypted content.
+ * @returns An {@link UnsignedEvent} ready to be signed and published.
+ * @throws {Error} If groupEventId is not a valid 64-character hex string.
+ */
 export function buildWordUsedEvent(params: WordUsedParams): UnsignedEvent {
   validateEventId(params.groupEventId, 'groupEventId')
   return {
@@ -215,6 +250,13 @@ export interface WordUsedPayload {
   duress: boolean
 }
 
+/**
+ * Build an unsigned kind 20800 beacon event.
+ *
+ * @param params - Beacon event parameters including groupId, encrypted content, and optional expiration.
+ * @returns An {@link UnsignedEvent} ready to be signed and published.
+ * @throws {Error} If groupId is invalid or expiration is not a non-negative integer.
+ */
 export function buildBeaconEvent(params: BeaconEventParams): UnsignedEvent {
   validateTagString(params.groupId, 'groupId')
   const tags: string[][] = [['h', params.groupId]]

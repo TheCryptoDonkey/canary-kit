@@ -86,6 +86,9 @@ function isNonNegativeInt(value: unknown): value is number {
 /**
  * Encode a sync message as a JSON string for transport.
  * Binary fields (seed) are hex-encoded for safe JSON round-tripping.
+ *
+ * @param msg - The sync message to serialise.
+ * @returns JSON string with protocolVersion injected and binary fields hex-encoded.
  */
 export function encodeSyncMessage(msg: SyncMessage): string {
   const versioned = { ...msg, protocolVersion: PROTOCOL_VERSION }
@@ -100,6 +103,10 @@ export function encodeSyncMessage(msg: SyncMessage): string {
  * Recursively produce a JSON string with sorted keys and no whitespace.
  * Handles nested objects, arrays (elements stringified recursively), and
  * all JSON-safe primitives. Used for deterministic signing (H2).
+ *
+ * @param value - Any JSON-serialisable value (null, boolean, number, string, array, or plain object).
+ * @returns Deterministic JSON string with sorted keys and no whitespace.
+ * @throws {Error} If value contains a Uint8Array (must be hex-encoded first) or unsupported type.
  */
 export function stableStringify(value: unknown): string {
   if (value === null || value === undefined) return 'null'
@@ -129,6 +136,9 @@ export function stableStringify(value: unknown): string {
  * (encodeSyncMessage) is responsible for injecting PROTOCOL_VERSION before
  * both encode and sign, so the canonical bytes always reflect the actual
  * wire value. This is the format that inner signatures are computed over (H2).
+ *
+ * @param msg - The sync message to canonicalise.
+ * @returns Deterministic JSON string with sorted keys and no whitespace.
  */
 export function canonicaliseSyncMessage(msg: SyncMessage): string {
   if (msg.type === 'reseed') {
@@ -141,6 +151,10 @@ export function canonicaliseSyncMessage(msg: SyncMessage): string {
 /**
  * Decode a sync message from a JSON string.
  * Throws on invalid or unrecognised messages.
+ *
+ * @param payload - JSON string to decode.
+ * @returns Validated {@link SyncMessage} with correct types (e.g. reseed.seed as Uint8Array).
+ * @throws {Error} If JSON is invalid, message type is unrecognised, required fields are missing, or protocolVersion does not match.
  */
 export function decodeSyncMessage(payload: string): SyncMessage {
   let parsed: Record<string, unknown>
@@ -356,8 +370,14 @@ function isPrivilegedAction(msg: SyncMessage, sender?: string): boolean {
  * Returns a new GroupState with the change applied.
  * Beacons and duress alerts don't modify group state (fire-and-forget).
  *
- * Authority invariants (I1–I6) are enforced for privileged actions.
+ * Authority invariants (I1-I6) are enforced for privileged actions.
  * Privileged actions without a sender are rejected (fail-closed).
+ *
+ * @param group - Current group state.
+ * @param msg - The sync message to apply.
+ * @param nowSec - Current unix timestamp in seconds (default: `Date.now() / 1000`).
+ * @param sender - Hex pubkey of the message sender (required for privileged actions).
+ * @returns New group state with the change applied, or unchanged state if rejected.
  */
 export function applySyncMessage(
   group: GroupState,
@@ -583,6 +603,12 @@ export interface SyncApplyResult {
  * Fire-and-forget messages (beacon, duress-alert, liveness-checkin) always
  * return `applied: true` when they pass freshness checks, even though they
  * don't modify group state.
+ *
+ * @param group - Current group state.
+ * @param msg - The sync message to apply.
+ * @param nowSec - Current unix timestamp in seconds (default: `Date.now() / 1000`).
+ * @param sender - Hex pubkey of the message sender (required for privileged actions).
+ * @returns `{ state, applied }` where `applied` indicates whether the message was accepted.
  */
 export function applySyncMessageWithResult(
   group: GroupState,

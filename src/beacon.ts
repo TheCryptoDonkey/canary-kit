@@ -35,6 +35,10 @@ function validateAesKey(key: Uint8Array): void {
 /**
  * Derive a 256-bit AES key from the group seed for beacon encryption.
  * Deterministic: same seed always produces the same key.
+ *
+ * @param seedHex - Group seed as a 64-character lowercase hex string (32 bytes).
+ * @returns 32-byte AES-256 key derived via HMAC-SHA256.
+ * @throws {Error} If seedHex is not a valid 64-character hex string.
  */
 export function deriveBeaconKey(seedHex: string): Uint8Array {
   validateSeedHex(seedHex)
@@ -45,6 +49,10 @@ export function deriveBeaconKey(seedHex: string): Uint8Array {
  * Derive a 256-bit AES key from the group seed for duress alert encryption.
  * Uses a distinct HMAC info string from beacon keys for domain separation —
  * prevents cross-type key reuse between normal beacons and duress alerts.
+ *
+ * @param seedHex - Group seed as a 64-character lowercase hex string (32 bytes).
+ * @returns 32-byte AES-256 key derived via HMAC-SHA256 with duress-specific info.
+ * @throws {Error} If seedHex is not a valid 64-character hex string.
  */
 export function deriveDuressKey(seedHex: string): Uint8Array {
   validateSeedHex(seedHex)
@@ -102,6 +110,12 @@ export interface BeaconPayload {
 /**
  * Encrypt a location beacon payload with the group's beacon key.
  * Returns a base64 string suitable for a Nostr event's `content` field.
+ *
+ * @param key - 32-byte AES-256 key from {@link deriveBeaconKey}.
+ * @param geohash - Geohash string representing the location.
+ * @param precision - Geohash precision level (1-11).
+ * @returns Base64-encoded ciphertext (12-byte IV prepended to AES-GCM output).
+ * @throws {Error} If key is not 32 bytes.
  */
 export async function encryptBeacon(
   key: Uint8Array,
@@ -119,6 +133,11 @@ export async function encryptBeacon(
 /**
  * Decrypt a location beacon event's content.
  * Throws if the key is wrong or the ciphertext is tampered with (AES-GCM authentication).
+ *
+ * @param key - 32-byte AES-256 key from {@link deriveBeaconKey}.
+ * @param content - Base64-encoded ciphertext from the beacon event's content field.
+ * @returns Decrypted {@link BeaconPayload} with geohash, precision, and timestamp.
+ * @throws {Error} If decryption fails, ciphertext is tampered, or payload is malformed.
  */
 export async function decryptBeacon(
   key: Uint8Array,
@@ -165,6 +184,11 @@ export interface DuressLocation {
  * The caller is responsible for geohash encoding and precision upgrade
  * (e.g. using geohash-kit to re-encode at precision 11 for duress).
  * This function just assembles the payload.
+ *
+ * @param memberPubkey - 64-character lowercase hex pubkey of the member under duress.
+ * @param location - Location info with geohash, precision, and source; or null if unavailable.
+ * @returns A {@link DuressAlert} payload ready for encryption.
+ * @throws {Error} If memberPubkey is not a valid 64-character hex string.
  */
 export function buildDuressAlert(
   memberPubkey: string,
@@ -196,6 +220,11 @@ export function buildDuressAlert(
 /**
  * Encrypt a duress alert with the group's duress key (from deriveDuressKey).
  * Returns a base64 string for the Nostr event's `content` field.
+ *
+ * @param key - 32-byte AES-256 key from {@link deriveDuressKey}.
+ * @param alert - The {@link DuressAlert} payload to encrypt.
+ * @returns Base64-encoded ciphertext (12-byte IV prepended to AES-GCM output).
+ * @throws {Error} If key is not 32 bytes.
  */
 export async function encryptDuressAlert(
   key: Uint8Array,
@@ -206,6 +235,11 @@ export async function encryptDuressAlert(
 
 /**
  * Decrypt a duress alert event's content.
+ *
+ * @param key - 32-byte AES-256 key from {@link deriveDuressKey}.
+ * @param content - Base64-encoded ciphertext from the duress alert event's content field.
+ * @returns Decrypted {@link DuressAlert} payload.
+ * @throws {Error} If decryption fails, ciphertext is tampered, or payload is malformed.
  */
 export async function decryptDuressAlert(
   key: Uint8Array,
