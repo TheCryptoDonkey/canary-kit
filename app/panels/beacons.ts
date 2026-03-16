@@ -561,8 +561,9 @@ function setMarkerDuress(pubkey: string): void {
 
 /**
  * Send a one-shot location beacon (used by liveness check-in).
- * Starts the continuous watch if not already active, then fires a single
- * position update so the map refreshes immediately.
+ * If the continuous watch is already active, it will deliver the next
+ * position update on its own — no need for a competing getCurrentPosition.
+ * If the watch isn't running, starts it and fires a single position request.
  */
 export function sendLocationPing(): void {
   console.info('[canary:beacon] sendLocationPing called', { hasGeo: 'geolocation' in navigator, map: !!map, mapReady })
@@ -575,14 +576,23 @@ export function sendLocationPing(): void {
     return
   }
 
+  // If watch is already running, it will deliver the next position update
+  // on its own schedule — no need for a competing getCurrentPosition call.
+  if (geoWatchId !== null) {
+    console.info('[canary:beacon] watch already active, skipping getCurrentPosition')
+    return
+  }
+
+  // Start the continuous watch — it will fire the first callback
+  // as soon as a position is available.
+  startBeaconWatch()
+
+  // Also fire a single position request for immediate feedback, since
+  // the watch may take a moment to deliver its first callback.
   const group = groups[activeGroupId]
   const beaconKey = deriveBeaconKey(group.seed)
   const geohashPrecision = group.beaconPrecision || 5
 
-  // Start the continuous watch if not already running
-  if (geoWatchId === null) startBeaconWatch()
-
-  // Also fire a single high-priority position request for immediate feedback
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       if (import.meta.env.DEV) console.info('[canary:beacon] getCurrentPosition success', { map: !!map, mapReady })
