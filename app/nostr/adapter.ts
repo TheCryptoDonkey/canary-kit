@@ -264,7 +264,11 @@ export class NostrSyncTransport implements SyncTransport {
 
             // Verify authenticated inner envelope.
             // Format: { s: personalPubkey, sig: schnorr(sig over payload), p: syncPayload }
-            const parsed = JSON.parse(decrypted) as unknown
+            let parsed: unknown
+            try { parsed = JSON.parse(decrypted) } catch {
+              console.warn('[canary:sync] Rejected malformed envelope')
+              return
+            }
             if (!parsed || typeof parsed !== 'object') {
               console.warn('[canary:sync] Rejected malformed envelope')
               return

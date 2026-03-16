@@ -36,7 +36,7 @@ export function encodeAsWords(
  * integer, reduced modulo 10^digits.
  */
 export function encodeAsPin(bytes: Uint8Array, digits: number = 4): string {
-  if (digits < 1 || digits > 10) throw new RangeError('PIN digits must be 1–10')
+  if (!Number.isInteger(digits) || digits < 1 || digits > 10) throw new RangeError('PIN digits must be an integer 1–10')
   if (bytes.length === 0) throw new RangeError('Cannot encode empty byte array as PIN')
   const needed = Math.min(Math.ceil(digits * 0.415), bytes.length)
   const mod = Math.pow(10, digits)
@@ -59,7 +59,7 @@ export function encodeAsPin(bytes: Uint8Array, digits: number = 4): string {
  * Encode raw bytes as a lowercase hex string.
  */
 export function encodeAsHex(bytes: Uint8Array, length: number = 8): string {
-  if (length < 1 || length > 64) throw new RangeError('Hex length must be 1–64')
+  if (!Number.isInteger(length) || length < 1 || length > 64) throw new RangeError('Hex length must be an integer 1–64')
   const needed = Math.ceil(length / 2)
   if (bytes.length < needed) throw new RangeError(`Not enough bytes: need ${needed}, got ${bytes.length}`)
   let hex = ''

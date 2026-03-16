@@ -151,8 +151,16 @@ describe('encoding input validation', () => {
     expect(() => encodeAsPin(new Uint8Array(0), 4)).toThrow('Cannot encode empty byte array as PIN')
   })
 
+  it('encodeAsPin rejects fractional digits', () => {
+    expect(() => encodeAsPin(new Uint8Array(32), 3.5)).toThrow('PIN digits must be an integer 1–10')
+  })
+
   it('encodeAsHex rejects insufficient bytes', () => {
     expect(() => encodeAsHex(new Uint8Array(1), 8)).toThrow('Not enough bytes')
+  })
+
+  it('encodeAsHex rejects fractional length', () => {
+    expect(() => encodeAsHex(new Uint8Array(32), 7.5)).toThrow('Hex length must be an integer 1–64')
   })
 })
 

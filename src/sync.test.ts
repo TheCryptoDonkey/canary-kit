@@ -41,6 +41,18 @@ describe('sync message serialisation', () => {
     expect(decodeSyncMessage(encodeSyncMessage(msg))).toEqual(msg)
   })
 
+  it('rejects reseed with oversized members array', () => {
+    const bigMembers = Array.from({ length: 101 }, (_, i) => (i + 1).toString(16).padStart(64, '0'))
+    const raw = JSON.stringify({ type: 'reseed', seed: 'a'.repeat(64), counter: 0, timestamp: 1700000000, epoch: 1, opId: 'rs-1', protocolVersion: 2, admins: ['a'.repeat(64)], members: bigMembers })
+    expect(() => decodeSyncMessage(raw)).toThrow('reseed.members exceeds maximum')
+  })
+
+  it('rejects state-snapshot with oversized members array', () => {
+    const bigMembers = Array.from({ length: 101 }, (_, i) => (i + 1).toString(16).padStart(64, '0'))
+    const raw = JSON.stringify({ type: 'state-snapshot', seed: 'a'.repeat(64), counter: 0, usageOffset: 0, timestamp: 1700000000, epoch: 1, opId: 'ss-1', protocolVersion: 2, admins: ['a'.repeat(64)], members: bigMembers })
+    expect(() => decodeSyncMessage(raw)).toThrow('state-snapshot members exceeds maximum')
+  })
+
   it('round-trips a counter-advance message', () => {
     const msg: SyncMessage = { type: 'counter-advance', counter: 42, usageOffset: 3, timestamp: 1700000000, protocolVersion: 2 }
     expect(decodeSyncMessage(encodeSyncMessage(msg))).toEqual(msg)

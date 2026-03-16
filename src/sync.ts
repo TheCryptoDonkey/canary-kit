@@ -41,6 +41,7 @@ export const STORED_MESSAGE_TYPES = new Set<string>([
 /** 64-character lowercase hex string (32 bytes — Nostr pubkey or CANARY seed). */
 const HEX_64_RE = /^[0-9a-f]{64}$/
 const MAX_COUNTER_ADVANCE_OFFSET = 100
+const MAX_MEMBERS = 100
 const MAX_BEACON_ACCURACY_METERS = 20_000_000
 const MAX_TAG_LENGTH = 256
 
@@ -237,6 +238,12 @@ export function decodeSyncMessage(payload: string): SyncMessage {
       if (!Array.isArray(parsed.members) || !parsed.members.every((m: unknown) => typeof m === 'string' && HEX_64_RE.test(m))) {
         throw new Error('Invalid sync message: reseed.members must be 64-char hex pubkeys')
       }
+      if (parsed.members.length > MAX_MEMBERS) {
+        throw new Error(`Invalid sync message: reseed.members exceeds maximum of ${MAX_MEMBERS}`)
+      }
+      if (parsed.admins.length > MAX_MEMBERS) {
+        throw new Error(`Invalid sync message: reseed.admins exceeds maximum of ${MAX_MEMBERS}`)
+      }
       return {
         type, seed: hexToBytes(parsed.seed), counter: parsed.counter, timestamp: ts,
         epoch: parsed.epoch, opId: parsed.opId,
@@ -301,6 +308,12 @@ export function decodeSyncMessage(payload: string): SyncMessage {
       }
       if (!Array.isArray(parsed.admins) || !parsed.admins.every((a: unknown) => typeof a === 'string' && HEX_64_RE.test(a))) {
         throw new Error('Invalid sync message: state-snapshot admins must be 64-char hex pubkeys')
+      }
+      if (parsed.members.length > MAX_MEMBERS) {
+        throw new Error(`Invalid sync message: state-snapshot members exceeds maximum of ${MAX_MEMBERS}`)
+      }
+      if (parsed.admins.length > MAX_MEMBERS) {
+        throw new Error(`Invalid sync message: state-snapshot admins exceeds maximum of ${MAX_MEMBERS}`)
       }
       if (!isNonNegativeInt(parsed.epoch)) {
         throw new Error('Invalid sync message: state-snapshot requires a non-negative epoch')
@@ -411,7 +424,7 @@ export function applySyncMessage(
 
   // ── Freshness gate for fire-and-forget messages ────────────
   // Drop stale duress-alert/beacon/liveness-checkin messages to prevent replay.
-  if (msg.type === 'duress-alert' || msg.type === 'beacon' || msg.type === 'liveness-checkin') {
+  if (msg.type === 'duress-alert' || msg.type === 'duress-clear' || msg.type === 'beacon' || msg.type === 'liveness-checkin') {
     const elapsed = nowSec - msg.timestamp
     if (elapsed > FIRE_AND_FORGET_FRESHNESS_SEC) return group   // stale
     if (elapsed < -MAX_FUTURE_SKEW_SEC) return group             // too far in the future
@@ -420,8 +433,8 @@ export function applySyncMessage(
   // Cross-check: liveness-checkin sender must match the pubkey in the message
   if (msg.type === 'liveness-checkin' && sender && msg.pubkey !== sender) return group
 
-  // Non-privileged member-leave still needs opId replay guard
-  if (msg.type === 'member-leave' && !isPrivilegedAction(msg, sender)) {
+  // Non-privileged member-leave/member-join/duress-clear still need opId replay guard
+  if ((msg.type === 'member-leave' || msg.type === 'member-join' || msg.type === 'duress-clear') && !isPrivilegedAction(msg, sender)) {
     const consumedSet = new Set(group.consumedOps)
     if (consumedSet.has(msg.opId)) return group
     if (group.consumedOpsFloor !== undefined && msg.timestamp <= group.consumedOpsFloor) return group
