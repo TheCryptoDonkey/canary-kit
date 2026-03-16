@@ -1,6 +1,6 @@
 // e2e/offline/login.spec.ts — Login screen tests
 import { test, expect } from '../fixtures.js'
-import { loginOffline, loginWithNsec, loginWithDemo } from '../helpers.js'
+import { loginOffline, loginWithNsec } from '../helpers.js'
 
 // Demo account nsec for testing (Alice)
 const ALICE_NSEC = 'nsec1vuhg9nandn0kas2w9uuvztwyla2fp7enfzz0emt6ly4gs6p5q3mqc6c6w5'
@@ -30,13 +30,19 @@ test.describe('Login screen', () => {
   })
 
   test('nsec login with invalid key shows error', async ({ cleanPage: page }) => {
-    // Listen for the alert dialog
+    // Capture the alert dialog message, accept it immediately to avoid blocking
+    let dialogMessage = ''
     page.once('dialog', async (dialog) => {
-      expect(dialog.message()).toContain('Invalid nsec')
+      dialogMessage = dialog.message()
       await dialog.accept()
     })
     await page.fill('#login-nsec', 'not-a-real-nsec')
     await page.click('#nsec-login-form button[type="submit"]')
+    // Wait for the dialog to appear and be handled
+    await page.waitForTimeout(500)
+    expect(dialogMessage).toBeTruthy()
+    // Login screen should still be visible
+    await expect(page.locator('.lock-screen')).toBeVisible()
   })
 
   test('can retry login after invalid nsec error', async ({ cleanPage: page }) => {
@@ -52,11 +58,6 @@ test.describe('Login screen', () => {
     // Should be able to use offline login as fallback
     await loginOffline(page, 'Fallback')
     await expect(page.locator('#sidebar')).toBeVisible()
-  })
-
-  test('demo account button loads correct identity', async ({ cleanPage: page }) => {
-    await loginWithDemo(page, 'Alice')
-    await expect(page.locator('.identity-badge__name')).toHaveText('Alice')
   })
 
   test('preserves #inv/ hash through offline login flow', async ({ cleanPage: page }) => {

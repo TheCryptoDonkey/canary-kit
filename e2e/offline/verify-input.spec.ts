@@ -1,11 +1,13 @@
 // e2e/offline/verify-input.spec.ts — Verify panel: word input and result
 import { test, expect } from '../fixtures.js'
-import { loginOffline, createGroup, getDisplayedWord, verifyWord } from '../helpers.js'
+import { loginOffline, createGroup, getDisplayedWord, verifyWord, addSimulatedMember } from '../helpers.js'
 
 test.describe('Verify input panel', () => {
   test.beforeEach(async ({ cleanPage: page }) => {
     await loginOffline(page, 'Tester')
     await createGroup(page, 'Test', { preset: 'family' })
+    // Verify panel requires 2+ members to render the input
+    await addSimulatedMember(page)
   })
 
   test('correct current word shows Verified', async ({ cleanPage: page }) => {
@@ -26,13 +28,9 @@ test.describe('Verify input panel', () => {
   })
 
   test('Enter key triggers verification', async ({ cleanPage: page }) => {
-    // Select a member if the dropdown is present
-    const memberSelect = page.locator('#verify-member')
-    if (await memberSelect.count() > 0) {
-      const firstOption = memberSelect.locator('option[value]:not([value=""])')
-      const firstValue = await firstOption.first().getAttribute('value')
-      if (firstValue) await memberSelect.selectOption(firstValue)
-    }
+    // Open the "Type manually" details to reveal the text input
+    await page.click('.verify-fallback summary')
+    await page.waitForSelector('#verify-input', { state: 'visible', timeout: 3000 })
 
     const word = await getDisplayedWord(page)
     await page.fill('#verify-input', word)

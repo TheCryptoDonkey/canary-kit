@@ -2,7 +2,7 @@
 import { test, expect } from '../fixtures.js'
 import {
   loginOffline, createGroup, createInvite, acceptInviteViaLink, acceptInviteViaQR,
-  getDisplayedWord, getGroupNames,
+  getDisplayedWord, getGroupNames, getGroupState,
   startTrackingWarningToasts, assertNoWarningToasts,
 } from '../helpers.js'
 
@@ -86,7 +86,7 @@ test.describe('Invite flow (offline)', () => {
     await expect(pageB.locator('.member-list .member-item')).toHaveCount(2, { timeout: 5000 })
   })
 
-  test('both users see same verification word after join', async ({ twoUsers: { pageA, pageB } }) => {
+  test('both users share same group state after join', async ({ twoUsers: { pageA, pageB } }) => {
     await loginOffline(pageA, 'Alice')
     await createGroup(pageA, 'Shared')
 
@@ -96,10 +96,21 @@ test.describe('Invite flow (offline)', () => {
     // Ensure hero panels are rendered on both pages
     await pageA.waitForSelector('#hero-reveal-btn', { timeout: 3000 })
     await pageB.waitForSelector('#hero-reveal-btn', { timeout: 3000 })
+
+    // Words are per-member (each user sees their own unique word derived from
+    // their identity), so instead verify that the underlying group state matches
+    const stateA = await getGroupState(pageA)
+    const stateB = await getGroupState(pageB)
+    expect(stateA.seed).toBeTruthy()
+    expect(stateA.seed).toBe(stateB.seed)
+    expect(stateA.counter).toBe(stateB.counter)
+    expect(stateA.usageOffset).toBe(stateB.usageOffset)
+
+    // Both users should see a word (even though they differ)
     const wordA = await getDisplayedWord(pageA)
     const wordB = await getDisplayedWord(pageB)
     expect(wordA).toBeTruthy()
-    expect(wordA).toBe(wordB)
+    expect(wordB).toBeTruthy()
   })
 
   test('wrong confirm code shows error via binary join', async ({ twoUsers: { pageA, pageB } }) => {

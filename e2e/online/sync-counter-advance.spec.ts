@@ -1,6 +1,6 @@
 // e2e/online/sync-counter-advance.spec.ts — Counter advance ripple
 import { test, expect } from '../fixtures.js'
-import { loginWithNsec, createGroup, createInvite, seedRelayUrl, getDisplayedWord } from '../helpers.js'
+import { loginWithNsec, createGroup, createInvite, seedRelayUrl, getDisplayedWord, getGroupState } from '../helpers.js'
 
 const ALICE_NSEC = 'nsec1vuhg9nandn0kas2w9uuvztwyla2fp7enfzz0emt6ly4gs6p5q3mqc6c6w5'
 const BOB_NSEC = 'nsec1hszs2j8elt78kq6ewresrxfallpc6qvf0p33usgy9ujdkgu0mcesd4qryw'
@@ -38,10 +38,16 @@ test.describe('Online sync: counter advance', () => {
     // Extra time for WebSocket subscription to be fully active
     await pageB.waitForTimeout(1000)
 
-    // Both should see the same word
-    const wordBefore = await getDisplayedWord(pageA)
-    const wordBeforeB = await getDisplayedWord(pageB)
-    expect(wordBefore).toBe(wordBeforeB)
+    // Both should have the same group state (seed, counter, usageOffset)
+    // Note: displayed words differ because they are per-member (derived with identity pubkey)
+    const stateA = await getGroupState(pageA)
+    const stateB = await getGroupState(pageB)
+    expect(stateA.seed).toBe(stateB.seed)
+    expect(stateA.counter).toBe(stateB.counter)
+    expect(stateA.usageOffset).toBe(stateB.usageOffset)
+
+    // Alice's word before burn (per-member, unique to Alice)
+    const wordBeforeA = await getDisplayedWord(pageA)
 
     // Alice burns the word ("I used this word")
     await pageA.click('#burn-btn')
@@ -49,14 +55,21 @@ test.describe('Online sync: counter advance', () => {
 
     // Alice's word should have changed
     const wordAfterA = await getDisplayedWord(pageA)
-    expect(wordAfterA).not.toBe(wordBefore)
+    expect(wordAfterA).not.toBe(wordBeforeA)
+
+    // Alice's group state should have advanced
+    const stateAfterA = await getGroupState(pageA)
+    const effectiveA = (stateAfterA.counter as number) + (stateAfterA.usageOffset as number)
+    const effectiveBefore = (stateA.counter as number) + (stateA.usageOffset as number)
+    expect(effectiveA).toBeGreaterThan(effectiveBefore)
 
     // Wait for propagation via relay
     await pageB.waitForTimeout(5000)
 
-    // Bob should now show the same new word as Alice
-    const wordAfterB = await getDisplayedWord(pageB)
-    expect(wordAfterB).toBe(wordAfterA)
+    // Bob's group state should now match Alice's (counter advance rippled)
+    const stateAfterB = await getGroupState(pageB)
+    expect(stateAfterB.counter).toBe(stateAfterA.counter)
+    expect(stateAfterB.usageOffset).toBe(stateAfterA.usageOffset)
 
     await ctxA.close()
     await ctxB.close()

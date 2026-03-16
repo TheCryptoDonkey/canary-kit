@@ -1,6 +1,6 @@
 // e2e/online/sync-reseed.spec.ts — Reseed propagation
 import { test, expect } from '../fixtures.js'
-import { loginWithNsec, createGroup, createInvite, openSettings, seedRelayUrl, getDisplayedWord } from '../helpers.js'
+import { loginWithNsec, createGroup, createInvite, openSettings, seedRelayUrl, getGroupState } from '../helpers.js'
 
 const ALICE_NSEC = 'nsec1vuhg9nandn0kas2w9uuvztwyla2fp7enfzz0emt6ly4gs6p5q3mqc6c6w5'
 const BOB_NSEC = 'nsec1hszs2j8elt78kq6ewresrxfallpc6qvf0p33usgy9ujdkgu0mcesd4qryw'
@@ -42,8 +42,11 @@ test.describe('Online sync: reseed', () => {
     // Extra time for WebSocket subscription to be fully active
     await pageB.waitForTimeout(1000)
 
-    // Both should now see the same word
-    const wordBefore = await getDisplayedWord(pageA)
+    // Both should have the same seed and epoch before reseed
+    const stateBefore = await getGroupState(pageA)
+    const stateBeforeB = await getGroupState(pageB)
+    expect(stateBefore.seed).toBe(stateBeforeB.seed)
+    expect(stateBefore.epoch).toBe(stateBeforeB.epoch)
 
     // Alice reseeds
     await openSettings(pageA)
@@ -51,15 +54,18 @@ test.describe('Online sync: reseed', () => {
     await pageA.click('#reseed-btn')
     await pageA.waitForTimeout(1000)
 
-    const wordAfterA = await getDisplayedWord(pageA)
-    expect(wordAfterA).not.toBe(wordBefore)
+    // Alice's group should now have a new seed and incremented epoch
+    const stateAfterA = await getGroupState(pageA)
+    expect(stateAfterA.seed).not.toBe(stateBefore.seed)
+    expect(stateAfterA.epoch).toBe((stateBefore.epoch as number) + 1)
 
     // Wait for propagation
     await pageB.waitForTimeout(5000)
 
-    // Bob should now show the new word (same as Alice)
-    const wordAfterB = await getDisplayedWord(pageB)
-    expect(wordAfterB).toBe(wordAfterA)
+    // Bob's group state should now match Alice's (reseed propagated)
+    const stateAfterB = await getGroupState(pageB)
+    expect(stateAfterB.seed).toBe(stateAfterA.seed)
+    expect(stateAfterB.epoch).toBe(stateAfterA.epoch)
 
     await ctxA.close()
     await ctxB.close()

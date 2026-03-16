@@ -6,7 +6,7 @@ const ALICE_NSEC = 'nsec1vuhg9nandn0kas2w9uuvztwyla2fp7enfzz0emt6ly4gs6p5q3mqc6c
 const BOB_NSEC = 'nsec1hszs2j8elt78kq6ewresrxfallpc6qvf0p33usgy9ujdkgu0mcesd4qryw'
 
 test.describe('Online sync: duress alert', () => {
-  test('duress word verified on User A triggers alert overlay on User B', async ({ browser, mockRelay }) => {
+  test('duress word detected by verifier and broadcast to relay', async ({ browser, mockRelay }) => {
     const relayUrl = mockRelay.url
     const baseURL = 'http://localhost:5173'
 
@@ -37,12 +37,13 @@ test.describe('Online sync: duress alert', () => {
     await expect(pageB.locator('#relay-status')).toBeVisible({ timeout: 5000 })
     await pageB.waitForTimeout(1000)
 
+    const eventsBefore = mockRelay.storedEvents.length
+
     // Get Bob's duress word by pressing the right side of the hero reveal button
     const bobDuressWord = await pageB.evaluate(() => {
       const btn = document.getElementById('hero-reveal-btn')
       if (!btn) return ''
       const rect = btn.getBoundingClientRect()
-      // Press right side = duress word
       btn.dispatchEvent(new PointerEvent('pointerdown', {
         bubbles: true,
         clientX: rect.left + rect.width * 0.75,
@@ -57,30 +58,29 @@ test.describe('Online sync: duress alert', () => {
 
     expect(bobDuressWord).toBeTruthy()
 
-    // Alice verifies Bob's duress word via the verify input
-    await pageA.waitForSelector('#verify-input', { timeout: 3000 })
-
-    // Select Bob in the member dropdown if present
-    const memberSelect = pageA.locator('#verify-member')
-    if (await memberSelect.count() > 0) {
-      const options = memberSelect.locator('option[value]:not([value=""])')
-      const firstValue = await options.first().getAttribute('value')
-      if (firstValue) await memberSelect.selectOption(firstValue)
-    }
-
+    // Alice verifies Bob's duress word via the "Type manually" text fallback
+    await pageA.click('.verify-fallback summary')
+    await pageA.waitForSelector('#verify-input', { state: 'visible', timeout: 3000 })
     await pageA.fill('#verify-input', bobDuressWord)
     await pageA.click('#verify-btn')
 
-    // Wait for propagation via relay
-    await pageB.waitForTimeout(5000)
+    // Alice should see the duress alert overlay on her own page (local detection)
+    await expect(pageA.locator('.duress-overlay')).toBeVisible({ timeout: 5000 })
+    await expect(pageA.locator('.duress-overlay__subtitle')).toHaveText('NEEDS HELP')
 
-    // Bob should see the duress alert overlay
-    await expect(pageB.locator('.duress-overlay')).toBeVisible({ timeout: 5000 })
-    await expect(pageB.locator('.duress-overlay__subtitle')).toHaveText('NEEDS HELP')
+    // Wait for relay broadcast
+    await pageA.waitForTimeout(2000)
 
-    // Dismiss the alert
-    await pageB.click('#duress-dismiss')
-    await expect(pageB.locator('.duress-overlay')).not.toBeVisible({ timeout: 3000 })
+    // The relay should have received the duress-alert event
+    expect(mockRelay.storedEvents.length).toBeGreaterThan(eventsBefore)
+
+    // Bob's page should NOT show the overlay — the subject's own device never
+    // reveals that duress was detected (attacker might be watching)
+    await expect(pageB.locator('.duress-overlay')).not.toBeVisible()
+
+    // Alice dismisses the alert
+    await pageA.locator('.duress-overlay__dismiss').click()
+    await expect(pageA.locator('.duress-overlay')).not.toBeVisible({ timeout: 3000 })
 
     await ctxA.close()
     await ctxB.close()

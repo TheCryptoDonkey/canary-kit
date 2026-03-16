@@ -315,8 +315,14 @@ export async function verifyWord(
   page: Page,
   word: string,
 ): Promise<'valid' | 'duress' | 'invalid'> {
-  // Wait for the verify panel to exist (needs ≥2 members)
-  await page.waitForSelector('#verify-input', { state: 'attached', timeout: 5000 })
+  // Wait for the verify panel to exist (needs ≥2 members).
+  // The input is inside a <details> element — open it first if closed.
+  const details = page.locator('.verify-fallback')
+  await details.waitFor({ state: 'attached', timeout: 5000 })
+  if (!(await details.getAttribute('open'))) {
+    await page.click('.verify-fallback summary')
+  }
+  await page.waitForSelector('#verify-input', { state: 'visible', timeout: 3000 })
 
   // Fill + click atomically via evaluate to avoid re-render race
   await page.evaluate((w) => {
