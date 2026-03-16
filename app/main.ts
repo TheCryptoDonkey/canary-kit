@@ -28,7 +28,7 @@ import { renderWelcome } from './panels/welcome.js'
 import { renderHero } from './panels/hero.js'
 import { renderVerify } from './panels/verify.js'
 import { renderMembers, showInviteModal } from './panels/members.js'
-import { renderBeacons, handleIncomingBeacon } from './panels/beacons.js'
+import { renderBeacons, handleIncomingBeacon, cleanupBeacons } from './panels/beacons.js'
 import { renderLiveness } from './panels/liveness.js'
 import { renderSettings } from './panels/settings.js'
 import { renderCallSimulation, destroyCallSimulation } from './views/call-simulation.js'
@@ -368,6 +368,7 @@ function render(): void {
         beacons.hidden = false
         void renderBeacons(beacons)
       } else {
+        cleanupBeacons()
         beacons.hidden = true
         beacons.innerHTML = ''
       }
@@ -1088,7 +1089,10 @@ function wireGlobalEvents(): void {
   // Handle incoming sync messages for beacon/duress side effects.
   document.addEventListener('canary:sync-message', (evt) => {
     const { groupId, message, sender } = (evt as CustomEvent).detail
+    const { activeGroupId } = getState()
     if (message.type === 'beacon') {
+      // Only process beacons for the currently active group
+      if (groupId !== activeGroupId) return
       if (import.meta.env.DEV) console.info(`[canary] Beacon from ${sender.slice(0, 8)}…`)
       handleIncomingBeacon(sender, message.lat, message.lon, message.accuracy ?? 20000, message.timestamp)
     } else if (message.type === 'duress-alert') {
