@@ -16,6 +16,9 @@ let geoWatchId: number | null = null
 let duressMembers = new Set<string>()
 let mapReady = false
 
+/** Track which group the current positions belong to. */
+let activeBeaconGroupId: string | null = null
+
 /** Named precision presets — human-readable, ordered from least to most precise. */
 const PRECISION_PRESETS = [
   { label: 'City', value: 4, hint: '~20 km' },
@@ -142,16 +145,43 @@ export async function renderBeacons(container: HTMLElement): Promise<void> {
   const group = groups[activeGroupId]
   const precision = group.beaconPrecision ?? 5
 
-  // Restore persisted positions into the in-memory map (runs once per session)
-  if (Object.keys(positions).length === 0 && group.lastPositions) {
-    for (const [pk, pos] of Object.entries(group.lastPositions)) {
-      positions[pk] = pos
+  // If the active group changed, clear stale positions and reload from the
+  // new group's persisted state. This prevents cross-group beacon bleed.
+  if (activeBeaconGroupId !== activeGroupId) {
+    // Clear all module-level state for the previous group
+    positions = {}
+    encryptedPayloads = {}
+    duressMembers.clear()
+    // Remove all existing markers from the map
+    for (const [pk, marker] of Object.entries(markers)) {
+      marker.remove()
+      delete markers[pk]
+    }
+    activeBeaconGroupId = activeGroupId
+    // Restore persisted positions for the new group
+    if (group.lastPositions) {
+      for (const [pk, pos] of Object.entries(group.lastPositions)) {
+        positions[pk] = pos
+      }
     }
   }
 
-  // If map is already initialised, skip re-rendering to preserve the live
-  // MapLibre instance (replacing innerHTML would orphan the GL context).
-  if (map && document.getElementById('beacon-map')) return
+  // If map is already initialised, refresh the data layers and return —
+  // preserves the live MapLibre instance (replacing innerHTML would orphan the GL context).
+  if (map && document.getElementById('beacon-map')) {
+    // Re-render circles and markers with new group's positions
+    refreshCircles()
+    for (const [pubkey, pos] of Object.entries(positions)) {
+      updateMapMarker(pubkey, pos.lat, pos.lon)
+    }
+    updateBeaconList()
+    if (Object.keys(positions).length > 0) fitMapToMarkers()
+    return
+  }
+
+  // Schedule a beacon list update after the DOM is built (below) —
+  // the map may fail to load (offline) but the text list should still render.
+  queueMicrotask(() => updateBeaconList())
 
   container.innerHTML = `
     <section class="panel beacon-panel">
@@ -644,4 +674,5 @@ export function cleanupBeacons(): void {
   positions = {}
   encryptedPayloads = {}
   duressMembers.clear()
+  activeBeaconGroupId = null
 }
