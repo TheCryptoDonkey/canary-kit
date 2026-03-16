@@ -85,7 +85,14 @@
     "totp",
     "deepfake",
     "voice-clone",
-    "meshtastic"
+    "meshtastic",
+    "liveness",
+    "dead-mans-switch",
+    "coercion-resistance",
+    "spoken-word",
+    "bidirectional-verification",
+    "offline-first",
+    "zero-dependency"
   ],
   "author": "TheCryptoDonkey",
   "license": "MIT",

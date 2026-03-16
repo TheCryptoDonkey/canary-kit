@@ -38,7 +38,7 @@ src/
   crypto.ts      — pure JS SHA-256, HMAC-SHA256, hex/base64 utilities
 ```
 
-Seven subpath exports mirror the source modules: `canary-kit`, `canary-kit/token`, `canary-kit/encoding`, `canary-kit/session`, `canary-kit/wordlist`, `canary-kit/nostr`, `canary-kit/beacon`.
+Eight subpath exports mirror the source modules: `canary-kit`, `canary-kit/token`, `canary-kit/encoding`, `canary-kit/session`, `canary-kit/wordlist`, `canary-kit/nostr`, `canary-kit/beacon`, `canary-kit/sync`.
 
 ## Conventions
 
