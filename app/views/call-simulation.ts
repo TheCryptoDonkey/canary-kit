@@ -68,8 +68,9 @@ function getDuressToken(role: string, nowSec?: number): string {
   const counter = isHandoff
     ? _handoffCounter
     : Math.floor((nowSec ?? Math.floor(Date.now() / 1000)) / preset.rotationSeconds)
-  // Must use null-byte separator to match deriveDirectionalPair/createSession
-  const context = `${_scenario.namespace}\0${role}`
+  // Use colon-separated context to match createSession's internal format
+  // (spoken-token v2 rejects null bytes in context strings)
+  const context = `pair:${_scenario.namespace}:${role}`
   const encoding = _scenario.encoding === 'pin'
     ? { format: 'pin' as const, digits: 4 }
     : { format: 'words' as const, count: 1 }
