@@ -27,3 +27,4 @@ playwright-report/
 
 # Recording output
 docs/record/output/
+.superpowers/
