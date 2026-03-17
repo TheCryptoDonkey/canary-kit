@@ -9,7 +9,11 @@ Coercion-resistant spoken verification. Extends `spoken-token` with duress, live
 - `npm run test:watch` — watch mode
 - `npm run typecheck` — type-check without emitting
 - `npm run bench` — run performance benchmarks
+- `npm run lint` — run ESLint
 - `npm run demo` — build and serve interactive demo at localhost:8787
+- `npm run build:app` — build demo app to docs/
+- `npm run test:e2e` — run Playwright e2e tests (requires `npx playwright install` first)
+- `npm run test:e2e:protocol` — run protocol-specific e2e tests
 
 ## Dependencies
 
