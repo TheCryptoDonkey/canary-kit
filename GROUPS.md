@@ -57,6 +57,10 @@ GroupState {
 }
 ```
 
+Applications MAY extend GroupState with additional fields (e.g. `wordCount`,
+`wordlist`, `beaconInterval`). Extension fields MUST be preserved through all
+state-mutating operations. This spec defines only the core fields above.
+
 Member identities are opaque strings. Nostr implementations use 64-character hex
 public keys. Other transports may use phone numbers, email addresses, or any
 unique identifier.
@@ -101,10 +105,16 @@ When a member is removed, the group MUST reseed to prevent the removed member fr
 deriving future tokens:
 
 1. Admin removes the member's identity from the `members` list.
-2. Admin generates a new 256-bit random seed.
-3. Admin increments `epoch` by 1.
-4. Admin resets `usageOffset` to 0 and clears `consumedOps`.
-5. Admin distributes the new seed to all remaining members.
+2. Admin generates a new 256-bit random seed and replaces the old seed locally.
+3. Admin resets `usageOffset` to 0.
+4. Admin broadcasts a `reseed` sync message to all remaining members.
+5. When members receive and apply the `reseed` message, they increment `epoch`,
+   clear `consumedOps`, and reset `consumedOpsFloor`.
+
+**Note:** The local `reseed` operation (steps 2-3) replaces the seed and resets
+the offset. The epoch increment and replay-state reset happen when the `reseed`
+sync message is applied — this split ensures epoch advances are synchronised
+across all members via the sync protocol, not managed independently.
 
 The removed member retains the old seed and can derive tokens for the old epoch.
 This is an accepted limitation — the protocol does not provide forward secrecy.
@@ -122,6 +132,25 @@ Reseed reasons:
 - `compromise` — suspected secret compromise
 - `scheduled` — routine rotation policy
 - `duress` — application-specific (e.g. CANARY duress detection)
+
+### Group Dissolution
+
+An admin MAY dissolve a group:
+
+1. Zero the seed in memory (overwrite with null bytes, best-effort).
+2. Clear the members and admins lists.
+3. Delete the persisted group state.
+
+There is no dissolution sync message — dissolution is a local operation. Members
+who have not been notified out-of-band will retain their copy of the group state
+until they independently dissolve or the state expires.
+
+### Admin Management
+
+The admin set is established at creation and can only be changed via a `reseed`
+message, which carries a replacement `admins` array. There is no dedicated
+promote/demote operation. To change admins, trigger a reseed with the desired
+admin list.
 
 ### Counter Advancement (Burn-After-Use)
 
@@ -205,6 +234,12 @@ Signals that a token has been used and the counter should advance.
 }
 ```
 
+**Note:** `counter-advance` does not carry `opId` or `epoch` fields. Replay
+protection relies on the monotonic effective-counter check (new counter must
+exceed current) and envelope encryption (the AES-GCM key rotates on reseed).
+This is a deliberate trade-off: counter-advance is the highest-frequency message
+and omitting `opId` reduces overhead.
+
 Validation:
 - `counter` MUST be non-negative.
 - `usageOffset` MUST be non-negative and not exceed `MAX_COUNTER_OFFSET` (100).
@@ -245,10 +280,12 @@ Signals that a member has been removed from the group.
 
 Signals a new seed has been distributed. The seed field contains the new secret.
 
+On application, `usageOffset` is reset to 0.
+
 ```json
 {
   "type": "reseed",
-  "seed": "<256-bit seed as raw bytes>",
+  "seed": "<64-char hex-encoded seed>",
   "counter": 42,
   "timestamp": 1709510400,
   "epoch": 2,
@@ -284,16 +321,24 @@ Full state synchronisation for new members or recovery.
 
 **WARNING:** Contains plaintext seed. Same encryption requirements as reseed.
 
+Implementations MUST reject `state-snapshot` messages with an `epoch` higher
+than the local epoch. Members who miss a reseed cannot catch up via snapshot —
+they must be re-invited with the current seed. This prevents an attacker from
+injecting a fabricated higher-epoch snapshot to replace the group state.
+
 ### Replay Protection
 
-Each state-mutating message carries an `opId` (unique operation identifier) and
-an `epoch`. Implementations MUST:
+State-mutating messages (except `counter-advance`) carry an `opId` (unique
+operation identifier) and an `epoch`. The `opId` MUST be cryptographically random
+and globally unique — a UUID v4 or 32-byte random hex string is recommended.
+
+Implementations MUST:
 
 1. Reject messages with an `opId` already in `consumedOps`.
 2. Reject messages with an `epoch` less than the current group epoch.
 3. After processing, append the `opId` to `consumedOps`.
-4. When `consumedOps` exceeds 1000 entries, evict the oldest and set
-   `consumedOpsFloor` to the timestamp of the evicted entry.
+4. When `consumedOps` exceeds 1000 entries, keep the most recent 1000 and set
+   `consumedOpsFloor` to `max(currentFloor, timestamp_of_new_entry)`.
 5. After eviction, reject messages with `timestamp <= consumedOpsFloor`.
 
 On epoch change (reseed), `consumedOps` is cleared and `consumedOpsFloor` is reset.
@@ -307,6 +352,12 @@ On epoch change (reseed), `consumedOps` is cleared and `consumedOpsFloor` is res
 
 Transports MUST ensure stored messages reach all members eventually. Ephemeral
 messages are best-effort.
+
+Applications MAY define additional message types beyond those specified here.
+For example, the CANARY protocol defines `beacon`, `duress-alert`, `duress-clear`,
+and `liveness-checkin` as application-specific ephemeral messages. Custom message
+types MUST include `protocolVersion` and SHOULD follow the same validation patterns.
+Implementations MUST silently ignore message types they do not recognise.
 
 ### Envelope Encryption
 
@@ -326,6 +377,27 @@ group_key = HMAC-SHA256(seed, utf8("<app>:sync:key"))
 ```
 
 Implementations MUST NOT reuse the group seed directly as an encryption key.
+
+#### AES-256-GCM Envelope Format
+
+When using group-key encryption for broadcast messages:
+
+1. Generate a random 12-byte IV.
+2. Encrypt the UTF-8 plaintext with `AES-256-GCM(key=group_key, iv=iv, plaintext)`.
+3. The ciphertext includes the authentication tag (appended by the cipher).
+4. Encode as `base64(iv || ciphertext || auth_tag)`.
+
+Decryption: base64-decode, split the leading 12 bytes as IV, pass the remainder
+to AES-256-GCM. Reject any payload where authentication fails.
+
+Applications MAY derive a per-participant signing key for message authentication:
+
+```
+signing_key = HMAC-SHA256(seed, utf8("<app>:sync:sign:") || personal_private_key)
+```
+
+This binds each participant's signing identity to the group seed and their own key,
+ensuring unique per-participant identities even across reseed events.
 
 ### Canonical Serialisation
 
