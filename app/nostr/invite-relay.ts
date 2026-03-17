@@ -11,7 +11,7 @@
 
 import { getPool } from './connect.js'
 import { getState } from '../state.js'
-import { finalizeEvent } from 'nostr-tools/pure'
+import { finalizeEvent, verifyEvent } from 'nostr-tools/pure'
 import { encrypt as nip44encrypt, decrypt as nip44decrypt, getConversationKey } from 'nostr-tools/nip44'
 import { hexToBytes } from 'canary-kit/crypto'
 import type { RemoteInviteToken } from '../crypto/remote-invite.js'
@@ -76,6 +76,8 @@ export function sendJoinRequest(opts: JoinRequestOpts): () => void {
     { kinds: [HANDSHAKE_KIND], '#d': [inviteId], authors: [adminPubkey] } as any,
     {
       onevent(ev) {
+        if (!verifyEvent(ev)) return
+        if (typeof ev.content === 'string' && ev.content.length > 65536) return
         try {
           const decrypted = nip44decrypt(ev.content, convKey)
           const msg = JSON.parse(decrypted)
@@ -144,6 +146,8 @@ export function listenForJoinRequests(opts: ListenForJoinOpts): () => void {
     { kinds: [HANDSHAKE_KIND], '#d': [inviteId], '#p': [identity.pubkey] } as any,
     {
       onevent(ev) {
+        if (!verifyEvent(ev)) return
+        if (typeof ev.content === 'string' && ev.content.length > 65536) return
         try {
           const convKey = getConversationKey(hexToBytes(adminPrivkey), ev.pubkey)
           const decrypted = nip44decrypt(ev.content, convKey)
@@ -265,6 +269,8 @@ export function fetchInviteToken(opts: {
     { kinds: [INVITE_PUBLISH_KIND], '#d': [inviteId] } as any,
     {
       onevent(ev) {
+        if (!verifyEvent(ev)) return
+        if (typeof ev.content === 'string' && ev.content.length > 65536) return
         if (found) return
         try {
           const token = JSON.parse(ev.content) as RemoteInviteToken

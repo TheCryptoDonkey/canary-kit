@@ -72,9 +72,7 @@ function handleDuressResult(identities: string[], groupId: string): void {
   const duressKey = deriveDuressKey(group.seed)
   for (const memberId of identities) {
     const alert = buildDuressAlert(memberId, null)
-    void encryptDuressAlert(duressKey, alert).then((encrypted) => {
-      console.info('[canary] Duress alert encrypted:', encrypted.slice(0, 32) + '…')
-    })
+    void encryptDuressAlert(duressKey, alert)
 
     broadcastAction(groupId, {
       type: 'duress-alert',

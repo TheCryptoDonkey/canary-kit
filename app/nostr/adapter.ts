@@ -43,13 +43,18 @@ export interface GroupRegistrationOptions {
 
 /** Bounded set that evicts oldest entries when capacity is reached. */
 class BoundedSet<T> {
-  private items: T[] = []
+  private order: T[] = []
+  private items = new Set<T>()
   constructor(private capacity: number) {}
-  has(item: T): boolean { return this.items.includes(item) }
+  has(item: T): boolean { return this.items.has(item) }
   add(item: T): void {
-    if (this.has(item)) return
-    if (this.items.length >= this.capacity) this.items.shift()
-    this.items.push(item)
+    if (this.items.has(item)) return
+    if (this.order.length >= this.capacity) {
+      const evicted = this.order.shift()!
+      this.items.delete(evicted)
+    }
+    this.order.push(item)
+    this.items.add(item)
   }
 }
 
@@ -117,7 +122,10 @@ export class NostrSyncTransport implements SyncTransport {
   /** Unregister a group (e.g. after removal or reseed). */
   unregisterGroup(groupId: string): void {
     const info = this.groupKeys.get(groupId)
-    if (info) this.tagHashToGroupId.delete(info.tagHash)
+    if (info) {
+      info.key.fill(0)
+      this.tagHashToGroupId.delete(info.tagHash)
+    }
     this.groupKeys.delete(groupId)
     this.decryptFailures.delete(groupId)
     this.recoveryPending.delete(groupId) // clear pending on unregister

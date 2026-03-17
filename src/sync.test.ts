@@ -1004,7 +1004,7 @@ describe('full round-trip: encode → decode → apply', () => {
 
   it('member-join round-trip updates group state', () => {
     const group = makeGroup()
-    const msg: SyncMessage = { type: 'member-join', pubkey: PUBKEY_BBB, timestamp: Date.now(), epoch: 0, opId: 'test-join-rt-1' }
+    const msg: SyncMessage = { type: 'member-join', pubkey: PUBKEY_BBB, timestamp: Math.floor(Date.now() / 1000), epoch: 0, opId: 'test-join-rt-1' }
     const encoded = encodeSyncMessage(msg)
     const decoded = decodeSyncMessage(encoded)
     const updated = applySyncMessage(group, decoded, undefined, PUBKEY_AAA)
@@ -1015,7 +1015,7 @@ describe('full round-trip: encode → decode → apply', () => {
     const group = makeGroup()
     const newSeed = crypto.getRandomValues(new Uint8Array(32))
     const msg: SyncMessage = {
-      type: 'reseed', seed: newSeed, counter: 5, timestamp: Date.now(),
+      type: 'reseed', seed: newSeed, counter: 5, timestamp: Math.floor(Date.now() / 1000),
       epoch: 1, opId: 'test-reseed-rt-1',
       admins: [PUBKEY_AAA], members: [PUBKEY_AAA],
     }

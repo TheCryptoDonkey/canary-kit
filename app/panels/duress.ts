@@ -113,7 +113,6 @@ export function renderDuress(container: HTMLElement): void {
       const currentGroup = g[gid]
       if (!currentGroup) return
 
-      const mode = currentGroup.duressMode ?? 'immediate'
       const opId = crypto.randomUUID()
       // In the demo, all modes broadcast via the sync transport.
       // In production, 'dead-drop' would skip push notifications
@@ -154,7 +153,6 @@ export function renderDuress(container: HTMLElement): void {
         })
       }
 
-      console.info('[canary] Silent duress dispatched (mode: %s)', mode)
     }, 3000)
   }
 

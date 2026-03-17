@@ -1,7 +1,7 @@
 // app/nostr/vault.ts — Vault sync: encrypt group state with NIP-44 self-encryption,
 // publish as a Nostr replaceable event (kind 30078), and restore on login.
 
-import { finalizeEvent } from 'nostr-tools/pure'
+import { finalizeEvent, verifyEvent } from 'nostr-tools/pure'
 import { encrypt as nip44encrypt, decrypt as nip44decrypt, getConversationKey } from 'nostr-tools/nip44'
 import { getPool, getReadRelayUrls, getWriteRelayUrls } from './connect.js'
 import type { AppGroup } from '../types.js'
@@ -181,6 +181,8 @@ export async function fetchVault(
       { kinds: [VAULT_KIND], authors: [pubkey], '#d': [VAULT_D_TAG], limit: 1 } as any,
       {
         onevent(event) {
+          if (!verifyEvent(event)) return
+          if (typeof event.content === 'string' && event.content.length > 262144) return  // 256KB vault limit
           if (!bestEvent || event.created_at > bestEvent.created_at) {
             bestEvent = event
           }

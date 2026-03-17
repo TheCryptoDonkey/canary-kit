@@ -2,7 +2,7 @@
 
 import { getPool, waitForConnection } from './connect.js'
 import { getState, update, updateGroup } from '../state.js'
-import { finalizeEvent } from 'nostr-tools/pure'
+import { finalizeEvent, verifyEvent } from 'nostr-tools/pure'
 import { dedupeRelays } from '../types.js'
 
 export interface NostrProfile {
@@ -78,6 +78,8 @@ export function fetchProfiles(pubkeys: string[], groupId?: string): void {
     { kinds: [0], authors: needed } as any,
     {
       onevent(event) {
+        if (!verifyEvent(event)) return
+        if (typeof event.content === 'string' && event.content.length > 65536) return
         try {
           const profile: NostrProfile = JSON.parse(event.content)
           console.warn('[profiles] got profile for', event.pubkey.slice(0, 8), profile.display_name || profile.name || '(no name)')
@@ -155,6 +157,8 @@ export async function fetchOwnProfile(): Promise<void> {
     { kinds: [0], authors: [pk] } as any,
     {
       onevent(event) {
+        if (!verifyEvent(event)) return
+        if (typeof event.content === 'string' && event.content.length > 65536) return
         try {
           const profile: NostrProfile = JSON.parse(event.content)
           console.warn('[profiles] got own profile from relay:', profile.display_name || profile.name || '(no name)')

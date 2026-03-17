@@ -450,6 +450,12 @@ export function applySyncMessage(
     if (elapsed < -MAX_FUTURE_SKEW_SEC) return group             // too far in the future
   }
 
+  // ── Future timestamp bound for stored mutation messages ────
+  // Prevents consumedOpsFloor poisoning: an attacker with admin access could
+  // craft a message with a far-future timestamp, trigger eviction, and set
+  // the floor to a future value, silently rejecting subsequent legitimate messages.
+  if (STORED_MESSAGE_TYPES.has(msg.type) && msg.timestamp > nowSec + MAX_FUTURE_SKEW_SEC) return group
+
   // Cross-check: liveness-checkin sender must match the pubkey in the message
   if (msg.type === 'liveness-checkin' && sender && msg.pubkey !== sender) return group
 
