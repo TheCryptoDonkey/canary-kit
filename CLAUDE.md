@@ -1,6 +1,6 @@
 # CLAUDE.md — canary-kit
 
-Deepfake-proof identity verification. Minimal dependencies. Open protocol.
+Coercion-resistant spoken verification. Extends `spoken-token` with duress, liveness, groups, and Nostr transport.
 
 ## Commands
 
@@ -11,33 +11,44 @@ Deepfake-proof identity verification. Minimal dependencies. Open protocol.
 - `npm run bench` — run performance benchmarks
 - `npm run demo` — build and serve interactive demo at localhost:8787
 
+## Dependencies
+
+- **`spoken-token`** — core derivation, encoding, wordlist, and verification (re-exported from canary-kit)
+- **`@scure/bip32`** and **`@scure/bip39`** — mnemonic key recovery in demo app
+
 ## Structure
 
-- `src/token.ts` — universal CANARY protocol (derive, verify, liveness, directional pairs)
-- `src/encoding.ts` — output encoding (words, PIN, hex)
+- `src/token.ts` — CANARY-specific derivation (duress, liveness, directional pairs) — wraps spoken-token
+- `src/encoding.ts` — re-exports spoken-token encoding (words, PIN, hex)
 - `src/session.ts` — directional two-party verification sessions
 - `src/derive.ts` — group word/phrase derivation
 - `src/verify.ts` — group word verification
 - `src/group.ts` — group lifecycle (create, reseed, add/remove members)
+- `src/sync.ts` — transport-agnostic group sync protocol (CANARY-SYNC)
+- `src/sync-crypto.ts` — AES-256-GCM envelope encryption for sync messages
 - `src/presets.ts` — threat-profile presets (family, field-ops, enterprise)
 - `src/beacon.ts` — encrypted location beacons and duress alerts
 - `src/nostr.ts` — Nostr event builders (6 event kinds)
-- `src/wordlist.ts` — 2048-word en-v1 spoken-clarity wordlist
-- `src/counter.ts` — time-based counter derivation
-- `src/crypto.ts` — pure JS SHA-256, HMAC-SHA256, hex/base64 utilities
+- `src/wordlist.ts` — re-exports spoken-token en-v1 wordlist
+- `src/counter.ts` — re-exports spoken-token time-based counter
+- `src/crypto.ts` — re-exports spoken-token crypto utilities
 - `src/index.ts` — barrel re-export
 - `app/` — interactive demo app (Vite, builds to docs/)
 
 ## Protocol Specs
 
-- `CANARY.md` — full protocol specification (CANARY-DERIVE, CANARY-DURESS, CANARY-WORDLIST)
-- `NIP-CANARY.md` — Nostr binding (6 event kinds: 38800, 28800, 38801, 28801, 28802, 20800)
-- `INTEGRATION.md` — enterprise/finance integration guide
+Layered architecture — each spec builds on the one above:
+
+1. **`spoken-token/PROTOCOL.md`** — generic HMAC-counter-to-words derivation (lives in spoken-token repo)
+2. **`GROUPS.md`** — Simple Shared Secret Groups (transport-agnostic group lifecycle)
+3. **`NIP-XX.md`** — Nostr transport binding for groups (maps to kinds 30078, 20078, NIP-17)
+4. **`CANARY.md`** — full CANARY protocol (extends 1+2 with duress, liveness, beacons, presets)
+5. **`NIP-CANARY.md`** — Nostr application profile of NIP-XX for CANARY groups
+6. **`INTEGRATION.md`** — enterprise/finance integration guide
 
 ## Conventions
 
 - **British English** — colour, initialise, behaviour, licence
-- **Minimal dependencies** — `@scure/bip32` and `@scure/bip39` for mnemonic key recovery; core crypto is pure JS
 - **ESM-only** — `"type": "module"` in package.json
 - **TDD** — write failing test first, then implement
 - **Pure functions** — group management returns new state, never mutates input
