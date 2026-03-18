@@ -42,6 +42,19 @@ event, and zero new event kinds. This deliberately trades forward secrecy for
 simplicity — the right trade-off when the goal is shared state derivation rather
 than confidential messaging.
 
+### Comparison with Existing Proposals
+
+| Proposal | Approach | Limitation for This Use Case |
+|---|---|---|
+| NIP-29 (Relay-based Groups) | Relay-mediated group rooms with admin and member roles | No end-to-end encryption; relay sees all messages; group state lives on the relay and is not portable |
+| NIP-72 (Moderated Communities) | Reddit-style communities with relay-enforced moderation | No E2E encryption; relay-mediated; optimised for public community boards, not shared encrypted state |
+| NIP-112 (Encrypted Group Events, proposed) | MLS ratchet-tree approach for encrypted group messaging | Complex ratchet-tree state management; forward secrecy adds key-management overhead; open proposal, not yet merged |
+
+These proposals solve group communication at the relay layer or via full MLS.
+This NIP solves it at the cryptographic layer — the group state is portable,
+encrypted, and verifiable without any relay cooperation. No new relay behaviour
+is required.
+
 ## Specification
 
 ### Group seed
@@ -117,7 +130,7 @@ Applications MAY add additional tags. Unknown tags MUST be ignored.
 ### Ephemeral signal event (kind 20078)
 
 Real-time signals between group members use kind 20078 ephemeral events. This
-NIP registers kind 20078 as the ephemeral counterpart to kind 30078 (NIP-78),
+NIP uses kind 20078 as the ephemeral counterpart to kind 30078 (NIP-78),
 following the established kind-range pattern (20000–29999 for ephemeral events).
 
 ```json
@@ -138,6 +151,13 @@ The `d` tag uses a SHA-256 hash of the group ID rather than the plaintext. This
 prevents relay operators from correlating high-frequency ephemeral signals to a
 named group. Kind 30078 uses the plaintext group ID because member pubkeys are
 already visible in `p` tags.
+
+Kind 20078 falls in the ephemeral range (20000–29999) established by NIP-01.
+Ephemeral events are not stored by relays, matching the transient nature of group
+signals. This NIP uses kind 20078 via d-tag namespacing — the `ssg/` prefix
+prevents collisions with other applications that may use the same kind number
+with different d-tag prefixes. This follows the precedent set by kind 30078
+(NIP-78), which is shared by multiple applications via d-tag namespacing.
 
 Signal types and encrypted payload schemas are application-defined. This NIP does
 not prescribe specific signal types. Applications MAY add a `t` tag for
@@ -215,6 +235,42 @@ must reach offline members.
 
 Seeds MUST be stored securely on the client. Applications SHOULD encrypt seeds at
 rest and zero seed material from memory when no longer needed.
+
+## Test Vectors
+
+All vectors produced by the canary-kit reference implementation.
+
+### Key Derivation
+
+`HMAC-SHA256(key = seed_bytes, data = utf8("ssg:key"))`
+
+| Field | Value |
+|---|---|
+| Seed (hex) | `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` |
+| Info | `ssg:key` |
+| Derived key (hex) | `140fdaf1fa5a1584127f3899e34e72b0e288e76b4b72144a03a90e4b0804a19d` |
+
+### Encryption Round-Trip
+
+`base64(IV[12] || AES-GCM-ciphertext || auth_tag[16])` using the derived key above and a fixed nonce.
+
+| Field | Value |
+|---|---|
+| Key (hex) | `140fdaf1fa5a1584127f3899e34e72b0e288e76b4b72144a03a90e4b0804a19d` |
+| Nonce (hex) | `000102030405060708090a0b` |
+| Plaintext | `Hello, SSG!` |
+| Ciphertext (base64) | `AAECAwQFBgcICQoLWK+U6XSujmoewzr+D3umLsGFyi+dos7aBUCE` |
+
+### d-tag Derivation
+
+`SHA-256(utf8(group_id))` — kind 30078 uses plaintext, kind 20078 uses the hash.
+
+| Field | Value |
+|---|---|
+| Group ID | `my-group` |
+| SHA-256 (hex) | `37a917d4256a91b5bcab3ee1a74f6bb739a9bf098853e65ba53e35af16a40000` |
+| kind 30078 d-tag | `ssg/my-group` |
+| kind 20078 d-tag | `ssg/37a917d4256a91b5bcab3ee1a74f6bb739a9bf098853e65ba53e35af16a40000` |
 
 ## Dependencies
 
