@@ -623,6 +623,7 @@ Notes:
 
 ## Dependencies
 
+- **[NIP-XX](NIP-XX.md)**: Simple Shared Secret Groups — the transport layer this NIP profiles
 - **NIP-44**: Versioned encryption (for all Nostr event `content` fields and seed
   distribution payloads)
 - **NIP-40**: Expiration tags (for group auto-dissolution and ephemeral event expiry)

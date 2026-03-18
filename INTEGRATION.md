@@ -15,6 +15,16 @@ insurance, banking, and enterprise use cases.
 For regulatory alignment analysis — including FCA, RBI, UAE TDRA, EU AI Act,
 eIDAS, and W3C Confidence Method — see [REGULATORY.md](REGULATORY.md).
 
+## Related Documents
+
+| Document | Purpose |
+|----------|---------|
+| [CANARY.md](CANARY.md) | Core protocol specification — CANARY-DERIVE, CANARY-DURESS, CANARY-WORDLIST |
+| [THREAT-MODEL.md](THREAT-MODEL.md) | Security properties P1–P8, adversary profiles, attack trees |
+| [GROUPS.md](GROUPS.md) | Transport-agnostic group protocol — the seed patterns in §Seed Establishment Patterns run on top of this |
+| [NIP-XX.md](NIP-XX.md) | Nostr transport binding for the group protocol |
+| [REGULATORY.md](REGULATORY.md) | Regulatory alignment — FCA, RBI, UAE TDRA, EU AI Act, eIDAS, W3C |
+
 ## Seed Establishment Patterns
 
 The shared seed is the foundation of CANARY verification. How it gets to both

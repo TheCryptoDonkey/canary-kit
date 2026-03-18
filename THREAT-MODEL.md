@@ -7,11 +7,14 @@
 ## Scope
 
 This threat model covers:
-- The CANARY protocol specification (CANARY.md)
-- The NIP-CANARY Nostr binding (NIP-CANARY.md)
+- The CANARY protocol specification ([CANARY.md](CANARY.md))
+- The NIP-CANARY Nostr binding ([NIP-CANARY.md](NIP-CANARY.md))
+- The Nostr transport layer ([NIP-XX.md](NIP-XX.md) — Simple Shared Secret Groups)
 - The canary-kit TypeScript reference implementation (src/*.ts)
 
-Out of scope: demo application (app/), build tooling, CI/CD, deployment infrastructure.
+Out of scope: demo application (app/), build tooling, CI/CD, deployment infrastructure. Deployment concerns (HSM, key rotation, relay trust) are addressed in [INTEGRATION.md](INTEGRATION.md).
+
+For regulatory mapping of properties P1–P8 against FCA, RBI, UAE TDRA, EU AI Act, eIDAS, and W3C Confidence Method, see [REGULATORY.md](REGULATORY.md).
 
 ## Adversary Profiles
 

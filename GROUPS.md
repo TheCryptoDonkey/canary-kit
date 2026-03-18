@@ -468,5 +468,7 @@ Source: https://github.com/forgesworn/canary-kit
 | Specification | Relationship |
 |---|---|
 | Spoken Token Protocol (`spoken-token` PROTOCOL.md) | Token derivation algorithm used by groups for verification |
-| CANARY Protocol (`canary-kit` CANARY.md) | Extension adding duress detection, liveness, beacons |
-| NIP-XX (planned) | Nostr transport binding for this protocol |
+| [CANARY.md](CANARY.md) | Extension adding duress detection, liveness, beacons — references CANARY-DERIVE algorithm |
+| [NIP-XX.md](NIP-XX.md) | Nostr transport binding for this protocol |
+| [INTEGRATION.md](INTEGRATION.md) | Deployment guide — seed establishment patterns, call centre integration, HSM and key rotation |
+| [THREAT-MODEL.md](THREAT-MODEL.md) | Security analysis — adversary profiles, attack trees, known limitations |

@@ -15,6 +15,11 @@ Group state is stored in kind 30078 (NIP-78) events, real-time signals use kind
 
 No new event kinds are introduced.
 
+The transport-agnostic protocol specification (group state, sync messages, reseed
+protocol, replay protection) is in [GROUPS.md](GROUPS.md). This NIP defines only
+the Nostr transport mapping. [NIP-CANARY.md](NIP-CANARY.md) is an application
+profile of this NIP for CANARY spoken-word verification groups.
+
 ## Motivation
 
 Several applications need a group of participants who share encrypted state:

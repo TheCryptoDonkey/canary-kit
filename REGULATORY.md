@@ -2,6 +2,15 @@
 
 This document maps the CANARY protocol's security properties against converging voice fraud and authentication regulations. It is intended for compliance teams, integrators, and legal reviewers evaluating CANARY as part of their authentication stack.
 
+## How to Use This Document
+
+This document is a technical alignment brief, not legal advice. Use it to evaluate whether CANARY meets your regulatory requirements and identify gaps that need additional controls.
+
+1. **Identify your regulatory scope** — which regulations apply to your jurisdiction and product category.
+2. **Check the CANARY alignment section** for each applicable regulation — it explains which security properties are relevant and how they satisfy the regulation's requirements.
+3. **Review the "What gap remains" section** — every regulation section ends with an honest statement of what CANARY does not cover. These gaps require additional controls at the application or deployment layer.
+4. **Cross-reference INTEGRATION.md** for concrete deployment patterns that correspond to the alignment claims made here.
+
 Security property references (P1–P8) are defined in [THREAT-MODEL.md](THREAT-MODEL.md). Deployment patterns are documented in [INTEGRATION.md](INTEGRATION.md).
 
 ---
@@ -238,7 +247,9 @@ SCA requires authentication codes to be "dynamically linked" to the specific tra
 | [THREAT-MODEL.md](THREAT-MODEL.md) | Security properties P1–P8, adversary profiles, attack trees |
 | [INTEGRATION.md](INTEGRATION.md) | Deployment patterns — call centre, banking, rideshare, field operations |
 | [CANARY.md](CANARY.md) | Full protocol specification |
-| [NIP-CANARY.md](NIP-CANARY.md) | Nostr binding for group protocols |
+| [GROUPS.md](GROUPS.md) | Transport-agnostic group protocol specification |
+| [NIP-CANARY.md](NIP-CANARY.md) | Nostr binding for CANARY group protocols |
+| [NIP-XX.md](NIP-XX.md) | Nostr transport binding (Simple Shared Secret Groups) |
 | [Signet](https://github.com/forgesworn/signet) | Cold-call verification for unknown institutions (forthcoming) |
 
 ---
