@@ -128,6 +128,16 @@ body::after {
   color: var(--text-muted);
   text-shadow: none;
   vertical-align: super;
+  cursor: default;
+  position: relative;
+}
+
+.header__version:hover {
+  font-size: 1rem;
+  vertical-align: baseline;
+  color: var(--amber-400);
+  text-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+  transition: all 0.2s var(--ease-out);
 }
 
 /* ── Two-column layout: sidebar + main ───────────────────── */
@@ -236,5 +246,81 @@ body::after {
 @media (min-width: 769px) {
   .header__hamburger {
     display: none;
+  }
+}
+
+/* ── App footer ─────────────────────────────────────────── */
+
+.app-footer {
+  padding: 1.5rem 1rem;
+  text-align: center;
+  border-top: 1px solid var(--border);
+  background: var(--bg-surface);
+  position: relative;
+  z-index: 2;
+}
+
+.app-footer__version {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+/* ── Notification prompt banner ─────────────────────────── */
+
+.notification-prompt {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-amber);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  max-width: 480px;
+  width: calc(100% - 2rem);
+  animation: prompt-slide-up 0.3s var(--ease-out);
+}
+
+@keyframes prompt-slide-up {
+  from { transform: translateX(-50%) translateY(1rem); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.notification-prompt__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  flex: 1;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.notification-prompt__text strong {
+  color: var(--text-bright);
+  font-size: 0.875rem;
+}
+
+.notification-prompt__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .notification-prompt {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .notification-prompt__actions {
+    justify-content: center;
   }
 }

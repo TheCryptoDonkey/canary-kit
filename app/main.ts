@@ -271,6 +271,10 @@ function buildShell(): void {
         <div id="call-simulation-container"></div>
       </main>
     </div>
+
+    <footer class="app-footer" id="app-footer">
+      <span class="app-footer__version">CANARY v${__APP_VERSION__}</span>
+    </footer>
   `
 }
 
@@ -460,17 +464,26 @@ function showCreateGroupModal(): void {
     import('./push.js').then(({ shouldPromptForNotifications, subscribeToPush, registerWithPushServer }) => {
       if (!shouldPromptForNotifications()) return
       setTimeout(() => {
-        if (!confirm('Enable notifications? We\'ll alert you in emergencies and remind you to check in.')) return
-        subscribeToPush().then(async (sub) => {
-          if (!sub) return
-          const { hashGroupTag } = await import('canary-kit/sync')
-          const { groups: g } = getState()
-          const pushGroups = Object.values(g).map(gr => ({ tagHash: hashGroupTag(gr.id), livenessInterval: gr.livenessInterval }))
-          await registerWithPushServer(sub, pushGroups)
-          showToast('Notifications enabled', 'success')
+        showNotificationPrompt(async () => {
+          try {
+            const sub = await subscribeToPush()
+            if (!sub) {
+              console.warn('[canary:push] subscribeToPush returned null — permission denied or unavailable')
+              return
+            }
+            const { hashGroupTag } = await import('canary-kit/sync')
+            const { groups: g } = getState()
+            const pushGroups = Object.values(g).map(gr => ({ tagHash: hashGroupTag(gr.id), livenessInterval: gr.livenessInterval }))
+            await registerWithPushServer(sub, pushGroups)
+            console.info('[canary:push] Registered with push server, groups:', pushGroups.length)
+            showToast('Notifications enabled', 'success')
+          } catch (err) {
+            console.error('[canary:push] Registration failed:', err)
+            showToast('Failed to enable notifications', 'error')
+          }
         })
-      }, 1000) // slight delay so the group creation toast shows first
-    }).catch(() => {})
+      }, 1500) // slight delay so the group creation toast shows first
+    }).catch((err) => console.error('[canary:push] Import failed:', err))
   })
 
   requestAnimationFrame(() => {
@@ -1123,7 +1136,9 @@ function wireGlobalEvents(): void {
   // changes from other devices while this tab was suspended.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      // Mobile browsers kill tabs without beforeunload — publish vault immediately
+      // Mobile browsers kill tabs without beforeunload — flush local storage
+      // synchronously (guaranteed) and publish vault to relay (best-effort).
+      flushPersist()
       publishVaultNow()
       return
     }
@@ -1252,8 +1267,11 @@ async function bootSync(): Promise<void> {
             livenessInterval: g.livenessInterval,
           }))
           await registerWithPushServer(sub, pushGroups)
+          console.info('[canary:push] Re-registered with push server, groups:', pushGroups.length)
+        } else {
+          console.warn('[canary:push] Permission granted but no existing subscription found')
         }
-      }).catch(() => {})
+      }).catch((err) => console.error('[canary:push] Re-registration failed:', err))
     }
   } else {
     // NIP-07: read-only relay connection for profile fetch (no sync transport)
@@ -1596,6 +1614,41 @@ async function bootApp(): Promise<void> {
   window.addEventListener('hashchange', () => checkInviteFragment())
 
   void bootSync()
+}
+
+// ── In-app notification prompt (replaces confirm()) ───────────
+
+function showNotificationPrompt(onAccept: () => void): void {
+  const existing = document.getElementById('notification-prompt')
+  if (existing) existing.remove()
+
+  const banner = document.createElement('div')
+  banner.id = 'notification-prompt'
+  banner.className = 'notification-prompt'
+
+  const text = document.createElement('div')
+  text.className = 'notification-prompt__text'
+  const strong = document.createElement('strong')
+  strong.textContent = 'Enable notifications?'
+  const desc = document.createElement('span')
+  desc.textContent = 'We\u2019ll alert you in emergencies and remind you to check in.'
+  text.append(strong, desc)
+
+  const actions = document.createElement('div')
+  actions.className = 'notification-prompt__actions'
+  const accept = document.createElement('button')
+  accept.className = 'btn btn--sm btn--primary'
+  accept.textContent = 'Enable'
+  const dismiss = document.createElement('button')
+  dismiss.className = 'btn btn--sm'
+  dismiss.textContent = 'Not now'
+  actions.append(accept, dismiss)
+
+  banner.append(text, actions)
+  document.getElementById('app')?.appendChild(banner)
+
+  accept.addEventListener('click', () => { banner.remove(); onAccept() })
+  dismiss.addEventListener('click', () => banner.remove())
 }
 
 // ── Vault sync: debounced publish on group changes ────────────
