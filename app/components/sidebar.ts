@@ -2,6 +2,7 @@
 
 import { getState, update } from '../state.js'
 import { escapeHtml } from '../utils/escape.js'
+import { personaBadgeHtml } from './persona-picker.js'
 import type { AppGroup } from '../types.js'
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -40,19 +41,24 @@ function renderGroupItems(
     return `<div class="group-list__empty">No groups yet</div>`
   }
 
+  const { activePersonaName } = getState()
+
   return entries
     .map((group) => {
       const isActive = group.id === activeGroupId
       const modifier = isActive ? ' group-list__item--active' : ''
       const preset = formatInterval(group.livenessInterval)
       const windowLabel = formatInterval(group.livenessInterval)
+      const badge = group.personaName ? personaBadgeHtml(group.personaName) : ''
+      const hidden = activePersonaName && group.personaName !== activePersonaName ? ' hidden' : ''
       return `
         <button
           class="group-list__item${modifier}"
           data-group-id="${escapeHtml(group.id)}"
           aria-current="${isActive ? 'true' : 'false'}"
+          ${hidden}
         >
-          <span class="group-list__name">${escapeHtml(group.name)}</span>
+          ${badge}<span class="group-list__name">${escapeHtml(group.name)}</span>
           <span class="group-list__preset">${escapeHtml(preset)} · ${escapeHtml(windowLabel)}</span>
         </button>
       `
