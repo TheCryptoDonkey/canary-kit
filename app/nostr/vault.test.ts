@@ -54,7 +54,7 @@ describe('serialiseVault', () => {
     const groups = { g1: makeGroup() }
     const json = serialiseVault(groups)
     const parsed = JSON.parse(json)
-    expect(parsed.version).toBe(1)
+    expect(parsed.version).toBe(2)
   })
 
   it('strips lastPositions from groups', () => {
@@ -94,8 +94,9 @@ describe('serialiseVault', () => {
   it('handles empty groups object', () => {
     const json = serialiseVault({})
     const parsed = JSON.parse(json)
-    expect(parsed.version).toBe(1)
+    expect(parsed.version).toBe(2)
     expect(parsed.groups).toEqual({})
+    expect(parsed.personas).toEqual([])
   })
 })
 
@@ -104,24 +105,25 @@ describe('deserialiseVault', () => {
     const groups = { g1: makeGroup() }
     const json = serialiseVault(groups)
     const result = deserialiseVault(json)
-    expect(result.g1.name).toBe('Test Group')
-    expect(result.g1.counter).toBe(42)
+    expect(result.groups.g1.name).toBe('Test Group')
+    expect(result.groups.g1.counter).toBe(42)
+    expect(result.personas).toEqual([])
   })
 
-  it('returns empty object for invalid JSON', () => {
-    expect(deserialiseVault('not json')).toEqual({})
+  it('returns empty groups and personas for invalid JSON', () => {
+    expect(deserialiseVault('not json')).toEqual({ groups: {}, personas: [] })
   })
 
-  it('returns empty object for null payload', () => {
-    expect(deserialiseVault('null')).toEqual({})
+  it('returns empty groups and personas for null payload', () => {
+    expect(deserialiseVault('null')).toEqual({ groups: {}, personas: [] })
   })
 
-  it('returns empty object for missing groups key', () => {
-    expect(deserialiseVault('{"version":1}')).toEqual({})
+  it('returns empty groups and personas for missing groups key', () => {
+    expect(deserialiseVault('{"version":1}')).toEqual({ groups: {}, personas: [] })
   })
 
-  it('returns empty object for non-object groups', () => {
-    expect(deserialiseVault('{"version":1,"groups":"nope"}')).toEqual({})
+  it('returns empty groups and personas for non-object groups', () => {
+    expect(deserialiseVault('{"version":1,"groups":"nope"}')).toEqual({ groups: {}, personas: [] })
   })
 })
 

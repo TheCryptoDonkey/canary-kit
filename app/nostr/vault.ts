@@ -4,7 +4,7 @@
 import { finalizeEvent, verifyEvent } from 'nostr-tools/pure'
 import { encrypt as nip44encrypt, decrypt as nip44decrypt, getConversationKey } from 'nostr-tools/nip44'
 import { getPool, getReadRelayUrls, getWriteRelayUrls } from './connect.js'
-import type { AppGroup } from '../types.js'
+import type { AppGroup, AppPersona } from '../types.js'
 
 // ── Constants ───────────────────────────────────────────────────
 
@@ -29,38 +29,64 @@ function hexToBytes(hex: string): Uint8Array {
 
 // ── Serialisation ───────────────────────────────────────────────
 
-interface VaultPayload {
-  version: 1
+interface VaultPayloadV2 {
+  version: 2
   groups: Record<string, AppGroup>
+  personas: AppPersona[]
+}
+
+/** Result of deserialising a vault — groups plus personas. */
+export interface VaultData {
+  groups: Record<string, AppGroup>
+  personas: AppPersona[]
 }
 
 /**
- * Serialise groups to a JSON string suitable for vault storage.
+ * Serialise groups and personas to a JSON string suitable for vault storage.
  * Strips ephemeral fields (`lastPositions`) and resets `livenessCheckins`.
+ * Produces a version 2 vault payload.
  */
-export function serialiseVault(groups: Record<string, AppGroup>): string {
+export function serialiseVault(groups: Record<string, AppGroup>, personas: AppPersona[] = []): string {
   const cleaned: Record<string, AppGroup> = {}
   for (const [key, group] of Object.entries(groups)) {
     const { lastPositions: _, ...rest } = group
     cleaned[key] = { ...rest, livenessCheckins: {} } as AppGroup
   }
-  const payload: VaultPayload = { version: 1, groups: cleaned }
+  const payload: VaultPayloadV2 = { version: 2, groups: cleaned, personas }
   return JSON.stringify(payload)
 }
 
 /**
- * Deserialise a vault JSON string back into groups.
- * Returns an empty object on any parse failure.
+ * Deserialise a vault JSON string back into groups and personas.
+ * Handles v1 vaults by defaulting all groups' `personaName` to `'personal'`
+ * and returning an empty personas array.
+ * Returns empty groups and personas on any parse failure.
  */
-export function deserialiseVault(json: string): Record<string, AppGroup> {
+export function deserialiseVault(json: string): VaultData {
   try {
     const parsed = JSON.parse(json)
     if (!parsed || typeof parsed !== 'object' || typeof parsed.groups !== 'object' || parsed.groups === null) {
-      return {}
+      return { groups: {}, personas: [] }
     }
-    return parsed.groups as Record<string, AppGroup>
+
+    // v2 — has version field set to 2
+    if (parsed.version === 2) {
+      return {
+        groups: parsed.groups as Record<string, AppGroup>,
+        personas: Array.isArray(parsed.personas) ? parsed.personas as AppPersona[] : [],
+      }
+    }
+
+    // v1 (or unversioned) — default personaName to 'personal'
+    const groups = parsed.groups as Record<string, AppGroup>
+    for (const group of Object.values(groups)) {
+      if (!group.personaName) {
+        group.personaName = 'personal'
+      }
+    }
+    return { groups, personas: [] }
   } catch {
-    return {}
+    return { groups: {}, personas: [] }
   }
 }
 
@@ -124,6 +150,7 @@ export async function publishVault(
   groups: Record<string, AppGroup>,
   privkey: string,
   pubkey: string,
+  personas: AppPersona[] = [],
 ): Promise<void> {
   const pool = getPool()
   if (!pool) throw new Error('No relay pool — connect first')
@@ -131,7 +158,7 @@ export async function publishVault(
   const writeRelays = getWriteRelayUrls()
   if (writeRelays.length === 0) throw new Error('No write relays configured')
 
-  const json = serialiseVault(groups)
+  const json = serialiseVault(groups, personas)
   const ciphertext = encryptVault(json, privkey, pubkey)
   const event = buildVaultEvent(ciphertext, privkey)
 
@@ -159,7 +186,7 @@ export async function publishVault(
 export async function fetchVault(
   privkey: string,
   pubkey: string,
-): Promise<Record<string, AppGroup> | null> {
+): Promise<VaultData | null> {
   const pool = getPool()
   if (!pool) {
     console.warn('[canary:vault] fetchVault: no pool')
@@ -174,7 +201,7 @@ export async function fetchVault(
 
   console.info(`[canary:vault] Fetching vault from`, readRelays, 'for', pubkey.slice(0, 8))
 
-  return new Promise<Record<string, AppGroup> | null>((resolve) => {
+  return new Promise<VaultData | null>((resolve) => {
     let resolved = false
     let bestEvent: { created_at: number; content: string } | null = null
 
@@ -186,8 +213,11 @@ export async function fetchVault(
         if (bestEvent) {
           const plaintext = decryptVault(bestEvent.content, privkey, pubkey)
           if (plaintext) {
-            resolve(deserialiseVault(plaintext))
-            return
+            const data = deserialiseVault(plaintext)
+            if (Object.keys(data.groups).length > 0) {
+              resolve(data)
+              return
+            }
           }
         }
         resolve(null)
@@ -215,8 +245,11 @@ export async function fetchVault(
               console.info('[canary:vault] EOSE — decrypting vault event')
               const plaintext = decryptVault(bestEvent.content, privkey, pubkey)
               if (plaintext) {
-                resolve(deserialiseVault(plaintext))
-                return
+                const data = deserialiseVault(plaintext)
+                if (Object.keys(data.groups).length > 0) {
+                  resolve(data)
+                  return
+                }
               }
               console.warn('[canary:vault] Vault decryption failed')
             } else {
@@ -244,6 +277,7 @@ function hasNip07Nip44(): boolean {
 export async function publishVaultNip07(
   groups: Record<string, AppGroup>,
   pubkey: string,
+  personas: AppPersona[] = [],
 ): Promise<void> {
   const pool = getPool()
   if (!pool) throw new Error('No relay pool — connect first')
@@ -252,7 +286,7 @@ export async function publishVaultNip07(
   const writeRelays = getWriteRelayUrls()
   if (writeRelays.length === 0) throw new Error('No write relays configured')
 
-  const json = serialiseVault(groups)
+  const json = serialiseVault(groups, personas)
   const ciphertext: string = await (window as any).nostr.nip44.encrypt(pubkey, json)
 
   const now = Math.floor(Date.now() / 1000)
@@ -284,7 +318,7 @@ export async function publishVaultNip07(
  */
 export async function fetchVaultNip07(
   pubkey: string,
-): Promise<Record<string, AppGroup> | null> {
+): Promise<VaultData | null> {
   const pool = getPool()
   if (!pool) {
     console.warn('[canary:vault] fetchVaultNip07: no pool')
@@ -303,7 +337,7 @@ export async function fetchVaultNip07(
 
   console.info(`[canary:vault] Fetching vault via NIP-07 from`, readRelays, 'for', pubkey.slice(0, 8))
 
-  return new Promise<Record<string, AppGroup> | null>((resolve) => {
+  return new Promise<VaultData | null>((resolve) => {
     let resolved = false
     let bestEvent: { created_at: number; content: string } | null = null
 
@@ -315,11 +349,14 @@ export async function fetchVaultNip07(
         if (bestEvent) {
           try {
             const plaintext: string = await (window as any).nostr.nip44.decrypt(pubkey, bestEvent.content)
-            resolve(deserialiseVault(plaintext))
-          } catch { resolve(null) }
-        } else {
-          resolve(null)
+            const data = deserialiseVault(plaintext)
+            if (Object.keys(data.groups).length > 0) {
+              resolve(data)
+              return
+            }
+          } catch { /* fall through */ }
         }
+        resolve(null)
       }
     }, 10_000)
 
@@ -344,15 +381,18 @@ export async function fetchVaultNip07(
               console.info('[canary:vault] NIP-07 EOSE — decrypting vault event')
               try {
                 const plaintext: string = await (window as any).nostr.nip44.decrypt(pubkey, bestEvent.content)
-                resolve(deserialiseVault(plaintext))
+                const data = deserialiseVault(plaintext)
+                if (Object.keys(data.groups).length > 0) {
+                  resolve(data)
+                  return
+                }
               } catch (err) {
                 console.warn('[canary:vault] NIP-07 vault decryption failed:', err)
-                resolve(null)
               }
             } else {
               console.info('[canary:vault] NIP-07 EOSE — no vault event found')
-              resolve(null)
             }
+            resolve(null)
           }
         },
       },
@@ -373,7 +413,7 @@ let _lastVaultTimestamp = 0
 export function subscribeToVault(
   pubkey: string,
   decrypt: (ciphertext: string) => Promise<string | null>,
-  onMerge: (merged: Record<string, AppGroup>, newCount: number) => void,
+  onMerge: (merged: Record<string, AppGroup>, newCount: number, personas: AppPersona[]) => void,
 ): void {
   unsubscribeFromVault()
 
@@ -402,9 +442,9 @@ export function subscribeToVault(
         try {
           const plaintext = await decrypt(event.content)
           if (!plaintext) return
-          const vaultGroups = deserialiseVault(plaintext)
+          const { groups: vaultGroups, personas: vaultPersonas } = deserialiseVault(plaintext)
           if (Object.keys(vaultGroups).length === 0) return
-          onMerge(vaultGroups, Object.keys(vaultGroups).length)
+          onMerge(vaultGroups, Object.keys(vaultGroups).length, vaultPersonas)
         } catch (err) {
           console.warn('[canary:vault] Live vault decrypt failed:', err)
         }
