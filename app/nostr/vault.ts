@@ -360,6 +360,70 @@ export async function fetchVaultNip07(
   })
 }
 
+// ── Live vault subscription ─────────────────────────────────────
+
+let _vaultUnsub: (() => void) | null = null
+let _lastVaultTimestamp = 0
+
+/**
+ * Subscribe to live vault updates from the relay. When another device
+ * publishes a newer vault, automatically decrypt and merge.
+ * Calls onMerge with the merged groups when new data arrives.
+ */
+export function subscribeToVault(
+  pubkey: string,
+  decrypt: (ciphertext: string) => Promise<string | null>,
+  onMerge: (merged: Record<string, AppGroup>, newCount: number) => void,
+): void {
+  unsubscribeFromVault()
+
+  const pool = getPool()
+  if (!pool) return
+
+  const readRelays = getReadRelayUrls()
+  if (readRelays.length === 0) return
+
+  _lastVaultTimestamp = Math.floor(Date.now() / 1000)
+
+  console.info('[canary:vault] Subscribing to live vault updates for', pubkey.slice(0, 8))
+
+  const sub = pool.subscribeMany(
+    readRelays,
+    { kinds: [VAULT_KIND], authors: [pubkey], '#d': [VAULT_D_TAG], since: _lastVaultTimestamp } as any,
+    {
+      async onevent(event) {
+        if (!verifyEvent(event)) return
+        if (event.created_at <= _lastVaultTimestamp) return
+        if (typeof event.content === 'string' && event.content.length > 262144) return
+
+        console.info(`[canary:vault] Live vault update received created_at=${event.created_at}`)
+        _lastVaultTimestamp = event.created_at
+
+        try {
+          const plaintext = await decrypt(event.content)
+          if (!plaintext) return
+          const vaultGroups = deserialiseVault(plaintext)
+          if (Object.keys(vaultGroups).length === 0) return
+          onMerge(vaultGroups, Object.keys(vaultGroups).length)
+        } catch (err) {
+          console.warn('[canary:vault] Live vault decrypt failed:', err)
+        }
+      },
+      oneose() {
+        console.info('[canary:vault] Live vault subscription EOSE — watching for updates')
+      },
+    },
+  )
+
+  _vaultUnsub = () => sub.close()
+}
+
+/** Stop watching for live vault updates. */
+export function unsubscribeFromVault(): void {
+  _vaultUnsub?.()
+  _vaultUnsub = null
+}
+
 // ── Merge Logic ─────────────────────────────────────────────────
 
 /**

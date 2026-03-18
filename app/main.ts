@@ -39,7 +39,7 @@ import { resolveSigner, hasNip07 } from './nostr/signer.js'
 import { decode as nip19decode } from 'nostr-tools/nip19'
 import { getPublicKey } from 'nostr-tools/pure'
 import { broadcastAction, ensureTransport, subscribeToAllGroups, teardownSync } from './sync.js'
-import { fetchVault, fetchVaultNip07, publishVault, publishVaultNip07, mergeVaultGroups } from './nostr/vault.js'
+import { fetchVault, fetchVaultNip07, publishVault, publishVaultNip07, mergeVaultGroups, subscribeToVault, unsubscribeFromVault } from './nostr/vault.js'
 import { showToast } from './components/toast.js'
 import { showDuressAlert } from './components/duress-alert.js'
 import { escapeHtml } from './utils/escape.js'
@@ -1159,6 +1159,7 @@ function wireGlobalEvents(): void {
       return
     }
     console.info('[canary:boot] App foregrounded — reconnecting and syncing vault')
+    unsubscribeFromVault()
     teardownSync()
     import('./nostr/connect.js').then(({ disconnectRelays }) => {
       disconnectRelays()
@@ -1192,6 +1193,48 @@ async function ensureLocalIdentity(): Promise<void> {
   // Boot-time auto-insertion of local identity into groups was removed.
   // It violated the authority model (I1) — only admins may add members.
   // Groups missing the local identity require a fresh invite to rejoin.
+}
+
+// ── Live vault watcher ─────────────────────────────────────────
+
+function startLiveVaultSync(): void {
+  const { identity } = getState()
+  if (!identity?.pubkey) return
+
+  const decrypt = identity.privkey
+    ? async (ct: string) => {
+        const { decryptVault } = await import('./nostr/vault.js')
+        return decryptVault(ct, identity.privkey!, identity.pubkey)
+      }
+    : identity.signerType === 'nip07'
+      ? async (ct: string) => {
+          try {
+            return await (window as any).nostr.nip44.decrypt(identity.pubkey, ct) as string
+          } catch { return null }
+        }
+      : null
+
+  if (!decrypt) return
+
+  subscribeToVault(identity.pubkey, decrypt, (vaultGroups, _count) => {
+    const { groups: localGroups } = getState()
+    const merged = mergeVaultGroups(localGroups, vaultGroups)
+    const newCount = Object.keys(merged).length - Object.keys(localGroups).length
+    const changed = newCount > 0 || Object.entries(merged).some(([id, g]) => {
+      const local = localGroups[id]
+      if (!local) return true
+      return g.epoch !== local.epoch || g.counter !== local.counter
+    })
+    if (changed) {
+      update({ groups: merged })
+      flushPersist()
+      if (newCount > 0) {
+        showToast(`${newCount} new group(s) synced from another device`, 'success')
+      } else {
+        showToast('Groups updated from another device', 'success', 2000)
+      }
+    }
+  })
 }
 
 // ── Relay sync boot ────────────────────────────────────────────
@@ -1277,6 +1320,7 @@ async function bootSync(): Promise<void> {
     }
 
     subscribeToAllGroups()
+    startLiveVaultSync()
     showToast(`Syncing via ${totalRelays} relay(s)`, 'success', 2000)
 
     // Auto-register for push notifications if previously granted
@@ -1330,6 +1374,7 @@ async function bootSync(): Promise<void> {
       console.warn('[canary:vault] NIP-07 vault sync failed:', err)
     }
 
+    startLiveVaultSync()
     showToast(`Connected to ${totalRelays} relay(s)`, 'success', 2000)
   } else {
     // No privkey and no NIP-07 — minimal relay connection
