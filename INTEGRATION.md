@@ -95,6 +95,27 @@ Customer calls insurer
 
 Weakest pattern (SMS is interceptable). Stepping stone to Pattern 1.
 
+#### Risk controls for Pattern 3
+
+Pattern 3 should be deployed with mandatory controls to bound its exposure:
+
+- **Maximum validity:** Bootstrap codes MUST expire within 24 hours. Long-lived
+  codes significantly increase the risk of interception and misuse.
+- **Mandatory upgrade:** On first app launch after SMS bootstrap, the app MUST
+  prompt the user to complete Pattern 1 enrolment (biometric login, seed sync).
+  Pattern 3 must not remain the long-term authentication mechanism.
+- **Rate limiting:** Limit bootstrap code requests to 3 attempts per phone number
+  per 24-hour window to prevent bulk enumeration or SIM-swap exploitation.
+- **Bulk enrolment monitoring:** Alert on unusual volumes of bootstrap requests
+  from a single IP range or time window — this may indicate a credential stuffing
+  or SIM-farm attack.
+- **Conversion tracking:** Log the rate at which Pattern 3 enrolments convert to
+  Pattern 1 (app login with seed sync). A low conversion rate indicates users are
+  remaining on the weaker pattern — investigate and intervene.
+
+Pattern 3 MUST NOT be used as a long-term authentication mechanism in regulated
+financial contexts (UAE, UK FCA, India RBI). See [REGULATORY.md](REGULATORY.md).
+
 ### Pattern 4: Task-Derived Seed (Rideshare / Delivery)
 
 For event-based verification where both parties are matched dynamically:
@@ -120,6 +141,23 @@ const session = createSession({
   counter: taskId,
 })
 ```
+
+#### Task secret clarification
+
+- **What `task_secret` is:** An operator-generated 256-bit cryptographic secret,
+  created fresh per task using a CSPRNG. It is not derived from user identities
+  or task IDs — those are inputs to `deriveSeed()`, not to the secret itself.
+- **Delivery mechanism:** The operator platform delivers `task_secret` to both
+  matched parties via an encrypted channel (e.g. push notification over TLS to
+  the platform's mobile SDK, or a NIP-17 gift-wrapped DM over Nostr).
+- **Trust boundary:** The operator sees the secret — by design. Pattern 4 relies
+  on the platform as the trust anchor. This is appropriate for dispatch use cases
+  where the platform is already the trusted intermediary for task matching. If the
+  platform is untrusted, use a different pattern.
+- **Lifecycle:** The `task_secret` is valid only for the duration of the task.
+  On task completion (or cancellation), both parties MUST zero the secret from
+  memory. The platform MUST discard its copy after delivery is confirmed. Do not
+  reuse `task_secret` across tasks.
 
 ## Call Centre Integration
 
@@ -221,6 +259,97 @@ if (result.status === 'duress') {
 | Compromised master key | No | Requires HSM + procedural controls |
 | Social engineering | Yes | Bidirectional — attacker must know the secret |
 | Coercion / duress | Yes | Distinct duress token triggers silent alert |
+
+## Audit Logging Guidance
+
+Deployers MUST maintain an audit log of CANARY events for compliance and incident
+investigation. The audit log records what happened and when — it must never contain
+secrets.
+
+### What to log
+
+| Event | Fields to record |
+|-------|-----------------|
+| **Verification attempt** | Timestamp, outcome (`valid` / `duress` / `invalid`), word count used, whether tolerance window was hit, session identifier (not the seed or word) |
+| **Duress event** | Timestamp, group ID or session ID, alert routing target (e.g. security team endpoint), member identifier |
+| **Seed rotation** | Timestamp, reason (`scheduled` / `compromise` / `member_removed` / `duress`), initiator identifier |
+| **Member change** | Timestamp, action (`add` / `remove`), member public key or identifier |
+
+### What NOT to log
+
+- Seeds, derived keys, or verification words
+- Duress words
+- Shared secrets or group seeds in any form
+- Sync message content that contains seeds (reseed, state-snapshot messages)
+
+Logging any of the above would allow an attacker who gains log access to
+impersonate group members or reconstruct the verification word sequence.
+
+### Retention guidance
+
+Log retention periods depend on regulatory context:
+
+- **GDPR Article 5(1)(e) (EU):** Personal data must not be kept longer than
+  necessary. Where member identifiers are personal data, apply data minimisation —
+  use pseudonymous identifiers and set a deletion schedule.
+- **Financial services (UK, EU, UAE):** Regulators typically require audit records
+  to be retained for 5–7 years. Verify the applicable standard for your licence
+  category.
+- **Healthcare:** Retention requirements vary by jurisdiction and data category.
+  Consult applicable regulations before setting a retention policy.
+
+---
+
+## Incident Response Playbook
+
+### Scenario 1: Suspected master key compromise
+
+The master key is the root from which all customer seeds are derived. Compromise
+is the highest-severity event.
+
+- [ ] **1. Revoke the HSM key** — prevent any further seed derivation from the
+      compromised key material.
+- [ ] **2. Generate a new master key** in the HSM — do not derive the new key
+      from the old one.
+- [ ] **3. Re-derive all customer seeds** from the new master key — increment
+      `seed_version` to force new seeds for all accounts.
+- [ ] **4. Trigger reseed** for all active CANARY sessions — the customer's app
+      will receive the new seed on next login.
+- [ ] **5. Notify affected members** — follow your incident notification policy
+      and applicable breach notification regulations.
+- [ ] **6. Review logs** — identify any verification attempts that may have been
+      made with tokens derived from the compromised key. Assess exposure window.
+
+### Scenario 2: Suspected seed compromise (individual group or customer)
+
+A specific seed (not the master key) is suspected to have been exposed.
+
+- [ ] **1. Identify affected groups** — determine which groups share the compromised
+      seed.
+- [ ] **2. Trigger immediate reseed** for all affected groups with reason `compromise`.
+      Use `removeMemberAndReseed()` if the compromise originated from a specific member's device.
+- [ ] **3. Verify reseed propagation** — confirm all remaining members have received
+      the new seed before considering the group secure.
+- [ ] **4. Review the exposure window** — determine what tokens could have been
+      derived from the compromised seed and for how long. Assess whether any
+      sensitive actions were authorised in that window.
+
+### Scenario 3: Suspected duress false positive
+
+A duress alert has fired. Before standing down, follow this checklist.
+
+- [ ] **1. Do not dismiss the alert** — treat every duress event as genuine until
+      independently confirmed otherwise. False dismissals are more dangerous than
+      false positives.
+- [ ] **2. Escalate to your safety or security team** — do not attempt independent
+      resolution at the call centre agent level.
+- [ ] **3. Attempt independent contact** — use a pre-established out-of-band channel
+      (not the current call) to reach the member directly.
+- [ ] **4. Stand down only after positive confirmation** — confirm the member is safe
+      via the independent channel before clearing the alert. Log the confirmation and
+      the confirming channel.
+
+---
 
 ## Regulatory Considerations
 
