@@ -10,6 +10,32 @@
 
 **[Interactive Demo](https://canary.trotters.cc/)** · [Protocol Spec](CANARY.md) · [Nostr Binding](NIP-CANARY.md) · [Integration Guide](INTEGRATION.md)
 
+## Why Now
+
+Regulators and criminals arrived at the same inflection point simultaneously. In
+March 2023 the UN Office on Drugs and Crime formally linked AI synthetic voice to
+organised criminal networks operating cross-border fraud at institutional scale.
+Voice cloning tools are now available as a service for under $400/month; vishing
+surged 442% in 2025. The same week, the UAE Central Bank set a 31 March 2026
+deadline banning SMS OTP across all licensed financial institutions — the first
+national regulator to mandate its replacement. India's RBI follows on 1 April 2026
+with mandatory two-factor authentication for all digital payment transactions. The
+EU AI Act's deepfake transparency obligation (Article 50) takes effect in August
+2026; EUDI Wallets must be available across all 27 Member States by December 2026.
+FCA Strong Customer Authentication technical standards were updated in March 2026.
+
+CANARY is positioned where these pressures converge: the voice channel, where
+authentication is weakest and the regulatory gap is largest. For a detailed mapping
+of CANARY's security properties against each regulation, see
+[REGULATORY.md](REGULATORY.md).
+
+The full verification stack covers four caller scenarios: known person, known
+institution (CANARY handles this), unknown person, and unknown institution
+cold-calling — the last via [Signet](https://github.com/TheCryptoDonkey/signet)
+cold-call verification (forthcoming). Deepfake labelling tools and CANARY are
+complementary: one labels AI-generated content after the fact; CANARY verifies
+the caller's identity in real time at the point of interaction.
+
 ## The Problem
 
 Voice phishing surged 442% in 2025. AI can clone a voice from three seconds of
