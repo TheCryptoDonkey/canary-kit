@@ -1750,7 +1750,9 @@ async function manualVaultSync(): Promise<void> {
     return
   }
 
-  showToast('Syncing...', 'info', 2000)
+  const shortPk = identity.pubkey.slice(0, 8)
+  showToast(`Syncing as ${shortPk}\u2026`, 'info', 3000)
+  console.info(`[canary:vault] Manual sync for pubkey ${shortPk}`)
 
   try {
     // Publish local state first so the other device can pick it up
@@ -1777,7 +1779,7 @@ async function manualVaultSync(): Promise<void> {
         showToast('Groups are in sync', 'success', 2000)
       }
     } else {
-      showToast('No remote vault found — local state published', 'warning')
+      showToast(`No vault found for ${shortPk}\u2026 — are both devices using the same identity?`, 'warning', 5000)
     }
   } catch (err) {
     console.error('[canary:vault] Manual sync failed:', err)
