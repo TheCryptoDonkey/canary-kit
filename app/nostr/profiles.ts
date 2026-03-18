@@ -285,7 +285,11 @@ export function publishKind0(name: string, privkeyHex: string): void {
 // ── Persona kind 0 publishing and fetching ────────────────────
 
 /**
- * Publish a kind 0 profile event for a named persona to the given write relays.
+ * Publish a kind 0 profile event for a named persona.
+ *
+ * Resolves write relays in priority order:
+ *   1. `persona.writeRelays` (per-persona relay list, e.g. a private relay for a burner persona)
+ *   2. `settings.defaultWriteRelays` (global fallback)
  *
  * Uses the persona's derived signing key. Fire-and-forget — errors are logged
  * but not thrown. Skipped silently if persona derivation fails (e.g. personas
@@ -293,9 +297,15 @@ export function publishKind0(name: string, privkeyHex: string): void {
  */
 export async function publishPersonaProfile(
   persona: AppPersona,
-  writeRelays: string[],
+  writeRelays?: string[],
 ): Promise<void> {
-  if (writeRelays.length === 0) return
+  const { settings } = getState()
+  const resolvedRelays = (writeRelays && writeRelays.length > 0)
+    ? writeRelays
+    : (persona.writeRelays && persona.writeRelays.length > 0)
+      ? persona.writeRelays
+      : (settings?.defaultWriteRelays?.length ? settings.defaultWriteRelays : [])
+  if (resolvedRelays.length === 0) return
 
   try {
     const derived = getPersona(persona.name, persona.index)
@@ -317,12 +327,12 @@ export async function publishPersonaProfile(
 
     const pool = new SimplePool()
     try {
-      const results = pool.publish(writeRelays, signed as any)
+      const results = pool.publish(resolvedRelays, signed as any)
       const settled = await Promise.allSettled(results)
       const ok = settled.filter(r => r.status === 'fulfilled').length
-      console.warn(`[profiles] persona "${persona.name}" kind 0 published to ${ok}/${writeRelays.length} relay(s)`)
+      console.warn(`[profiles] persona "${persona.name}" kind 0 published to ${ok}/${resolvedRelays.length} relay(s)`)
     } finally {
-      pool.close(writeRelays)
+      pool.close(resolvedRelays)
     }
   } catch (err) {
     console.warn(`[profiles] persona "${persona.name}" kind 0 publish failed:`, err)
@@ -333,10 +343,21 @@ export async function publishPersonaProfile(
  * Fetch kind 0 profiles for all known personas and update their displayName,
  * picture, and about fields in state.
  *
+ * Resolves read relays in priority order:
+ *   1. Explicit `readRelays` argument (if provided and non-empty)
+ *   2. `settings.defaultReadRelays` (global fallback)
+ *
+ * All personas are fetched from the same relay set (80/20 simplification — per-persona
+ * read relays are not supported here; use `publishPersonaProfile` for targeted writes).
+ *
  * Errors are logged but not thrown.
  */
-export async function fetchPersonaProfiles(readRelays: string[]): Promise<void> {
-  if (readRelays.length === 0) return
+export async function fetchPersonaProfiles(readRelays?: string[]): Promise<void> {
+  const { settings } = getState()
+  const resolvedRelays = (readRelays && readRelays.length > 0)
+    ? readRelays
+    : (settings?.defaultReadRelays?.length ? settings.defaultReadRelays : [])
+  if (resolvedRelays.length === 0) return
 
   try {
     const { personas } = getState()
@@ -364,7 +385,7 @@ export async function fetchPersonaProfiles(readRelays: string[]): Promise<void> 
       const pool = new SimplePool()
 
       const sub = pool.subscribeMany(
-        readRelays,
+        resolvedRelays,
         [{ kinds: [0], authors: pubkeys }] as any,
         {
           onevent(event) {
@@ -396,7 +417,7 @@ export async function fetchPersonaProfiles(readRelays: string[]): Promise<void> 
           },
           oneose() {
             sub.close()
-            pool.close(readRelays)
+            pool.close(resolvedRelays)
             resolve()
           },
         },

@@ -230,8 +230,7 @@ function showLockScreen(): void {
       window.addEventListener('hashchange', () => checkInviteFragment())
       void bootSync()
       // Non-blocking: fetch kind 0 profiles for all personas
-      const { settings: _s } = getState()
-      fetchPersonaProfiles(_s.defaultReadRelays).catch(() => {})
+      fetchPersonaProfiles().catch(() => {})
     } catch {
       _failCount++
       const delay = DELAYS[Math.min(_failCount, DELAYS.length - 1)]
@@ -1193,8 +1192,7 @@ function wireGlobalEvents(): void {
     const { personaName } = (e as CustomEvent).detail
     const persona = getState().personas[personaName]
     if (!persona) return
-    const { settings: s } = getState()
-    await publishPersonaProfile(persona, s.defaultWriteRelays)
+    await publishPersonaProfile(persona)
   })
 
   // Immediate vault publish requested (e.g. after word rotation)
@@ -1829,8 +1827,7 @@ async function bootApp(): Promise<void> {
 
   void bootSync()
   // Non-blocking: fetch kind 0 profiles for all personas
-  const { settings: bootSettings } = getState()
-  fetchPersonaProfiles(bootSettings.defaultReadRelays).catch(() => {})
+  fetchPersonaProfiles().catch(() => {})
 }
 
 // ── In-app notification prompt (replaces confirm()) ───────────
