@@ -1,6 +1,6 @@
 // app/components/persona-card.ts — Persona card with expand/collapse, profile editing, actions
 
-import { getState, update } from '../state.js'
+import { getState, update, updateGroup } from '../state.js'
 import { escapeHtml } from '../utils/escape.js'
 import { personaColour } from './persona-picker.js'
 import { generateQR } from './qr.js'
@@ -134,23 +134,33 @@ function renderRelaySection(persona: AppPersona): string {
 
 function renderGroupsSection(persona: AppPersona, groups: AppGroup[]): string {
   const personaGroups = groups.filter((g) => g.personaName === persona.name)
-  if (personaGroups.length === 0) {
-    return `
-      <div class="persona-card__section">
-        <h4 class="persona-card__section-title">Groups</h4>
-        <span class="persona-card__meta">No groups assigned</span>
-      </div>
-    `
-  }
+  const otherGroups = groups.filter((g) => g.personaName !== persona.name)
 
   const chips = personaGroups.map((g) => `
-    <button class="persona-card__group-chip" data-navigate-group="${escapeHtml(g.id)}">${escapeHtml(g.name)}</button>
+    <span class="persona-card__group-chip-wrap">
+      <button class="persona-card__group-chip" data-navigate-group="${escapeHtml(g.id)}">${escapeHtml(g.name)}</button>
+      <button class="persona-card__group-remove" data-unassign-group="${escapeHtml(g.id)}"
+        title="Unassign from this persona" aria-label="Unassign ${escapeHtml(g.name)}">\u00D7</button>
+    </span>
   `).join('')
+
+  const assignOptions = otherGroups.length > 0
+    ? `<select class="input persona-card__assign-select" data-assign-persona="${escapeHtml(persona.name)}" style="font-size:0.75rem;padding:0.25rem 0.375rem;">
+        <option value="">+ Assign group\u2026</option>
+        ${otherGroups.map((g) => {
+          const from = g.personaName ? ` (${escapeHtml(g.personaName)})` : ''
+          return `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}${from}</option>`
+        }).join('')}
+      </select>`
+    : ''
 
   return `
     <div class="persona-card__section">
       <h4 class="persona-card__section-title">Groups</h4>
-      <div class="persona-card__group-chips">${chips}</div>
+      ${personaGroups.length > 0
+        ? `<div class="persona-card__group-chips">${chips}</div>`
+        : `<span class="persona-card__meta">No groups assigned</span>`}
+      ${assignOptions}
     </div>
   `
 }
@@ -362,6 +372,20 @@ export function wirePersonaCards(container: HTMLElement): void {
       return
     }
 
+    // ── Unassign group from persona ───────────────────────────
+    const unassignBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-unassign-group]')
+    if (unassignBtn) {
+      e.stopPropagation()
+      const groupId = unassignBtn.dataset.unassignGroup!
+      const { groups } = getState()
+      const group = groups[groupId]
+      if (!group) return
+      // Move to 'personal' (default) — the group still exists, just unlinked from this persona
+      updateGroup(groupId, { personaName: 'personal' })
+      showToast(`"${group.name}" moved to personal`, 'info')
+      return
+    }
+
     // ── Close menu on outside click ───────────────────────────
     if (openMenus.size > 0) {
       const inMenu = (e.target as HTMLElement).closest<HTMLElement>('[data-persona-menu-panel]')
@@ -370,6 +394,23 @@ export function wirePersonaCards(container: HTMLElement): void {
         update({ view: getState().view })
       }
     }
+  })
+
+  // ── Assign group to persona ─────────────────────────────
+  container.addEventListener('change', (e) => {
+    const select = e.target as HTMLSelectElement
+    if (!select.dataset.assignPersona) return
+    const personaName = select.dataset.assignPersona
+    const groupId = select.value
+    if (!groupId) return
+
+    const { groups } = getState()
+    const group = groups[groupId]
+    if (!group) return
+
+    updateGroup(groupId, { personaName })
+    showToast(`"${group.name}" assigned to ${personaName}`, 'success')
+    select.value = ''
   })
 
   // ── Profile publish button visibility ─────────────────────

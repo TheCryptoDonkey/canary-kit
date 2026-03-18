@@ -438,6 +438,42 @@ const STYLES = `
     color: var(--text-primary);
   }
 
+  .persona-card__group-chip-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  .persona-card__group-remove {
+    font-size: 0.75rem;
+    line-height: 1;
+    padding: 0.25rem 0.25rem;
+    background: none;
+    border: 1px solid var(--border);
+    border-left: none;
+    border-radius: 0 3px 3px 0;
+    color: var(--text-muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+  }
+
+  .persona-card__group-chip-wrap:hover .persona-card__group-remove {
+    opacity: 1;
+  }
+
+  .persona-card__group-remove:hover {
+    color: var(--failed);
+  }
+
+  .persona-card__group-chip-wrap .persona-card__group-chip {
+    border-radius: 3px 0 0 3px;
+  }
+
+  .persona-card__assign-select {
+    margin-top: 0.375rem;
+  }
+
   .persona-card__actions {
     display: flex;
     align-items: center;
