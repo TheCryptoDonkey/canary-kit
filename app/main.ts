@@ -1635,10 +1635,15 @@ function showLoginScreen(): void {
       return
     }
 
-    // Generate mnemonic and derive keypair (NIP-06)
-    const { generateMnemonic, mnemonicToKeypair } = await import('./mnemonic.js')
-    const mnemonic = generateMnemonic()
-    const { pubkey, privkey } = mnemonicToKeypair(mnemonic)
+    // Generate mnemonic and derive personal identity via nsec-tree
+    const { generateMnemonic } = await import('@scure/bip39')
+    const { wordlist } = await import('@scure/bip39/wordlists/english.js')
+    const { restoreFromMnemonic } = await import('./mnemonic.js')
+    const mnemonic = generateMnemonic(wordlist)
+    const { root, defaultPersona } = restoreFromMnemonic(mnemonic)
+    const privkey = Array.from(defaultPersona.identity.privateKey, b => b.toString(16).padStart(2, '0')).join('')
+    const pubkey = Array.from(defaultPersona.identity.publicKey, b => b.toString(16).padStart(2, '0')).join('')
+    root.destroy()
 
     update({
       identity: { pubkey, privkey, mnemonic, signerType: 'local', displayName: name },
@@ -1668,13 +1673,17 @@ function showLoginScreen(): void {
     }
 
     try {
-      const { validateMnemonic, mnemonicToKeypair } = await import('./mnemonic.js')
-      if (!validateMnemonic(phrase)) {
+      const { validateMnemonic, restoreFromMnemonic } = await import('./mnemonic.js')
+      const { wordlist } = await import('@scure/bip39/wordlists/english.js')
+      if (!validateMnemonic(phrase, wordlist)) {
         alert('Invalid recovery phrase. Please check your words and try again.')
         return
       }
 
-      const { pubkey, privkey } = mnemonicToKeypair(phrase)
+      const { root, defaultPersona } = restoreFromMnemonic(phrase)
+      const privkey = Array.from(defaultPersona.identity.privateKey, b => b.toString(16).padStart(2, '0')).join('')
+      const pubkey = Array.from(defaultPersona.identity.publicKey, b => b.toString(16).padStart(2, '0')).join('')
+      root.destroy()
       update({
         identity: { pubkey, privkey, mnemonic: phrase, signerType: 'local', displayName: 'You' },
       })

@@ -4,7 +4,7 @@ import type { AppState, AppGroup, AppIdentity, AppSettings } from './types.js'
 import { WELL_KNOWN_READ_RELAYS, DEFAULT_WRITE_RELAY } from './types.js'
 import { getState, loadState, subscribe } from './state.js'
 import { deriveKey, encrypt, decrypt, generateSalt, encodeSalt, decodeSalt } from './crypto/pin.js'
-import { mnemonicToKeypair, validateMnemonic } from './mnemonic.js'
+import { validateMnemonic } from './mnemonic.js'
 import { initDuressQueueCrypto } from './duress-queue.js'
 
 // ── Storage keys ───────────────────────────────────────────────
@@ -244,10 +244,11 @@ function attachLegacyMnemonic(identity: AppIdentity | null): { identity: AppIden
 
   try {
     if (nextIdentity && validateMnemonic(mnemonic)) {
-      const { pubkey } = mnemonicToKeypair(mnemonic)
-      if (pubkey === nextIdentity.pubkey) {
-        nextIdentity = { ...nextIdentity, mnemonic }
-      }
+      // Attach legacy mnemonic to identity for backup purposes.
+      // Note: nsec-tree uses a different derivation path (m/44'/1237'/727'/0'/0')
+      // so this mnemonic won't produce the same pubkey via nsec-tree — but it's
+      // still the user's backup phrase and should be preserved.
+      nextIdentity = { ...nextIdentity, mnemonic }
     }
   } catch {
     // Ignore invalid legacy recovery phrases — they are removed below.
