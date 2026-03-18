@@ -403,8 +403,22 @@ button {
 /* ── #create-group-btn ───────────────────────────────────── */
 
 #create-group-btn {
-  margin: 1rem 1.5rem;
+  margin: 1rem 1.5rem 0.5rem;
   width: calc(100% - 3rem);
+}
+
+.sidebar__sync-btn {
+  margin: 0 1.5rem 1rem;
+  width: calc(100% - 3rem);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  border-color: transparent;
+  background: transparent;
+}
+
+.sidebar__sync-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border);
 }
 
 /* ── Panels grid ─────────────────────────────────────────── */

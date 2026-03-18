@@ -1142,6 +1142,9 @@ function wireGlobalEvents(): void {
   // Immediate vault publish requested (e.g. after word rotation)
   document.addEventListener('canary:vault-publish-now', () => publishVaultNow())
 
+  // Manual vault sync triggered from sidebar
+  document.addEventListener('canary:sync-vault', () => void manualVaultSync())
+
   // On background: flush vault to relay so other devices can pick up changes.
   // On foreground: reconnect relay + fetch vault to catch up on any state
   // changes from other devices while this tab was suspended.
@@ -1726,6 +1729,52 @@ function publishVaultNow(): void {
         console.error('[canary:vault] Vault publish FAILED:', err)
         showToast(`Vault publish failed: ${err instanceof Error ? err.message : err}`, 'error')
       })
+  }
+}
+
+/**
+ * Manual vault sync: publish local state, then fetch + merge remote vault.
+ * Triggered by the "Sync Groups" button in the sidebar.
+ */
+async function manualVaultSync(): Promise<void> {
+  const { identity, groups } = getState()
+  if (!identity?.privkey || !identity?.pubkey) {
+    showToast('No identity — cannot sync', 'error')
+    return
+  }
+
+  showToast('Syncing...', 'info', 2000)
+
+  try {
+    // Publish local state first so the other device can pick it up
+    if (Object.keys(groups).length > 0) {
+      await publishVault(groups, identity.privkey, identity.pubkey)
+    }
+
+    // Fetch remote vault and merge
+    const { waitForConnection } = await import('./nostr/connect.js')
+    await waitForConnection()
+    const vaultGroups = await fetchVault(identity.privkey, identity.pubkey)
+
+    if (vaultGroups && Object.keys(vaultGroups).length > 0) {
+      const { groups: localGroups } = getState()
+      const merged = mergeVaultGroups(localGroups, vaultGroups)
+      const newCount = Object.keys(merged).length - Object.keys(localGroups).length
+
+      update({ groups: merged })
+      flushPersist()
+
+      if (newCount > 0) {
+        showToast(`Synced — ${newCount} new group(s) restored`, 'success')
+      } else {
+        showToast('Groups are in sync', 'success', 2000)
+      }
+    } else {
+      showToast('No remote vault found — local state published', 'warning')
+    }
+  } catch (err) {
+    console.error('[canary:vault] Manual sync failed:', err)
+    showToast(`Sync failed: ${err instanceof Error ? err.message : err}`, 'error')
   }
 }
 

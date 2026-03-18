@@ -76,6 +76,7 @@ export function renderSidebar(container: HTMLElement): void {
       ${renderGroupItems(groups, activeGroupId)}
     </nav>
     <button class="btn btn--primary" id="create-group-btn">+ New Group</button>
+    <button class="btn btn--sm sidebar__sync-btn" id="sync-groups-btn" title="Sync groups from other devices">Sync Groups</button>
   `
 
   // Wire up group selection
@@ -93,5 +94,11 @@ export function renderSidebar(container: HTMLElement): void {
   const createBtn = container.querySelector<HTMLButtonElement>('#create-group-btn')
   createBtn?.addEventListener('click', () => {
     container.dispatchEvent(new CustomEvent('canary:create-group', { bubbles: true }))
+  })
+
+  // Wire up sync button
+  const syncBtn = container.querySelector<HTMLButtonElement>('#sync-groups-btn')
+  syncBtn?.addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('canary:sync-vault'))
   })
 }
