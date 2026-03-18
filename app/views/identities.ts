@@ -634,19 +634,21 @@ function renderGroupSummary(): string {
   const groupList = Object.values(groups)
   if (groupList.length === 0) return ''
 
-  // Group by persona
+  // Group by persona id
   const byPersona = new Map<string, typeof groupList>()
   for (const g of groupList) {
-    const key = g.personaName || '(unassigned)'
+    const key = g.personaId || '(unassigned)'
     const list = byPersona.get(key) ?? []
     list.push(g)
     byPersona.set(key, list)
   }
 
   const rows: string[] = []
-  for (const [personaName, pGroups] of byPersona) {
-    const isUnassigned = personaName === '(unassigned)'
-    const isArchived = !isUnassigned && personas[personaName]?.archived
+  for (const [personaId, pGroups] of byPersona) {
+    const isUnassigned = personaId === '(unassigned)'
+    const personaEntry = !isUnassigned ? personas[personaId] : undefined
+    const isArchived = personaEntry?.archived
+    const personaName = personaEntry?.name ?? personaId
     const label = isUnassigned
       ? `<span style="color:var(--text-muted);font-style:italic;">unassigned</span>`
       : `<span${isArchived ? ' style="opacity:0.5;"' : ''}>${escapeHtml(personaName)}</span>`
@@ -882,14 +884,15 @@ export function renderIdentities(container: HTMLElement): void {
     }
 
     const { personas } = getState()
-    if (personas[name]) {
+    // Check if name already exists in root-level personas
+    if (Object.values(personas).some(p => p.name === name)) {
       errorEl.textContent = 'That name is already taken.'
       return
     }
 
     try {
       const newPersona = createPersona(name)
-      update({ personas: { ...personas, [name]: newPersona } })
+      update({ personas: { ...personas, [newPersona.id]: newPersona } })
       nameInput.value = ''
       errorEl.textContent = ''
     } catch (err) {
@@ -917,8 +920,10 @@ export function renderIdentities(container: HTMLElement): void {
     if (!restoreBtn) return
     const name = restoreBtn.dataset.restorePersona!
     const { personas } = getState()
-    const persona = personas[name]
-    if (!persona) return
-    update({ personas: { ...personas, [name]: { ...persona, archived: false } } })
+    // Find persona by name (archived personas displayed by name)
+    const entry = Object.entries(personas).find(([, p]) => p.name === name)
+    if (!entry) return
+    const [id, persona] = entry
+    update({ personas: { ...personas, [id]: { ...persona, archived: false } } })
   })
 }

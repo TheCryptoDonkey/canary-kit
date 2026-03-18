@@ -46,12 +46,12 @@ function truncateNpub(npub: string): string {
 }
 
 /** Render a single `<option>` for a persona. */
-function renderPersonaOption(persona: AppPersona, activePersonaName: string | null): string {
+function renderPersonaOption(persona: AppPersona, activePersonaId: string | null): string {
   const label = persona.displayName
     ? `${escapeHtml(persona.displayName)} (${escapeHtml(truncateNpub(persona.npub))})`
     : `${escapeHtml(persona.name)} · ${escapeHtml(truncateNpub(persona.npub))}`
-  const selected = persona.name === activePersonaName ? ' selected' : ''
-  return `<option value="${escapeHtml(persona.name)}"${selected}>${label}</option>`
+  const selected = persona.id === activePersonaId ? ' selected' : ''
+  return `<option value="${escapeHtml(persona.id)}"${selected}>${label}</option>`
 }
 
 // ── Public API ─────────────────────────────────────────────────
@@ -63,20 +63,20 @@ function renderPersonaOption(persona: AppPersona, activePersonaName: string | nu
  * with no local key material — persona derivation is unavailable).
  *
  * The dropdown includes:
- * - An "All groups" option (value="") selected when activePersonaName is null.
+ * - An "All groups" option (value="") selected when activePersonaId is null.
  * - One option per persona in state.
  */
 export function renderPersonaPicker(): string {
   if (!isPersonasInitialised()) return ''
 
-  const { personas, activePersonaName } = getState()
+  const { personas, activePersonaId } = getState()
   const personaList = Object.values(personas).filter(p => !p.archived)
   if (personaList.length === 0) return ''
 
-  const allSelected = activePersonaName === null ? ' selected' : ''
+  const allSelected = activePersonaId === null ? ' selected' : ''
   const options = [
     `<option value=""${allSelected}>All groups</option>`,
-    ...personaList.map((p) => renderPersonaOption(p, activePersonaName)),
+    ...personaList.map((p) => renderPersonaOption(p, activePersonaId)),
   ].join('')
 
   return `<select class="persona-picker" aria-label="Filter by persona">${options}</select>`
@@ -85,9 +85,9 @@ export function renderPersonaPicker(): string {
 /**
  * Wire the persona picker `<select>` change event inside a container.
  *
- * On change, updates `state.activePersonaName`:
+ * On change, updates `state.activePersonaId`:
  * - Empty string value → null (show all groups)
- * - Non-empty value → that persona name
+ * - Non-empty value → that persona id
  */
 export function wirePersonaPicker(container: HTMLElement): void {
   const select = container.querySelector<HTMLSelectElement>('.persona-picker')
@@ -95,6 +95,6 @@ export function wirePersonaPicker(container: HTMLElement): void {
 
   select.addEventListener('change', () => {
     const value = select.value
-    update({ activePersonaName: value === '' ? null : value })
+    update({ activePersonaId: value === '' ? null : value })
   })
 }

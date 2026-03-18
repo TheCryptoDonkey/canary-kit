@@ -184,7 +184,7 @@ export function updateIdentityDisplay(): void {
   const avatar = document.getElementById('identity-avatar') as HTMLImageElement | null
   if (!dot || !label) return
 
-  const { identity, activePersonaName, personas } = getState()
+  const { identity, activePersonaId, personas } = getState()
   if (!identity?.pubkey) {
     label.textContent = 'No identity'
     dot.className = 'header__identity-dot header__identity-dot--none'
@@ -193,7 +193,7 @@ export function updateIdentityDisplay(): void {
   }
 
   // When a persona is active and exists in state, show its identity instead
-  const activePersona = activePersonaName ? personas[activePersonaName] : null
+  const activePersona = activePersonaId ? Object.values(personas).find(p => p.id === activePersonaId) ?? null : null
   const shortPk = activePersona
     ? `${activePersona.npub.slice(0, 8)}\u2026${activePersona.npub.slice(-4)}`
     : `${identity.pubkey.slice(0, 6)}\u2026${identity.pubkey.slice(-4)}`

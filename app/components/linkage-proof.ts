@@ -95,7 +95,8 @@ export function showProveOwnershipModal(personaName: string): void {
     const proofTypeInput = dialog.querySelector<HTMLInputElement>('input[name="lp-type"]:checked')
     const proofType = proofTypeInput?.value === 'full' ? 'full' : 'blind'
 
-    const sourcePersona = getPersona(personaName, personas[personaName]?.index ?? 0)
+    const personaEntry = Object.values(personas).find(p => p.name === personaName)
+    const sourcePersona = getPersona(personaName, personaEntry?.index ?? 0)
     const targetPersona = getPersona(targetName, targetIndex)
 
     const sourceRoot = fromNsec(sourcePersona.identity.privateKey)

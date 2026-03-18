@@ -41,7 +41,7 @@ import { decode as nip19decode } from 'nostr-tools/nip19'
 import { getPublicKey } from 'nostr-tools/pure'
 import { broadcastAction, ensureTransport, subscribeToAllGroups, teardownSync } from './sync.js'
 import { fetchVault, fetchVaultNip07, publishVault, publishVaultNip07, mergeVaultGroups, subscribeToVault, unsubscribeFromVault } from './nostr/vault.js'
-import { initPersonas, destroyPersonas } from './persona.js'
+import { initPersonas, initPersonasFromTree, destroyPersonas } from './persona.js'
 import { fetchPersonaProfiles, publishPersonaProfile } from './nostr/profiles.js'
 import { showToast } from './components/toast.js'
 import { showDuressAlert } from './components/duress-alert.js'
@@ -201,20 +201,15 @@ function showLockScreen(): void {
       await unlockAndRestoreState(pin)
       // Success: build the full app shell and start auto-lock.
       await ensureLocalIdentity()
-      // Derive persona keys from identity and merge vault metadata
+      // Derive persona keys from identity — restore from vault or init fresh
       {
         const { identity, personas: vaultPersonas } = getState()
         if (identity?.privkey) {
-          const customNames = Object.keys(vaultPersonas).filter(
-            name => !['personal', 'bitcoiner', 'work', 'social', 'anonymous'].includes(name)
-          )
-          const personas = initPersonas(identity, customNames.length > 0 ? customNames : undefined)
-          for (const [name, vaultP] of Object.entries(vaultPersonas)) {
-            if (personas[name]) {
-              personas[name] = { ...personas[name], ...vaultP, npub: personas[name].npub }
-            }
+          if (Object.keys(vaultPersonas).length > 0) {
+            initPersonasFromTree(identity, vaultPersonas)
+          } else {
+            initPersonas(identity)
           }
-          update({ personas })
         }
       }
       buildShell()
@@ -434,16 +429,16 @@ function render(): void {
 // ── Modal: create group ────────────────────────────────────────
 
 function showCreateGroupModal(): void {
-  const { identity, personas, activePersonaName } = getState()
+  const { identity, personas, activePersonaId } = getState()
   const knownName = identity?.displayName && identity.displayName !== 'You' ? identity.displayName : ''
 
-  const personaNames = Object.keys(personas)
-  const personaOptions = personaNames.length > 0
-    ? personaNames.map(n => {
-        const sel = n === (activePersonaName ?? 'personal') ? ' selected' : ''
-        return `<option value="${escapeHtml(n)}"${sel}>${escapeHtml(n)}</option>`
+  const personaList = Object.values(personas)
+  const personaOptions = personaList.length > 0
+    ? personaList.map(p => {
+        const sel = p.id === activePersonaId ? ' selected' : ''
+        return `<option value="${escapeHtml(p.id)}"${sel}>${escapeHtml(p.name)}</option>`
       }).join('')
-    : '<option value="personal">personal</option>'
+    : '<option value="">—</option>'
 
   const content = `
     <h2 class="modal__title">New Group</h2>
@@ -490,7 +485,7 @@ function showCreateGroupModal(): void {
     const name = (formData.get('name') as string | null)?.trim() ?? ''
     if (!name) return
     const myName = knownName || (formData.get('myname') as string | null)?.trim() || ''
-    const selectedPersona = (formData.get('persona') as string | null)?.trim() || 'personal'
+    const selectedPersona = (formData.get('persona') as string | null)?.trim() || ''
     const activePresetBtn = document.querySelector<HTMLButtonElement>('.segmented__btn.segmented__btn--active[data-preset]')
     const preset = (activePresetBtn?.dataset.preset ?? 'family') as 'family' | 'field-ops' | 'enterprise' | 'event'
     const groupId = createNewGroup(name, preset, identity?.pubkey, selectedPersona)
@@ -717,7 +712,7 @@ function showBinaryJoinScreen(b64url: string): void {
           livenessInterval: validated.rotationInterval,
           livenessCheckins: {} as Record<string, number>,
           tolerance: validated.tolerance,
-          personaName: getState().activePersonaName ?? 'personal',
+          personaId: getState().activePersonaId ?? '',
           createdAt: Math.floor(Date.now() / 1000),
           admins: [...validated.admins],
           epoch: validated.epoch,
@@ -825,7 +820,7 @@ function acceptWelcomeEnvelope(
     livenessInterval: welcome.rotationInterval,
     livenessCheckins: {} as Record<string, number>,
     tolerance: welcome.tolerance,
-    personaName: getState().activePersonaName ?? 'personal',
+    personaId: getState().activePersonaId ?? '',
     createdAt: Math.floor(Date.now() / 1000),
     admins: [...welcome.admins],
     epoch: welcome.epoch,
@@ -1154,10 +1149,11 @@ function wireGlobalEvents(): void {
   document.addEventListener('canary:export-persona', (evt) => {
     const { personaName } = (evt as CustomEvent<{ personaName: string }>).detail
     const { personas } = getState()
-    const persona = personas[personaName]
-    if (!persona) return
+    // Find persona by name (events from persona-card use name)
+    const entry = Object.values(personas).find(p => p.name === personaName)
+    if (!entry) return
     import('./components/export-modal.js').then(({ showExportModal }) => {
-      showExportModal(persona)
+      showExportModal(entry)
     })
   })
 
@@ -1171,9 +1167,10 @@ function wireGlobalEvents(): void {
   document.addEventListener('canary:archive-persona', (evt) => {
     const { personaName } = (evt as CustomEvent<{ personaName: string }>).detail
     const { personas } = getState()
-    const persona = personas[personaName]
-    if (!persona) return
-    update({ personas: { ...personas, [personaName]: { ...persona, archived: true } } })
+    const entry = Object.entries(personas).find(([, p]) => p.name === personaName)
+    if (!entry) return
+    const [id, persona] = entry
+    update({ personas: { ...personas, [id]: { ...persona, archived: true } } })
     showToast(`Archived "${personaName}"`, 'success')
   })
 
@@ -1181,10 +1178,11 @@ function wireGlobalEvents(): void {
     const { personaName } = (evt as CustomEvent<{ personaName: string }>).detail
     import('./persona.js').then(({ rotatePersona }) => {
       const { personas } = getState()
-      const persona = personas[personaName]
-      if (!persona) return
-      const rotated = rotatePersona(personaName, persona.index)
-      update({ personas: { ...personas, [personaName]: rotated } })
+      const entry = Object.entries(personas).find(([, p]) => p.name === personaName)
+      if (!entry) return
+      const [id, persona] = entry
+      const rotated = rotatePersona(id, persona.index)
+      update({ personas: { ...personas, [id]: rotated } })
       showToast(`Rotated "${personaName}" to index ${rotated.index}`, 'success')
     })
   })
@@ -1241,8 +1239,8 @@ function wireGlobalEvents(): void {
 
   // Publish a persona's kind 0 profile to relays (fired from settings panel)
   document.addEventListener('canary:publish-persona-profile', async (e) => {
-    const { personaName } = (e as CustomEvent).detail
-    const persona = getState().personas[personaName]
+    const { personaId } = (e as CustomEvent).detail
+    const persona = getState().personas[personaId]
     if (!persona) return
     await publishPersonaProfile(persona)
   })
@@ -1423,12 +1421,14 @@ async function bootSync(): Promise<void> {
         }
       }
       // Merge vault persona metadata onto derived personas
-      if (vaultData?.personas && vaultData.personas.length > 0) {
+      if (vaultData?.personas && Object.keys(vaultData.personas).length > 0) {
         const { personas: currentPersonas } = getState()
         const updated = { ...currentPersonas }
-        for (const vaultP of vaultData.personas) {
-          if (updated[vaultP.name]) {
-            updated[vaultP.name] = { ...updated[vaultP.name], ...vaultP, npub: updated[vaultP.name].npub }
+        for (const [id, vaultP] of Object.entries(vaultData.personas)) {
+          if (updated[id]) {
+            updated[id] = { ...updated[id], ...vaultP, npub: updated[id].npub }
+          } else {
+            updated[id] = vaultP
           }
         }
         update({ personas: updated })
@@ -1490,12 +1490,14 @@ async function bootSync(): Promise<void> {
         }
       }
       // Merge vault persona metadata (NIP-07 has no local keys, so just metadata)
-      if (vaultData?.personas && vaultData.personas.length > 0) {
+      if (vaultData?.personas && Object.keys(vaultData.personas).length > 0) {
         const { personas: currentPersonas } = getState()
         const updated = { ...currentPersonas }
-        for (const vaultP of vaultData.personas) {
-          if (updated[vaultP.name]) {
-            updated[vaultP.name] = { ...updated[vaultP.name], ...vaultP, npub: updated[vaultP.name].npub }
+        for (const [id, vaultP] of Object.entries(vaultData.personas)) {
+          if (updated[id]) {
+            updated[id] = { ...updated[id], ...vaultP, npub: updated[id].npub }
+          } else {
+            updated[id] = vaultP
           }
         }
         update({ personas: updated })
@@ -1973,20 +1975,15 @@ function showLoginScreen(): void {
 }
 
 async function bootApp(): Promise<void> {
-  // Derive persona keys from identity and merge any stored vault metadata
+  // Derive persona keys from identity — restore from vault or init fresh
   {
     const { identity, personas: vaultPersonas } = getState()
     if (identity?.privkey) {
-      const customNames = Object.keys(vaultPersonas).filter(
-        name => !['personal', 'bitcoiner', 'work', 'social', 'anonymous'].includes(name)
-      )
-      const personas = initPersonas(identity, customNames.length > 0 ? customNames : undefined)
-      for (const [name, vaultP] of Object.entries(vaultPersonas)) {
-        if (personas[name]) {
-          personas[name] = { ...personas[name], ...vaultP, npub: personas[name].npub }
-        }
+      if (Object.keys(vaultPersonas).length > 0) {
+        initPersonasFromTree(identity, vaultPersonas)
+      } else {
+        initPersonas(identity)
       }
-      update({ personas })
     }
   }
 
@@ -2097,11 +2094,10 @@ function scheduleVaultPublish(): void {
   _vaultTimer = setTimeout(() => {
     const { identity: id, groups: g, personas: p, deletedGroupIds: d } = getState()
     if (!id?.pubkey || Object.keys(g).length === 0) return
-    const personaArr = Object.values(p)
     if (id.privkey) {
-      publishVault(g, id.privkey, id.pubkey, personaArr, d)
+      publishVault(g, id.privkey, id.pubkey, p, d)
     } else if (id.signerType === 'nip07') {
-      publishVaultNip07(g, id.pubkey, personaArr, d)
+      publishVaultNip07(g, id.pubkey, p, d)
     }
   }, VAULT_DEBOUNCE_MS)
 }
@@ -2110,12 +2106,11 @@ function publishVaultNow(): void {
   if (_vaultTimer) clearTimeout(_vaultTimer)
   const { identity, groups, personas, deletedGroupIds } = getState()
   if (!identity?.pubkey || Object.keys(groups).length === 0) return
-  const personaArr = Object.values(personas)
 
   const publish = identity.privkey
-    ? publishVault(groups, identity.privkey, identity.pubkey, personaArr, deletedGroupIds)
+    ? publishVault(groups, identity.privkey, identity.pubkey, personas, deletedGroupIds)
     : identity.signerType === 'nip07'
-      ? publishVaultNip07(groups, identity.pubkey, personaArr, deletedGroupIds)
+      ? publishVaultNip07(groups, identity.pubkey, personas, deletedGroupIds)
       : null
 
   publish
@@ -2148,13 +2143,12 @@ async function manualVaultSync(): Promise<void> {
 
   try {
     // Publish local state first so the other device can pick it up
-    const personaArr = Object.values(personas)
     const { deletedGroupIds } = getState()
     if (Object.keys(groups).length > 0) {
       if (isNip07) {
-        await publishVaultNip07(groups, identity.pubkey, personaArr, deletedGroupIds)
+        await publishVaultNip07(groups, identity.pubkey, personas, deletedGroupIds)
       } else {
-        await publishVault(groups, identity.privkey!, identity.pubkey, personaArr, deletedGroupIds)
+        await publishVault(groups, identity.privkey!, identity.pubkey, personas, deletedGroupIds)
       }
     }
 
@@ -2183,12 +2177,14 @@ async function manualVaultSync(): Promise<void> {
       showToast(`No vault found for ${shortPk}\u2026 — are both devices using the same identity?`, 'warning', 5000)
     }
     // Merge vault persona metadata
-    if (vaultData?.personas && vaultData.personas.length > 0) {
+    if (vaultData?.personas && Object.keys(vaultData.personas).length > 0) {
       const { personas: currentPersonas } = getState()
       const updated = { ...currentPersonas }
-      for (const vaultP of vaultData.personas) {
-        if (updated[vaultP.name]) {
-          updated[vaultP.name] = { ...updated[vaultP.name], ...vaultP, npub: updated[vaultP.name].npub }
+      for (const [id, vaultP] of Object.entries(vaultData.personas)) {
+        if (updated[id]) {
+          updated[id] = { ...updated[id], ...vaultP, npub: updated[id].npub }
+        } else {
+          updated[id] = vaultP
         }
       }
       update({ personas: updated })

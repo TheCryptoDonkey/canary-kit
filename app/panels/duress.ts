@@ -47,7 +47,9 @@ export function renderDuress(container: HTMLElement): void {
   }
 
   const isMember = !!(identity?.pubkey && group.members.includes(identity.pubkey))
-  const personaLabel = group.personaName ? escapeHtml(`All ${group.personaName} groups`) : 'All persona groups'
+  const personas = getState().personas
+  const personaEntry = group.personaId ? Object.values(personas).find(p => p.id === group.personaId) : undefined
+  const personaLabel = personaEntry ? escapeHtml(`All ${personaEntry.name} groups`) : 'All persona groups'
 
   container.innerHTML = `
     <section class="panel duress-section">

@@ -41,7 +41,7 @@ function renderGroupItems(
     return `<div class="group-list__empty">No groups yet</div>`
   }
 
-  const { activePersonaName, personas } = getState()
+  const { activePersonaId, personas } = getState()
 
   return entries
     .map((group) => {
@@ -49,9 +49,11 @@ function renderGroupItems(
       const modifier = isActive ? ' group-list__item--active' : ''
       const preset = formatInterval(group.livenessInterval)
       const windowLabel = formatInterval(group.livenessInterval)
-      const badge = group.personaName ? personaBadgeHtml(group.personaName) : ''
-      const isArchived = personas[group.personaName]?.archived
-      const hidden = isArchived || (activePersonaName && group.personaName !== activePersonaName) ? ' hidden' : ''
+      // Resolve persona name from id for badge display
+      const personaEntry = group.personaId ? Object.values(personas).find(p => p.id === group.personaId) : undefined
+      const badge = personaEntry ? personaBadgeHtml(personaEntry.name) : ''
+      const isArchived = personaEntry?.archived
+      const hidden = isArchived || (activePersonaId && group.personaId !== activePersonaId) ? ' hidden' : ''
       return `
         <button
           class="group-list__item${modifier}"

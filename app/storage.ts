@@ -458,7 +458,7 @@ export async function unlockAndRestoreState(pin: string): Promise<void> {
     identity: identityResult.identity,
     settings,
     personas: {},
-    activePersonaName: null,
+    activePersonaId: null,
     deletedGroupIds: [],
   }
 
@@ -488,7 +488,7 @@ export function restoreState(): void {
     identity: identityResult.identity,
     settings,
     personas: {},
-    activePersonaName: null,
+    activePersonaId: null,
     deletedGroupIds: [],
   }
 

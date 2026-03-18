@@ -28,8 +28,8 @@ function truncateNpub(npub: string): string {
   return `${npub.slice(0, 8)}\u2026${npub.slice(-4)}`
 }
 
-function countGroupsForPersona(personaName: string, groups: AppGroup[]): number {
-  return groups.filter((g) => g.personaName === personaName).length
+function countGroupsForPersona(personaId: string, groups: AppGroup[]): number {
+  return groups.filter((g) => g.personaId === personaId).length
 }
 
 function hasProfileChanges(persona: AppPersona, card: HTMLElement): boolean {
@@ -132,9 +132,9 @@ function renderRelaySection(persona: AppPersona): string {
   `
 }
 
-function renderGroupsSection(persona: AppPersona, groups: AppGroup[]): string {
-  const personaGroups = groups.filter((g) => g.personaName === persona.name)
-  const otherGroups = groups.filter((g) => g.personaName !== persona.name)
+function renderGroupsSection(persona: AppPersona, groups: AppGroup[], allPersonas: Record<string, AppPersona>): string {
+  const personaGroups = groups.filter((g) => g.personaId === persona.id)
+  const otherGroups = groups.filter((g) => g.personaId !== persona.id)
 
   const chips = personaGroups.map((g) => `
     <span class="persona-card__group-chip-wrap">
@@ -144,11 +144,19 @@ function renderGroupsSection(persona: AppPersona, groups: AppGroup[]): string {
     </span>
   `).join('')
 
+  // Resolve persona name for the "from" label on assign options
+  function personaNameForGroup(g: AppGroup): string {
+    if (!g.personaId) return ''
+    const p = Object.values(allPersonas).find(p => p.id === g.personaId)
+    return p ? p.name : ''
+  }
+
   const assignOptions = otherGroups.length > 0
-    ? `<select class="input persona-card__assign-select" data-assign-persona="${escapeHtml(persona.name)}" style="font-size:0.75rem;padding:0.25rem 0.375rem;">
+    ? `<select class="input persona-card__assign-select" data-assign-persona="${escapeHtml(persona.id)}" style="font-size:0.75rem;padding:0.25rem 0.375rem;">
         <option value="">+ Assign group\u2026</option>
         ${otherGroups.map((g) => {
-          const from = g.personaName ? ` (${escapeHtml(g.personaName)})` : ''
+          const fromName = personaNameForGroup(g)
+          const from = fromName ? ` (${escapeHtml(fromName)})` : ''
           return `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}${from}</option>`
         }).join('')}
       </select>`
@@ -204,19 +212,21 @@ function renderActions(persona: AppPersona): string {
  */
 export function renderPersonaCard(persona: AppPersona, groups: AppGroup[]): string {
   const isExpanded = expandedCards.has(persona.name)
-  const groupCount = countGroupsForPersona(persona.name, groups)
+  const groupCount = countGroupsForPersona(persona.id, groups)
+  const { personas: allPersonas } = getState()
 
   return `
     <div class="persona-card${isExpanded ? ' persona-card--expanded' : ''}"
          id="persona-card-${escapeHtml(persona.name)}"
-         data-persona-name="${escapeHtml(persona.name)}">
+         data-persona-name="${escapeHtml(persona.name)}"
+         data-persona-id="${escapeHtml(persona.id)}">
       ${renderCollapsedCard(persona, groupCount)}
       ${isExpanded ? `
         <div class="persona-card__body">
           <div class="persona-card__npub">${escapeHtml(persona.npub)}</div>
           ${renderProfileSection(persona)}
           ${renderRelaySection(persona)}
-          ${renderGroupsSection(persona, groups)}
+          ${renderGroupsSection(persona, groups, allPersonas)}
           ${renderActions(persona)}
         </div>
       ` : ''}
@@ -380,9 +390,9 @@ export function wirePersonaCards(container: HTMLElement): void {
       const { groups } = getState()
       const group = groups[groupId]
       if (!group) return
-      // Move to 'personal' (default) — the group still exists, just unlinked from this persona
-      updateGroup(groupId, { personaName: 'personal' })
-      showToast(`"${group.name}" moved to personal`, 'info')
+      // Unlink from persona — set personaId to empty string
+      updateGroup(groupId, { personaId: '' })
+      showToast(`"${group.name}" unassigned`, 'info')
       return
     }
 
@@ -400,16 +410,17 @@ export function wirePersonaCards(container: HTMLElement): void {
   container.addEventListener('change', (e) => {
     const select = e.target as HTMLSelectElement
     if (!select.dataset.assignPersona) return
-    const personaName = select.dataset.assignPersona
+    const personaId = select.dataset.assignPersona
     const groupId = select.value
     if (!groupId) return
 
-    const { groups } = getState()
+    const { groups, personas } = getState()
     const group = groups[groupId]
     if (!group) return
 
-    updateGroup(groupId, { personaName })
-    showToast(`"${group.name}" assigned to ${personaName}`, 'success')
+    updateGroup(groupId, { personaId })
+    const personaEntry = Object.values(personas).find(p => p.id === personaId)
+    showToast(`"${group.name}" assigned to ${personaEntry?.name ?? personaId}`, 'success')
     select.value = ''
   })
 

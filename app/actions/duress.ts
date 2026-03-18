@@ -1,5 +1,6 @@
 import type { AppGroup, AppPersona } from '../types.js'
 import type { DuressScope } from 'canary-kit/beacon'
+import { findById } from '../persona-tree.js'
 
 /**
  * Get target groups for a duress alert based on scope.
@@ -24,7 +25,7 @@ export function getTargetGroups(
       targets = [origin]
       break
     case 'persona':
-      targets = Object.values(groups).filter(g => g.personaName === origin.personaName)
+      targets = Object.values(groups).filter(g => g.personaId === origin.personaId)
       break
     case 'master':
       targets = Object.values(groups)
@@ -32,7 +33,8 @@ export function getTargetGroups(
   }
 
   return targets.filter(g => {
-    const persona = personas[g.personaName]
-    return !persona?.archived
+    if (!g.personaId) return true
+    const found = findById(personas, g.personaId)
+    return !found?.persona.archived
   })
 }

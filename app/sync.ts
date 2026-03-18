@@ -125,7 +125,7 @@ export function reRegisterGroup(groupId: string): void {
 
   _transport.unregisterGroup(groupId)
   if (!isPersonasInitialised()) return // NIP-07 or not yet initialised
-  const groupIdentity = getGroupIdentity(group.personaName ?? 'personal', groupId, group.epoch)
+  const groupIdentity = getGroupIdentity(group.personaId, groupId, group.epoch)
   const signer = new GroupSigner(groupIdentity)
   _transport.registerGroup(groupId, group.seed, signer, group.members, _recoveryOptions(groupId))
 }
@@ -226,7 +226,7 @@ export function subscribeToGroup(groupId: string): void {
     const group = groups[groupId]
     if (identity?.privkey && group?.seed) {
       if (!isPersonasInitialised()) return // NIP-07 or not yet initialised
-      const groupIdentity = getGroupIdentity(group.personaName ?? 'personal', groupId, group.epoch)
+      const groupIdentity = getGroupIdentity(group.personaId, groupId, group.epoch)
       const signer = new GroupSigner(groupIdentity)
       ;(_transport as NostrSyncTransport).registerGroup(groupId, group.seed, signer, group.members, _recoveryOptions(groupId))
     }

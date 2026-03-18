@@ -43,7 +43,7 @@ function renderPersonaList(): string {
         ${personaBadgeHtml(p.name)}
         <span class="relay-url">${escapeHtml(p.displayName ?? p.name)}</span>
         <span class="settings-hint" style="margin-left: 0.25rem;">${escapeHtml(shortNpub)}</span>
-        <button class="btn btn--ghost btn--sm persona-publish-btn" data-persona-name="${escapeHtml(p.name)}" title="Publish profile">Publish</button>
+        <button class="btn btn--ghost btn--sm persona-publish-btn" data-persona-id="${escapeHtml(p.id)}" title="Publish profile">Publish</button>
       </li>
     `
   }).join('')
@@ -507,12 +507,13 @@ export function renderSettings(container: HTMLElement): void {
 
   container.querySelectorAll<HTMLButtonElement>('.persona-publish-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const personaName = btn.dataset.personaName
-      if (!personaName) return
+      const personaId = btn.dataset.personaId
+      if (!personaId) return
       document.dispatchEvent(new CustomEvent('canary:publish-persona-profile', {
-        detail: { personaName },
+        detail: { personaId },
       }))
-      showToast(`Publishing profile for "${personaName}"…`, 'info')
+      const personaEntry = Object.values(getState().personas).find(p => p.id === personaId)
+      showToast(`Publishing profile for "${personaEntry?.name ?? personaId}"…`, 'info')
     })
   })
 }

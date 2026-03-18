@@ -171,15 +171,15 @@ export function renderIdentityTree(): string {
 
   const personaList = Object.values(personas)
 
-  // Build a map: persona name → groups belonging to that persona
+  // Build a map: persona id → groups belonging to that persona
   const groupsByPersona: Record<string, Array<{ id: string; name: string }>> = {}
   for (const p of personaList) {
-    groupsByPersona[p.name] = []
+    groupsByPersona[p.id] = []
   }
   for (const [id, group] of Object.entries(groups)) {
-    const pName = group.personaName
-    if (pName && groupsByPersona[pName]) {
-      groupsByPersona[pName].push({ id, name: group.name })
+    const pId = group.personaId
+    if (pId && groupsByPersona[pId]) {
+      groupsByPersona[pId].push({ id, name: group.name })
     }
   }
 
@@ -188,7 +188,7 @@ export function renderIdentityTree(): string {
       p.name,
       p.npub,
       p.archived === true,
-      groupsByPersona[p.name] ?? [],
+      groupsByPersona[p.id] ?? [],
     ))
     .join('')
 

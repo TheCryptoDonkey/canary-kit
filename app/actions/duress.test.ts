@@ -2,21 +2,21 @@ import { describe, it, expect } from 'vitest'
 import { getTargetGroups } from './duress.js'
 import type { AppGroup, AppPersona } from '../types.js'
 
-function makeGroup(id: string, personaName: string): AppGroup {
-  return { id, personaName, name: id, seed: 'a'.repeat(64) } as any
+function makeGroup(id: string, personaId: string): AppGroup {
+  return { id, personaId, name: id, seed: 'a'.repeat(64) } as any
 }
 
-function makePersona(name: string, archived = false): AppPersona {
-  return { name, index: 0, npub: 'npub1test', archived } as any
+function makePersona(id: string, name: string, archived = false): AppPersona {
+  return { id, name, index: 0, npub: 'npub1test', children: {}, archived } as any
 }
 
 describe('duress fan-out', () => {
   describe('getTargetGroups', () => {
     const groups: Record<string, AppGroup> = {
-      'g1': makeGroup('g1', 'personal'),
-      'g2': makeGroup('g2', 'personal'),
-      'g3': makeGroup('g3', 'bitcoiner'),
-      'g4': makeGroup('g4', 'bitcoiner'),
+      'g1': makeGroup('g1', 'p1'),
+      'g2': makeGroup('g2', 'p1'),
+      'g3': makeGroup('g3', 'p2'),
+      'g4': makeGroup('g4', 'p2'),
     }
 
     it('group scope returns only the origin group', () => {
@@ -24,7 +24,7 @@ describe('duress fan-out', () => {
       expect(targets.map(g => g.id)).toEqual(['g1'])
     })
 
-    it('persona scope returns all groups with same personaName', () => {
+    it('persona scope returns all groups with same personaId', () => {
       const targets = getTargetGroups(groups, 'g1', 'persona')
       expect(targets.map(g => g.id).sort()).toEqual(['g1', 'g2'])
     })
@@ -41,14 +41,14 @@ describe('duress fan-out', () => {
 
     it('persona scope excludes groups whose persona is archived', () => {
       const groupsWithArchived: Record<string, AppGroup> = {
-        'g1': makeGroup('g1', 'personal'),
-        'g2': makeGroup('g2', 'personal'),
-        'g3': makeGroup('g3', 'work'),
-        'g4': makeGroup('g4', 'work'),
+        'g1': makeGroup('g1', 'p1'),
+        'g2': makeGroup('g2', 'p1'),
+        'g3': makeGroup('g3', 'p2'),
+        'g4': makeGroup('g4', 'p2'),
       }
       const personas: Record<string, AppPersona> = {
-        'personal': makePersona('personal', false),
-        'work': makePersona('work', true),
+        'p1': makePersona('p1', 'personal', false),
+        'p2': makePersona('p2', 'work', true),
       }
       // g3 is origin but its persona 'work' is archived — should return empty
       const targets = getTargetGroups(groupsWithArchived, 'g3', 'persona', personas)
@@ -57,14 +57,14 @@ describe('duress fan-out', () => {
 
     it('master scope excludes groups whose persona is archived', () => {
       const groupsWithArchived: Record<string, AppGroup> = {
-        'g1': makeGroup('g1', 'personal'),
-        'g2': makeGroup('g2', 'personal'),
-        'g3': makeGroup('g3', 'work'),
-        'g4': makeGroup('g4', 'work'),
+        'g1': makeGroup('g1', 'p1'),
+        'g2': makeGroup('g2', 'p1'),
+        'g3': makeGroup('g3', 'p2'),
+        'g4': makeGroup('g4', 'p2'),
       }
       const personas: Record<string, AppPersona> = {
-        'personal': makePersona('personal', false),
-        'work': makePersona('work', true),
+        'p1': makePersona('p1', 'personal', false),
+        'p2': makePersona('p2', 'work', true),
       }
       const targets = getTargetGroups(groupsWithArchived, 'g1', 'master', personas)
       expect(targets.map(g => g.id).sort()).toEqual(['g1', 'g2'])

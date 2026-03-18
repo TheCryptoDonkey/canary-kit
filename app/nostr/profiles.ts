@@ -364,22 +364,22 @@ export async function fetchPersonaProfiles(readRelays?: string[]): Promise<void>
     const personaList = Object.values(personas)
     if (personaList.length === 0) return
 
-    // Decode each persona's npub to a hex pubkey
-    const pubkeyToName = new Map<string, string>()
+    // Decode each persona's npub to a hex pubkey, mapping to persona id
+    const pubkeyToId = new Map<string, string>()
     for (const p of personaList) {
       try {
         const decoded = decode(p.npub)
         if (decoded.type === 'npub') {
-          pubkeyToName.set(decoded.data as string, p.name)
+          pubkeyToId.set(decoded.data as string, p.id)
         }
       } catch {
         // Skip invalid npubs
       }
     }
 
-    if (pubkeyToName.size === 0) return
+    if (pubkeyToId.size === 0) return
 
-    const pubkeys = Array.from(pubkeyToName.keys())
+    const pubkeys = Array.from(pubkeyToId.keys())
 
     await new Promise<void>((resolve) => {
       const pool = new SimplePool()
@@ -392,13 +392,13 @@ export async function fetchPersonaProfiles(readRelays?: string[]): Promise<void>
             if (!verifyEvent(event)) return
             if (typeof event.content === 'string' && event.content.length > 65536) return
 
-            const personaName = pubkeyToName.get(event.pubkey)
-            if (!personaName) return
+            const personaId = pubkeyToId.get(event.pubkey)
+            if (!personaId) return
 
             try {
               const profile: NostrProfile = normaliseProfile(JSON.parse(event.content))
               const { personas: current } = getState()
-              const existing = current[personaName]
+              const existing = current[personaId]
               if (!existing) return
 
               const updated: AppPersona = {
@@ -410,7 +410,7 @@ export async function fetchPersonaProfiles(readRelays?: string[]): Promise<void>
                 ...(profile.about !== undefined ? { about: profile.about } : {}),
               }
 
-              update({ personas: { ...current, [personaName]: updated } })
+              update({ personas: { ...current, [personaId]: updated } })
             } catch {
               // Malformed profile content — skip
             }
