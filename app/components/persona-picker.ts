@@ -70,7 +70,7 @@ export function renderPersonaPicker(): string {
   if (!isPersonasInitialised()) return ''
 
   const { personas, activePersonaName } = getState()
-  const personaList = Object.values(personas)
+  const personaList = Object.values(personas).filter(p => !p.archived)
   if (personaList.length === 0) return ''
 
   const allSelected = activePersonaName === null ? ' selected' : ''

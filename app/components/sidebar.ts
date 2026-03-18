@@ -41,7 +41,7 @@ function renderGroupItems(
     return `<div class="group-list__empty">No groups yet</div>`
   }
 
-  const { activePersonaName } = getState()
+  const { activePersonaName, personas } = getState()
 
   return entries
     .map((group) => {
@@ -50,7 +50,8 @@ function renderGroupItems(
       const preset = formatInterval(group.livenessInterval)
       const windowLabel = formatInterval(group.livenessInterval)
       const badge = group.personaName ? personaBadgeHtml(group.personaName) : ''
-      const hidden = activePersonaName && group.personaName !== activePersonaName ? ' hidden' : ''
+      const isArchived = personas[group.personaName]?.archived
+      const hidden = isArchived || (activePersonaName && group.personaName !== activePersonaName) ? ' hidden' : ''
       return `
         <button
           class="group-list__item${modifier}"
