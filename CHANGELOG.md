@@ -1,3 +1,10 @@
+## [1.0.5](https://github.com/forgesworn/canary-kit/compare/v1.0.4...v1.0.5) (2026-03-18)
+
+
+### Bug Fixes
+
+* vault sync reliability and push diagnostics ([01ea70d](https://github.com/forgesworn/canary-kit/commit/01ea70dfc103e7bde093e5b09032a46d59a45bd4))
+
 ## [1.0.4](https://github.com/forgesworn/canary-kit/compare/v1.0.3...v1.0.4) (2026-03-18)
 
 
