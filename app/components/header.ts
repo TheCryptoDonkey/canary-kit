@@ -9,6 +9,7 @@ import { decode as nip19decode, nsecEncode } from 'nostr-tools/nip19'
 import { getPublicKey } from 'nostr-tools/pure'
 import { hexToBytes } from 'canary-kit/crypto'
 import { escapeHtml } from '../utils/escape.js'
+import { renderPersonaPicker, wirePersonaPicker } from './persona-picker.js'
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -57,6 +58,7 @@ export function renderHeader(container: HTMLElement): void {
       <button class="header__nav-tab${view === 'groups' ? ' header__nav-tab--active' : ''}" data-view="groups">Groups</button>
       <button class="header__nav-tab${view === 'call-demo' ? ' header__nav-tab--active' : ''}" data-view="call-demo">Call Demo</button>
     </nav>
+    ${renderPersonaPicker()}
     <div class="header__actions">
       <button class="header__identity-btn" id="identity-btn" title="Identity">
         <img class="header__identity-avatar" id="identity-avatar" alt="" hidden>
@@ -72,6 +74,8 @@ export function renderHeader(container: HTMLElement): void {
       <button class="theme-toggle" id="reset-btn" aria-label="Reset demo" title="Clear all data and reset">&#8634;</button>
     </div>
   `
+
+  wirePersonaPicker(container)
 
   const btn = container.querySelector<HTMLButtonElement>('#theme-toggle')
   if (btn) {
@@ -179,7 +183,7 @@ export function updateIdentityDisplay(): void {
   const avatar = document.getElementById('identity-avatar') as HTMLImageElement | null
   if (!dot || !label) return
 
-  const { identity } = getState()
+  const { identity, activePersonaName, personas } = getState()
   if (!identity?.pubkey) {
     label.textContent = 'No identity'
     dot.className = 'header__identity-dot header__identity-dot--none'
@@ -187,10 +191,16 @@ export function updateIdentityDisplay(): void {
     return
   }
 
-  const shortPk = `${identity.pubkey.slice(0, 6)}\u2026${identity.pubkey.slice(-4)}`
-  const name = identity.displayName && identity.displayName !== 'You'
-    ? identity.displayName
-    : shortPk
+  // When a persona is active and exists in state, show its identity instead
+  const activePersona = activePersonaName ? personas[activePersonaName] : null
+  const shortPk = activePersona
+    ? `${activePersona.npub.slice(0, 8)}\u2026${activePersona.npub.slice(-4)}`
+    : `${identity.pubkey.slice(0, 6)}\u2026${identity.pubkey.slice(-4)}`
+  const name = activePersona
+    ? (activePersona.displayName ?? activePersona.name)
+    : (identity.displayName && identity.displayName !== 'You'
+      ? identity.displayName
+      : shortPk)
 
   label.textContent = name
 
