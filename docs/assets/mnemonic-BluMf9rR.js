@@ -1,1 +1,0 @@
-import{t as e}from"./mnemonic-Dq3gUHjf.js";import{a as t}from"./bip39-DvIKHvPh.js";export{e as restoreFromMnemonic,t as validateMnemonic};
