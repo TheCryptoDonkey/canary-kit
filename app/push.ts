@@ -90,3 +90,33 @@ export function shouldPromptForNotifications(): boolean {
   if (!('Notification' in window)) return false
   return Notification.permission === 'default'
 }
+
+/** True when push is fundamentally unavailable (e.g. iOS Safari not in PWA mode). */
+export function isPushUnavailable(): boolean {
+  return !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)
+}
+
+/** True when running as an installed PWA (standalone / fullscreen). */
+export function isStandalone(): boolean {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || (navigator as any).standalone === true
+}
+
+/** True on iOS (iPhone/iPad). */
+export function isIOS(): boolean {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+}
+
+/** True on macOS Safari (not Chrome/Firefox/etc). */
+export function isMacSafari(): boolean {
+  const ua = navigator.userAgent
+  return /Macintosh/.test(ua) && /Safari/.test(ua) && !/Chrome|Chromium|Firefox|Edg/.test(ua) && navigator.maxTouchPoints === 0
+}
+
+/**
+ * Should we show an "Add to Home Screen" prompt for push support?
+ * Only on iOS Safari when not already running as a PWA.
+ */
+export function shouldPromptAddToHomeScreen(): boolean {
+  return isIOS() && !isStandalone() && isPushUnavailable()
+}

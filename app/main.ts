@@ -461,7 +461,18 @@ function showCreateGroupModal(): void {
     }
     publishVaultNow()
     // Frictionless notification prompt after first group
-    import('./push.js').then(({ shouldPromptForNotifications, subscribeToPush, registerWithPushServer }) => {
+    import('./push.js').then(({ shouldPromptForNotifications, shouldPromptAddToHomeScreen, isMacSafari, subscribeToPush, registerWithPushServer }) => {
+      if (shouldPromptAddToHomeScreen()) {
+        // iOS Safari outside PWA — push is impossible, guide user
+        setTimeout(() => {
+          showAddToHomeScreenPrompt()
+        }, 1500)
+        return
+      }
+      if (isMacSafari() && !('Notification' in window)) {
+        console.info('[canary:push] Mac Safari without notification support — skipping prompt')
+        return
+      }
       if (!shouldPromptForNotifications()) return
       setTimeout(() => {
         showNotificationPrompt(async () => {
@@ -1648,6 +1659,35 @@ function showNotificationPrompt(onAccept: () => void): void {
   document.getElementById('app')?.appendChild(banner)
 
   accept.addEventListener('click', () => { banner.remove(); onAccept() })
+  dismiss.addEventListener('click', () => banner.remove())
+}
+
+function showAddToHomeScreenPrompt(): void {
+  const existing = document.getElementById('notification-prompt')
+  if (existing) existing.remove()
+
+  const banner = document.createElement('div')
+  banner.id = 'notification-prompt'
+  banner.className = 'notification-prompt'
+
+  const text = document.createElement('div')
+  text.className = 'notification-prompt__text'
+  const strong = document.createElement('strong')
+  strong.textContent = 'Add to Home Screen'
+  const desc = document.createElement('span')
+  desc.textContent = 'To receive emergency alerts and liveness reminders, add CANARY to your home screen. Tap the share button, then "Add to Home Screen".'
+  text.append(strong, desc)
+
+  const actions = document.createElement('div')
+  actions.className = 'notification-prompt__actions'
+  const dismiss = document.createElement('button')
+  dismiss.className = 'btn btn--sm'
+  dismiss.textContent = 'Got it'
+  actions.append(dismiss)
+
+  banner.append(text, actions)
+  document.getElementById('app')?.appendChild(banner)
+
   dismiss.addEventListener('click', () => banner.remove())
 }
 
