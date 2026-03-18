@@ -1,7 +1,7 @@
 // app/nostr/signer.ts — EventSigner implementations: NIP-07, local keypair, and group-derived identity
 
 import type { EventSigner } from 'canary-kit/sync'
-import { deriveGroupSigningKey } from 'canary-kit/sync'
+import type { Identity } from 'nsec-tree/core'
 import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools/pure'
 import { encrypt as nip44encrypt, decrypt as nip44decrypt, getConversationKey } from 'nostr-tools/nip44'
 
@@ -70,14 +70,20 @@ export class LocalKeySigner implements EventSigner {
 
 // ── Group Signer ───────────────────────────────────────────────
 
-/** Signs Nostr events using a per-group derived identity. Personal pubkey never appears on relays. */
+/**
+ * Signs Nostr events using an nsec-tree-derived group identity. Personal pubkey never appears on relays.
+ *
+ * Note: GroupSigner intentionally does NOT implement the full EventSigner interface
+ * (which includes encrypt/decrypt). Group signing keys are for event signing only —
+ * NIP-44 encryption uses the persona key or personal key, not the group signing key.
+ */
 export class GroupSigner {
   public readonly pubkey: string
   private readonly signingKey: Uint8Array
 
-  constructor(seedHex: string, personalPrivkeyHex: string) {
-    this.signingKey = deriveGroupSigningKey(seedHex, personalPrivkeyHex)
-    this.pubkey = getPublicKey(this.signingKey)
+  constructor(groupIdentity: Identity) {
+    this.signingKey = groupIdentity.privateKey
+    this.pubkey = bytesToHex(groupIdentity.publicKey)
   }
 
   async sign(event: unknown): Promise<unknown> {
