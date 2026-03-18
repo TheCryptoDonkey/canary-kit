@@ -1,3 +1,19 @@
+# [2.1.0](https://github.com/forgesworn/canary-kit/compare/v2.0.0...v2.1.0) (2026-03-18)
+
+
+### Features
+
+* add animated identity tree with CSS connecting lines ([1d718ca](https://github.com/forgesworn/canary-kit/commit/1d718caee64c2c509b244926e533b8ffa2891138))
+* add Identities view tab with routing and container ([85f81d8](https://github.com/forgesworn/canary-kit/commit/85f81d8f6bc74459660f432525187d94ac41ca08))
+* add linkage proof generation and verification ([401a5f6](https://github.com/forgesworn/canary-kit/commit/401a5f65c4d35f5ba4d2fc3c881e275e061d5763))
+* add nsec export modal with reveal, copy, QR, relay info ([b7e7508](https://github.com/forgesworn/canary-kit/commit/b7e7508d6fb5f98c1c32f07af5797290d6b696e1))
+* add persona card component with expand/collapse, profile editing, actions ([a96f59b](https://github.com/forgesworn/canary-kit/commit/a96f59b6cee2addeecb5c47f750b5692cf110c93))
+* add Shamir share recovery to login screen ([717368d](https://github.com/forgesworn/canary-kit/commit/717368d85d7a8b12df9fa0adf820d348c2d8d4d5))
+* add Shamir split modal for master mnemonic backup ([99babbe](https://github.com/forgesworn/canary-kit/commit/99babbe21b2986cd2036bffa9cde4a7036c8524f))
+* build identities view with master card, persona cards, tree, archive section ([9fcbb4b](https://github.com/forgesworn/canary-kit/commit/9fcbb4b5dcc040b0b489f628b5ad000eb883aaa9))
+* respect archived flag in persona picker, sidebar, and duress fan-out ([8208a62](https://github.com/forgesworn/canary-kit/commit/8208a62611ec71fd325f08b750f9763968c5db81))
+* use per-persona relay lists with global fallback in profile operations ([b93ac4e](https://github.com/forgesworn/canary-kit/commit/b93ac4e11f02c99de6c950b0ccd869a4e459d079))
+
 # [2.0.0](https://github.com/forgesworn/canary-kit/compare/v1.4.0...v2.0.0) (2026-03-18)
 
 
