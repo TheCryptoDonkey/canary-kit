@@ -14,6 +14,9 @@ import {
   bytesToHex,
   concatBytes,
 } from './crypto.js'
+import { deriveFromPersona } from 'nsec-tree/persona'
+import type { Persona } from 'nsec-tree/persona'
+import type { Identity } from 'nsec-tree/core'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -132,35 +135,25 @@ export async function decryptEnvelope(groupKey: Uint8Array, encoded: string): Pr
   return new TextDecoder().decode(plaintextBuf)
 }
 
-// ── Task 2: Per-group derived signing identity ────────────────────────────────
+// ── Group identity derivation (via nsec-tree) ───────────────────────────────
 
 /**
- * Derive a 32-byte signing key for a participant within a group.
+ * Derive a group signing identity from a persona.
  *
- * `HMAC-SHA256(hex_to_bytes(seed), utf8("canary:sync:sign:") || hex_to_bytes(personalPrivkey))`
+ * Uses nsec-tree's two-level derivation: persona → group.
+ * Purpose string: `canary:group:{groupId}`
+ * Index maps to group epoch — reseed increments epoch, producing fresh keys for all members.
  *
- * Binding the personal private key ensures that each participant's signing
- * identity is unique within the group, even across reseed events.
- *
- * @param seedHex - Group seed as a 64-character lowercase hex string (32 bytes).
- * @param personalPrivkeyHex - Participant's private key as a 64-character lowercase hex string.
- * @returns 32-byte signing key unique to this participant within this group epoch.
- * @throws {Error} If seedHex or personalPrivkeyHex are not valid 64-character hex strings.
+ * @param persona - The member's persona (from nsec-tree derivePersona).
+ * @param groupId - The group identifier string.
+ * @param epoch - Group epoch (0 = initial, increments on reseed).
+ * @returns nsec-tree Identity with signing key for this group.
  */
-export function deriveGroupSigningKey(seedHex: string, personalPrivkeyHex: string): Uint8Array {
-  validateSeedHex(seedHex)
-  if (!/^[0-9a-f]{64}$/.test(personalPrivkeyHex)) {
-    throw new Error('personalPrivkeyHex must be a 64-character lowercase hex string (32 bytes)')
-  }
-  const seedBytes = hexToBytes(seedHex)
-  const data = concatBytes(utf8('canary:sync:sign:'), hexToBytes(personalPrivkeyHex))
-  const result = hmacSha256(seedBytes, data)
-  // Zero intermediate buffers containing key material (defence-in-depth).
-  // JS strings are immutable so the hex inputs cannot be zeroed, but Uint8Arrays can.
-  seedBytes.fill(0)
-  data.fill(0)
-  return result
+export function deriveGroupIdentity(persona: Persona, groupId: string, epoch: number): Identity {
+  return deriveFromPersona(persona, `canary:group:${groupId}`, epoch)
 }
+
+export type { Persona, Identity }
 
 // ── Task 2: Hashed group tag ──────────────────────────────────────────────────
 

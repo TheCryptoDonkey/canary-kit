@@ -1,13 +1,16 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import {
   deriveGroupKey,
   encryptEnvelope,
   decryptEnvelope,
-  deriveGroupSigningKey,
+  deriveGroupIdentity,
   hashGroupTag,
 } from './sync-crypto.js'
 import { encodeSyncMessage, decodeSyncMessage, type SyncMessage } from './sync.js'
 import { randomSeed } from './crypto.js'
+import { fromNsec } from 'nsec-tree/core'
+import { derivePersona } from 'nsec-tree/persona'
+import type { Persona } from 'nsec-tree/persona'
 
 // ── Task 1: Group key derivation ─────────────────────────────────────────────
 
@@ -84,42 +87,51 @@ describe('encryptEnvelope / decryptEnvelope', () => {
 
 // ── Task 2: Per-group derived signing identity ────────────────────────────────
 
-describe('deriveGroupSigningKey', () => {
-  const seedHex = 'a'.repeat(64)
-  const otherSeedHex = 'b'.repeat(64)
-  const privkeyHex = 'c'.repeat(64)
-  const otherPrivkeyHex = 'd'.repeat(64)
+describe('deriveGroupIdentity', () => {
+  const TEST_KEY_BYTES = new Uint8Array(32).fill(1)
+  let persona: Persona
 
-  it('returns exactly 32 bytes', () => {
-    const key = deriveGroupSigningKey(seedHex, privkeyHex)
-    expect(key).toBeInstanceOf(Uint8Array)
-    expect(key.length).toBe(32)
+  beforeAll(() => {
+    const root = fromNsec(TEST_KEY_BYTES)
+    persona = derivePersona(root, 'personal')
+    root.destroy()
   })
 
-  it('is deterministic — same inputs always produce the same key', () => {
-    const key1 = deriveGroupSigningKey(seedHex, privkeyHex)
-    const key2 = deriveGroupSigningKey(seedHex, privkeyHex)
-    expect(Array.from(key1)).toEqual(Array.from(key2))
+  it('returns an Identity with npub and privateKey', () => {
+    const identity = deriveGroupIdentity(persona, 'family-2026', 0)
+    expect(identity.npub).toMatch(/^npub1/)
+    expect(identity.nsec).toMatch(/^nsec1/)
+    expect(identity.privateKey).toBeInstanceOf(Uint8Array)
+    expect(identity.privateKey.length).toBe(32)
+    expect(identity.publicKey).toBeInstanceOf(Uint8Array)
+    expect(identity.publicKey.length).toBe(32)
   })
 
-  it('different seeds produce different keys', () => {
-    const key1 = deriveGroupSigningKey(seedHex, privkeyHex)
-    const key2 = deriveGroupSigningKey(otherSeedHex, privkeyHex)
-    expect(Array.from(key1)).not.toEqual(Array.from(key2))
+  it('is deterministic', () => {
+    const id1 = deriveGroupIdentity(persona, 'family-2026', 0)
+    const id2 = deriveGroupIdentity(persona, 'family-2026', 0)
+    expect(id1.npub).toBe(id2.npub)
   })
 
-  it('different private keys produce different keys', () => {
-    const key1 = deriveGroupSigningKey(seedHex, privkeyHex)
-    const key2 = deriveGroupSigningKey(seedHex, otherPrivkeyHex)
-    expect(Array.from(key1)).not.toEqual(Array.from(key2))
+  it('different group IDs produce different identities', () => {
+    const id1 = deriveGroupIdentity(persona, 'family-2026', 0)
+    const id2 = deriveGroupIdentity(persona, 'meetup', 0)
+    expect(id1.npub).not.toBe(id2.npub)
   })
 
-  it('rejects non-64-hex private key', () => {
-    expect(() => deriveGroupSigningKey(seedHex, 'not-a-hex-key')).toThrow()
+  it('different epochs produce different identities', () => {
+    const epoch0 = deriveGroupIdentity(persona, 'family-2026', 0)
+    const epoch1 = deriveGroupIdentity(persona, 'family-2026', 1)
+    expect(epoch0.npub).not.toBe(epoch1.npub)
   })
 
-  it('rejects short hex private key', () => {
-    expect(() => deriveGroupSigningKey(seedHex, 'abcd')).toThrow()
+  it('different personas produce different group identities', () => {
+    const root = fromNsec(TEST_KEY_BYTES)
+    const bitcoiner = derivePersona(root, 'bitcoiner')
+    const fromPersonal = deriveGroupIdentity(persona, 'group-a', 0)
+    const fromBitcoiner = deriveGroupIdentity(bitcoiner, 'group-a', 0)
+    expect(fromPersonal.npub).not.toBe(fromBitcoiner.npub)
+    root.destroy()
   })
 })
 
@@ -217,10 +229,6 @@ describe('integration: encrypt sync message → decrypt → apply', () => {
 
   it('rejects uppercase seed in deriveGroupKey (security audit)', () => {
     expect(() => deriveGroupKey('A'.repeat(64))).toThrow('seedHex must be a 64-character')
-  })
-
-  it('rejects short seed in deriveGroupSigningKey (security audit)', () => {
-    expect(() => deriveGroupSigningKey('ab', 'c'.repeat(64))).toThrow('seedHex must be a 64-character')
   })
 
   it('rejects wrong-length AES key in encryptEnvelope (security audit)', async () => {

@@ -1,6 +1,7 @@
 // Transport-agnostic sync message protocol
 
-export { deriveGroupKey, deriveGroupSigningKey, hashGroupTag, encryptEnvelope, decryptEnvelope } from './sync-crypto.js'
+export { deriveGroupKey, deriveGroupIdentity, hashGroupTag, encryptEnvelope, decryptEnvelope } from './sync-crypto.js'
+export type { Persona, Identity } from './sync-crypto.js'
 
 import { bytesToHex, hexToBytes } from './crypto.js'
 import type { GroupState } from './group.js'
