@@ -106,15 +106,22 @@ export function createNewGroup(name: string, preset: PresetName, memberPubkey?: 
  * Clears `activeGroupId` if the deleted group was the active one.
  */
 export function deleteGroup(id: string): void {
-  const { groups, activeGroupId } = getState()
+  const { groups, activeGroupId, deletedGroupIds } = getState()
 
   const updated = { ...groups }
   delete updated[id]
 
+  // Record tombstone so vault merge doesn't resurrect this group
+  const tombstones = deletedGroupIds.includes(id) ? deletedGroupIds : [...deletedGroupIds, id]
+
   update({
     groups: updated,
     activeGroupId: activeGroupId === id ? null : activeGroupId,
+    deletedGroupIds: tombstones,
   })
+
+  // Publish vault immediately so the relay version reflects the deletion
+  document.dispatchEvent(new CustomEvent('canary:vault-publish-now'))
 }
 
 /**

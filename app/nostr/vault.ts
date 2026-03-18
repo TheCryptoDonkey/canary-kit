@@ -35,10 +35,11 @@ interface VaultPayloadV2 {
   personas: AppPersona[]
 }
 
-/** Result of deserialising a vault — groups plus personas. */
+/** Result of deserialising a vault — groups, personas, and tombstones. */
 export interface VaultData {
   groups: Record<string, AppGroup>
   personas: AppPersona[]
+  deletedGroupIds: string[]
 }
 
 /**
@@ -46,13 +47,17 @@ export interface VaultData {
  * Strips ephemeral fields (`lastPositions`) and resets `livenessCheckins`.
  * Produces a version 2 vault payload.
  */
-export function serialiseVault(groups: Record<string, AppGroup>, personas: AppPersona[] = []): string {
+export function serialiseVault(
+  groups: Record<string, AppGroup>,
+  personas: AppPersona[] = [],
+  deletedGroupIds: string[] = [],
+): string {
   const cleaned: Record<string, AppGroup> = {}
   for (const [key, group] of Object.entries(groups)) {
     const { lastPositions: _, ...rest } = group
     cleaned[key] = { ...rest, livenessCheckins: {} } as AppGroup
   }
-  const payload: VaultPayloadV2 = { version: 2, groups: cleaned, personas }
+  const payload = { version: 2, groups: cleaned, personas, deletedGroupIds }
   return JSON.stringify(payload)
 }
 
@@ -66,7 +71,7 @@ export function deserialiseVault(json: string): VaultData {
   try {
     const parsed = JSON.parse(json)
     if (!parsed || typeof parsed !== 'object' || typeof parsed.groups !== 'object' || parsed.groups === null) {
-      return { groups: {}, personas: [] }
+      return { groups: {}, personas: [], deletedGroupIds: [] }
     }
 
     // v2 — has version field set to 2
@@ -74,6 +79,7 @@ export function deserialiseVault(json: string): VaultData {
       return {
         groups: parsed.groups as Record<string, AppGroup>,
         personas: Array.isArray(parsed.personas) ? parsed.personas as AppPersona[] : [],
+        deletedGroupIds: Array.isArray(parsed.deletedGroupIds) ? parsed.deletedGroupIds : [],
       }
     }
 
@@ -84,9 +90,9 @@ export function deserialiseVault(json: string): VaultData {
         group.personaName = 'personal'
       }
     }
-    return { groups, personas: [] }
+    return { groups, personas: [], deletedGroupIds: [] }
   } catch {
-    return { groups: {}, personas: [] }
+    return { groups: {}, personas: [], deletedGroupIds: [] }
   }
 }
 
@@ -151,6 +157,7 @@ export async function publishVault(
   privkey: string,
   pubkey: string,
   personas: AppPersona[] = [],
+  deletedGroupIds: string[] = [],
 ): Promise<void> {
   const pool = getPool()
   if (!pool) throw new Error('No relay pool — connect first')
@@ -158,7 +165,7 @@ export async function publishVault(
   const writeRelays = getWriteRelayUrls()
   if (writeRelays.length === 0) throw new Error('No write relays configured')
 
-  const json = serialiseVault(groups, personas)
+  const json = serialiseVault(groups, personas, deletedGroupIds)
   const ciphertext = encryptVault(json, privkey, pubkey)
   const event = buildVaultEvent(ciphertext, privkey)
 
@@ -278,6 +285,7 @@ export async function publishVaultNip07(
   groups: Record<string, AppGroup>,
   pubkey: string,
   personas: AppPersona[] = [],
+  deletedGroupIds: string[] = [],
 ): Promise<void> {
   const pool = getPool()
   if (!pool) throw new Error('No relay pool — connect first')
@@ -286,7 +294,7 @@ export async function publishVaultNip07(
   const writeRelays = getWriteRelayUrls()
   if (writeRelays.length === 0) throw new Error('No write relays configured')
 
-  const json = serialiseVault(groups, personas)
+  const json = serialiseVault(groups, personas, deletedGroupIds)
   const ciphertext: string = await (window as any).nostr.nip44.encrypt(pubkey, json)
 
   const now = Math.floor(Date.now() / 1000)
@@ -477,10 +485,15 @@ export function unsubscribeFromVault(): void {
 export function mergeVaultGroups(
   local: Record<string, AppGroup>,
   vault: Record<string, AppGroup>,
+  deletedGroupIds: string[] = [],
 ): Record<string, AppGroup> {
   const merged: Record<string, AppGroup> = { ...local }
+  const tombstones = new Set(deletedGroupIds)
 
   for (const [id, vaultGroup] of Object.entries(vault)) {
+    // Skip groups the user intentionally deleted
+    if (tombstones.has(id)) continue
+
     const localGroup = local[id]
     if (!localGroup) {
       // Only in vault — add it

@@ -111,19 +111,19 @@ describe('deserialiseVault', () => {
   })
 
   it('returns empty groups and personas for invalid JSON', () => {
-    expect(deserialiseVault('not json')).toEqual({ groups: {}, personas: [] })
+    expect(deserialiseVault('not json')).toEqual({ groups: {}, personas: [], deletedGroupIds: [] })
   })
 
   it('returns empty groups and personas for null payload', () => {
-    expect(deserialiseVault('null')).toEqual({ groups: {}, personas: [] })
+    expect(deserialiseVault('null')).toEqual({ groups: {}, personas: [], deletedGroupIds: [] })
   })
 
   it('returns empty groups and personas for missing groups key', () => {
-    expect(deserialiseVault('{"version":1}')).toEqual({ groups: {}, personas: [] })
+    expect(deserialiseVault('{"version":1}')).toEqual({ groups: {}, personas: [], deletedGroupIds: [] })
   })
 
   it('returns empty groups and personas for non-object groups', () => {
-    expect(deserialiseVault('{"version":1,"groups":"nope"}')).toEqual({ groups: {}, personas: [] })
+    expect(deserialiseVault('{"version":1,"groups":"nope"}')).toEqual({ groups: {}, personas: [], deletedGroupIds: [] })
   })
 })
 

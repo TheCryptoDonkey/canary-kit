@@ -136,4 +136,6 @@ export interface AppState {
   settings: AppSettings
   personas: Record<string, AppPersona>
   activePersonaName: string | null
+  /** Group IDs that were intentionally deleted — prevents vault merge from resurrecting them. */
+  deletedGroupIds: string[]
 }

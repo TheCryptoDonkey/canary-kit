@@ -20,6 +20,7 @@ const DEFAULT_STATE: AppState = {
   },
   personas: {},
   activePersonaName: null,
+  deletedGroupIds: [],
 }
 
 // ── Internal state ─────────────────────────────────────────────

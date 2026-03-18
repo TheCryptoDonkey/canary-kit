@@ -1265,7 +1265,7 @@ function startLiveVaultSync(): void {
 
   subscribeToVault(identity.pubkey, decrypt, (vaultGroups, _count) => {
     const { groups: localGroups } = getState()
-    const merged = mergeVaultGroups(localGroups, vaultGroups)
+    const merged = mergeVaultGroups(localGroups, vaultGroups, getState().deletedGroupIds)
     const newCount = Object.keys(merged).length - Object.keys(localGroups).length
     const changed = newCount > 0 || Object.entries(merged).some(([id, g]) => {
       const local = localGroups[id]
@@ -1344,7 +1344,7 @@ async function bootSync(): Promise<void> {
       console.info('[canary:vault] Vault fetch result:', vaultGroups ? `${Object.keys(vaultGroups).length} group(s)` : 'null')
       if (vaultGroups && Object.keys(vaultGroups).length > 0) {
         const { groups: localGroups } = getState()
-        const merged = mergeVaultGroups(localGroups, vaultGroups)
+        const merged = mergeVaultGroups(localGroups, vaultGroups, getState().deletedGroupIds)
         // Check if anything actually changed
         const localKeys = Object.keys(localGroups).sort().join(',')
         const mergedKeys = Object.keys(merged).sort().join(',')
@@ -1413,7 +1413,7 @@ async function bootSync(): Promise<void> {
       console.info('[canary:vault] NIP-07 vault result:', vaultGroups ? `${Object.keys(vaultGroups).length} group(s)` : 'null')
       if (vaultGroups && Object.keys(vaultGroups).length > 0) {
         const { groups: localGroups } = getState()
-        const merged = mergeVaultGroups(localGroups, vaultGroups)
+        const merged = mergeVaultGroups(localGroups, vaultGroups, getState().deletedGroupIds)
         const stateChanged = Object.keys(merged).length !== Object.keys(localGroups).length ||
           Object.entries(merged).some(([id, g]) => {
             const local = localGroups[id]
@@ -1891,27 +1891,27 @@ function scheduleVaultPublish(): void {
 
   if (_vaultTimer) clearTimeout(_vaultTimer)
   _vaultTimer = setTimeout(() => {
-    const { identity: id, groups: g, personas: p } = getState()
+    const { identity: id, groups: g, personas: p, deletedGroupIds: d } = getState()
     if (!id?.pubkey || Object.keys(g).length === 0) return
     const personaArr = Object.values(p)
     if (id.privkey) {
-      publishVault(g, id.privkey, id.pubkey, personaArr)
+      publishVault(g, id.privkey, id.pubkey, personaArr, d)
     } else if (id.signerType === 'nip07') {
-      publishVaultNip07(g, id.pubkey, personaArr)
+      publishVaultNip07(g, id.pubkey, personaArr, d)
     }
   }, VAULT_DEBOUNCE_MS)
 }
 
 function publishVaultNow(): void {
   if (_vaultTimer) clearTimeout(_vaultTimer)
-  const { identity, groups, personas } = getState()
+  const { identity, groups, personas, deletedGroupIds } = getState()
   if (!identity?.pubkey || Object.keys(groups).length === 0) return
   const personaArr = Object.values(personas)
 
   const publish = identity.privkey
-    ? publishVault(groups, identity.privkey, identity.pubkey, personaArr)
+    ? publishVault(groups, identity.privkey, identity.pubkey, personaArr, deletedGroupIds)
     : identity.signerType === 'nip07'
-      ? publishVaultNip07(groups, identity.pubkey, personaArr)
+      ? publishVaultNip07(groups, identity.pubkey, personaArr, deletedGroupIds)
       : null
 
   publish
@@ -1945,11 +1945,12 @@ async function manualVaultSync(): Promise<void> {
   try {
     // Publish local state first so the other device can pick it up
     const personaArr = Object.values(personas)
+    const { deletedGroupIds } = getState()
     if (Object.keys(groups).length > 0) {
       if (isNip07) {
-        await publishVaultNip07(groups, identity.pubkey, personaArr)
+        await publishVaultNip07(groups, identity.pubkey, personaArr, deletedGroupIds)
       } else {
-        await publishVault(groups, identity.privkey!, identity.pubkey, personaArr)
+        await publishVault(groups, identity.privkey!, identity.pubkey, personaArr, deletedGroupIds)
       }
     }
 
@@ -1963,7 +1964,7 @@ async function manualVaultSync(): Promise<void> {
 
     if (vaultGroups && Object.keys(vaultGroups).length > 0) {
       const { groups: localGroups } = getState()
-      const merged = mergeVaultGroups(localGroups, vaultGroups)
+      const merged = mergeVaultGroups(localGroups, vaultGroups, getState().deletedGroupIds)
       const newCount = Object.keys(merged).length - Object.keys(localGroups).length
 
       update({ groups: merged })

@@ -458,6 +458,7 @@ export async function unlockAndRestoreState(pin: string): Promise<void> {
     settings,
     personas: {},
     activePersonaName: null,
+    deletedGroupIds: [],
   }
 
   setPinKey(key)
@@ -487,6 +488,7 @@ export function restoreState(): void {
     settings,
     personas: {},
     activePersonaName: null,
+    deletedGroupIds: [],
   }
 
   loadState(restored)
