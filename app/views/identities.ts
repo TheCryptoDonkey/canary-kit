@@ -593,6 +593,43 @@ function renderNip07Fallback(): string {
 
 // ── Render: Master card ──────────────────────────────────────
 
+function renderGroupSummary(): string {
+  const { groups, personas } = getState()
+  const groupList = Object.values(groups)
+  if (groupList.length === 0) return ''
+
+  // Group by persona
+  const byPersona = new Map<string, typeof groupList>()
+  for (const g of groupList) {
+    const key = g.personaName || '(unassigned)'
+    const list = byPersona.get(key) ?? []
+    list.push(g)
+    byPersona.set(key, list)
+  }
+
+  const rows: string[] = []
+  for (const [personaName, pGroups] of byPersona) {
+    const isUnassigned = personaName === '(unassigned)'
+    const isArchived = !isUnassigned && personas[personaName]?.archived
+    const label = isUnassigned
+      ? `<span style="color:var(--text-muted);font-style:italic;">unassigned</span>`
+      : `<span${isArchived ? ' style="opacity:0.5;"' : ''}>${escapeHtml(personaName)}</span>`
+    const chips = pGroups.map(g =>
+      `<button class="persona-card__group-chip" data-navigate-group="${escapeHtml(g.id)}">${escapeHtml(g.name)}</button>`
+    ).join(' ')
+    rows.push(`<div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.375rem;flex-wrap:wrap;">
+      <span style="font-size:0.75rem;min-width:5rem;">${label}</span>${chips}
+    </div>`)
+  }
+
+  return `
+    <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border);">
+      <h4 class="persona-card__section-title" style="margin-bottom:0.5rem;">Groups</h4>
+      ${rows.join('')}
+    </div>
+  `
+}
+
 function renderMasterCard(): string {
   const { identity, personas, groups } = getState()
   if (!identity) return ''
@@ -622,6 +659,7 @@ function renderMasterCard(): string {
         <div id="id-mnemonic" class="id-master__mnemonic${_backupRevealed ? ' id-master__mnemonic--revealed' : ''}">${escapeHtml(identity.mnemonic ?? '')}</div>
         <span class="id-master__mnemonic-hint">${_backupRevealed ? 'Click to hide' : 'Click to reveal recovery phrase'}</span>
       ` : ''}
+      ${renderGroupSummary()}
     </div>
   `
 }

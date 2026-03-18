@@ -1137,6 +1137,58 @@ function wireGlobalEvents(): void {
     showCallVerify(groupId, pubkey)
   })
 
+  // ── Identity view events ──────────────────────────────────────
+
+  document.addEventListener('canary:shamir-split', () => {
+    import('./components/shamir-modal.js').then(({ showShamirModal }) => {
+      showShamirModal()
+    })
+  })
+
+  document.addEventListener('canary:verify-proof', () => {
+    import('./components/linkage-proof.js').then(({ showVerifyProofModal }) => {
+      showVerifyProofModal()
+    })
+  })
+
+  document.addEventListener('canary:export-persona', (evt) => {
+    const { personaName } = (evt as CustomEvent<{ personaName: string }>).detail
+    const { personas } = getState()
+    const persona = personas[personaName]
+    if (!persona) return
+    import('./components/export-modal.js').then(({ showExportModal }) => {
+      showExportModal(persona)
+    })
+  })
+
+  document.addEventListener('canary:prove-ownership', (evt) => {
+    const { personaName } = (evt as CustomEvent<{ personaName: string }>).detail
+    import('./components/linkage-proof.js').then(({ showProveOwnershipModal }) => {
+      showProveOwnershipModal(personaName)
+    })
+  })
+
+  document.addEventListener('canary:archive-persona', (evt) => {
+    const { personaName } = (evt as CustomEvent<{ personaName: string }>).detail
+    const { personas } = getState()
+    const persona = personas[personaName]
+    if (!persona) return
+    update({ personas: { ...personas, [personaName]: { ...persona, archived: true } } })
+    showToast(`Archived "${personaName}"`, 'success')
+  })
+
+  document.addEventListener('canary:rotate-persona', (evt) => {
+    const { personaName } = (evt as CustomEvent<{ personaName: string }>).detail
+    import('./persona.js').then(({ rotatePersona }) => {
+      const { personas } = getState()
+      const persona = personas[personaName]
+      if (!persona) return
+      const rotated = rotatePersona(personaName, persona.index)
+      update({ personas: { ...personas, [personaName]: rotated } })
+      showToast(`Rotated "${personaName}" to index ${rotated.index}`, 'success')
+    })
+  })
+
   // Fired by the settings panel PIN toggle.
   document.addEventListener('canary:pin-enable', (evt) => {
     const pin = (evt as CustomEvent<{ pin: string }>).detail?.pin

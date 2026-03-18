@@ -4,6 +4,7 @@ import { getState, update } from '../state.js'
 import { escapeHtml } from '../utils/escape.js'
 import { personaColour } from './persona-picker.js'
 import { generateQR } from './qr.js'
+import { showToast } from './toast.js'
 import type { AppPersona, AppGroup } from '../types.js'
 
 // ── Module state ──────────────────────────────────────────────
@@ -357,6 +358,7 @@ export function wirePersonaCards(container: HTMLElement): void {
       const updated = { ...personas[name], readRelays, writeRelays }
       update({ personas: { ...personas, [name]: updated } })
       customRelayEditing.delete(name)
+      showToast(`Relays saved for "${name}"`, 'success')
       return
     }
 
@@ -416,6 +418,7 @@ export function wirePersonaCards(container: HTMLElement): void {
     }
 
     update({ personas: { ...personas, [name]: updated } })
+    showToast(`Profile saved for "${name}"`, 'success')
 
     // Hide publish button after saving
     const btn = card.querySelector<HTMLButtonElement>('[data-persona-publish]')

@@ -1,1 +1,0 @@
-import{n as e}from"./bip39-E3q2Lx2v.js";export{e as generateMnemonic};
