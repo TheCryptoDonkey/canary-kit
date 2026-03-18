@@ -35,21 +35,28 @@ interface VaultPayloadV2 {
   personas: AppPersona[]
 }
 
+interface VaultPayloadV3 {
+  version: 3
+  groups: Record<string, AppGroup>
+  personas: Record<string, AppPersona>
+  deletedGroupIds?: string[]
+}
+
 /** Result of deserialising a vault — groups, personas, and tombstones. */
 export interface VaultData {
   groups: Record<string, AppGroup>
-  personas: AppPersona[]
+  personas: Record<string, AppPersona>
   deletedGroupIds: string[]
 }
 
 /**
  * Serialise groups and personas to a JSON string suitable for vault storage.
  * Strips ephemeral fields (`lastPositions`) and resets `livenessCheckins`.
- * Produces a version 2 vault payload.
+ * Produces a version 3 vault payload with persona tree keyed by id.
  */
 export function serialiseVault(
   groups: Record<string, AppGroup>,
-  personas: AppPersona[] = [],
+  personas: Record<string, AppPersona> = {},
   deletedGroupIds: string[] = [],
 ): string {
   const cleaned: Record<string, AppGroup> = {}
@@ -57,42 +64,39 @@ export function serialiseVault(
     const { lastPositions: _, ...rest } = group
     cleaned[key] = { ...rest, livenessCheckins: {} } as AppGroup
   }
-  const payload = { version: 2, groups: cleaned, personas, deletedGroupIds }
+  const payload: VaultPayloadV3 = { version: 3, groups: cleaned, personas, deletedGroupIds }
   return JSON.stringify(payload)
 }
 
 /**
  * Deserialise a vault JSON string back into groups and personas.
- * Handles v1 vaults by defaulting all groups' `personaName` to `'personal'`
- * and returning an empty personas array.
+ * Only version 3 vaults are supported. Older versions return an error result
+ * so the caller can inform the user to update all devices.
  * Returns empty groups and personas on any parse failure.
  */
 export function deserialiseVault(json: string): VaultData {
   try {
     const parsed = JSON.parse(json)
     if (!parsed || typeof parsed !== 'object' || typeof parsed.groups !== 'object' || parsed.groups === null) {
-      return { groups: {}, personas: [], deletedGroupIds: [] }
+      return { groups: {}, personas: {}, deletedGroupIds: [] }
     }
 
-    // v2 — has version field set to 2
-    if (parsed.version === 2) {
+    // v3 — persona tree keyed by id, groups use personaId
+    if (parsed.version === 3) {
       return {
         groups: parsed.groups as Record<string, AppGroup>,
-        personas: Array.isArray(parsed.personas) ? parsed.personas as AppPersona[] : [],
+        personas: (parsed.personas && typeof parsed.personas === 'object' && !Array.isArray(parsed.personas))
+          ? parsed.personas as Record<string, AppPersona>
+          : {},
         deletedGroupIds: Array.isArray(parsed.deletedGroupIds) ? parsed.deletedGroupIds : [],
       }
     }
 
-    // v1 (or unversioned) — default personaName to 'personal'
-    const groups = parsed.groups as Record<string, AppGroup>
-    for (const group of Object.values(groups)) {
-      if (!group.personaName) {
-        group.personaName = 'personal'
-      }
-    }
-    return { groups, personas: [], deletedGroupIds: [] }
+    // v1/v2 or unversioned — outdated format
+    console.warn('[canary:vault] Vault format outdated (version:', parsed.version ?? 'none', ') — please update all devices')
+    return { groups: {}, personas: {}, deletedGroupIds: [] }
   } catch {
-    return { groups: {}, personas: [], deletedGroupIds: [] }
+    return { groups: {}, personas: {}, deletedGroupIds: [] }
   }
 }
 
@@ -156,7 +160,7 @@ export async function publishVault(
   groups: Record<string, AppGroup>,
   privkey: string,
   pubkey: string,
-  personas: AppPersona[] = [],
+  personas: Record<string, AppPersona> = {},
   deletedGroupIds: string[] = [],
 ): Promise<void> {
   const pool = getPool()
@@ -284,7 +288,7 @@ function hasNip07Nip44(): boolean {
 export async function publishVaultNip07(
   groups: Record<string, AppGroup>,
   pubkey: string,
-  personas: AppPersona[] = [],
+  personas: Record<string, AppPersona> = {},
   deletedGroupIds: string[] = [],
 ): Promise<void> {
   const pool = getPool()
@@ -421,7 +425,7 @@ let _lastVaultTimestamp = 0
 export function subscribeToVault(
   pubkey: string,
   decrypt: (ciphertext: string) => Promise<string | null>,
-  onMerge: (merged: Record<string, AppGroup>, newCount: number, personas: AppPersona[]) => void,
+  onMerge: (merged: Record<string, AppGroup>, newCount: number, personas: Record<string, AppPersona>) => void,
 ): void {
   unsubscribeFromVault()
 

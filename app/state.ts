@@ -19,7 +19,7 @@ const DEFAULT_STATE: AppState = {
     defaultWriteRelays: [DEFAULT_WRITE_RELAY],
   },
   personas: {},
-  activePersonaName: null,
+  activePersonaId: null,
   deletedGroupIds: [],
 }
 

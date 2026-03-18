@@ -1,6 +1,6 @@
 // app/persona.test.ts — Persona module tests (TDD)
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure'
 import { bytesToHex } from 'nostr-tools/utils'
 import type { AppIdentity } from './types.js'
@@ -13,6 +13,7 @@ import {
   rotatePersona,
   destroyPersonas,
 } from './persona.js'
+import { getState, update } from './state.js'
 
 /** Create a local identity from a fresh keypair. */
 function localIdentity(): AppIdentity {
@@ -40,6 +41,8 @@ describe('persona module', () => {
   afterEach(() => {
     // Clean up after each test
     if (isPersonasInitialised()) destroyPersonas()
+    // Reset state personas
+    update({ personas: {} })
   })
 
   describe('initPersonas', () => {
@@ -50,23 +53,25 @@ describe('persona module', () => {
       expect(isPersonasInitialised()).toBe(true)
     })
 
-    it('derives personas for provided custom names', () => {
+    it('derives personas for provided custom names, keyed by id', () => {
       const identity = localIdentity()
       const personas = initPersonas(identity, ['personal', 'bitcoiner'])
 
-      const names = Object.keys(personas)
-      expect(names).toHaveLength(2)
-      expect(names).toContain('personal')
-      expect(names).toContain('bitcoiner')
+      const entries = Object.values(personas)
+      expect(entries).toHaveLength(2)
 
-      for (const [name, p] of Object.entries(personas)) {
-        expect(p.name).toBe(name)
+      const names = entries.map(p => p.name).sort()
+      expect(names).toEqual(['bitcoiner', 'personal'])
+
+      for (const p of entries) {
+        expect(p.id).toMatch(/^[a-z0-9]{8}$/)
         expect(p.index).toBe(0)
         expect(p.npub).toMatch(/^npub1[a-z0-9]+$/)
+        expect(p.children).toEqual({})
       }
     })
 
-    it('is deterministic — same privkey produces same personas', () => {
+    it('is deterministic — same privkey produces same npubs', () => {
       const identity = fixedIdentity()
       const names = ['personal', 'bitcoiner']
 
@@ -74,11 +79,9 @@ describe('persona module', () => {
       destroyPersonas()
       const second = initPersonas(identity, names)
 
-      // Same npubs for every persona name
-      for (const name of Object.keys(first)) {
-        expect(second[name]).toBeDefined()
-        expect(second[name].npub).toBe(first[name].npub)
-      }
+      const firstNpubs = Object.values(first).map(p => p.npub).sort()
+      const secondNpubs = Object.values(second).map(p => p.npub).sort()
+      expect(firstNpubs).toEqual(secondNpubs)
     })
 
     it('returns empty for NIP-07 identity (no privkey)', () => {
@@ -93,20 +96,26 @@ describe('persona module', () => {
     it('includes custom personas when customNames provided', () => {
       const identity = localIdentity()
       const personas = initPersonas(identity, ['burner', 'alias'])
+      const entries = Object.values(personas)
 
-      expect(personas['burner']).toBeDefined()
-      expect(personas['burner'].npub).toMatch(/^npub1/)
-      expect(personas['alias']).toBeDefined()
-      expect(personas['alias'].npub).toMatch(/^npub1/)
+      const burner = entries.find(p => p.name === 'burner')
+      expect(burner).toBeDefined()
+      expect(burner!.npub).toMatch(/^npub1/)
+
+      const alias = entries.find(p => p.name === 'alias')
+      expect(alias).toBeDefined()
+      expect(alias!.npub).toMatch(/^npub1/)
     })
   })
 
   describe('getGroupIdentity', () => {
     it('returns Identity with npub and privateKey', () => {
       const identity = localIdentity()
-      initPersonas(identity, ['personal', 'bitcoiner', 'work'])
+      const personas = initPersonas(identity, ['personal', 'bitcoiner', 'work'])
+      update({ personas })
 
-      const groupIdentity = getGroupIdentity('personal', 'group-abc', 0)
+      const personalId = Object.values(personas).find(p => p.name === 'personal')!.id
+      const groupIdentity = getGroupIdentity(personalId, 'group-abc', 0)
       expect(groupIdentity.npub).toMatch(/^npub1/)
       expect(groupIdentity.privateKey).toBeInstanceOf(Uint8Array)
       expect(groupIdentity.privateKey.length).toBe(32)
@@ -114,42 +123,51 @@ describe('persona module', () => {
 
     it('different groups produce different identities', () => {
       const identity = localIdentity()
-      initPersonas(identity, ['personal', 'bitcoiner', 'work'])
+      const personas = initPersonas(identity, ['personal', 'bitcoiner', 'work'])
+      update({ personas })
 
-      const id1 = getGroupIdentity('personal', 'group-a', 0)
-      const id2 = getGroupIdentity('personal', 'group-b', 0)
+      const personalId = Object.values(personas).find(p => p.name === 'personal')!.id
+      const id1 = getGroupIdentity(personalId, 'group-a', 0)
+      const id2 = getGroupIdentity(personalId, 'group-b', 0)
       expect(id1.npub).not.toBe(id2.npub)
     })
 
     it('different personas produce different identities for the same group', () => {
       const identity = localIdentity()
-      initPersonas(identity, ['personal', 'bitcoiner', 'work'])
+      const personas = initPersonas(identity, ['personal', 'bitcoiner', 'work'])
+      update({ personas })
 
-      const id1 = getGroupIdentity('personal', 'group-x', 0)
-      const id2 = getGroupIdentity('work', 'group-x', 0)
+      const personalId = Object.values(personas).find(p => p.name === 'personal')!.id
+      const workId = Object.values(personas).find(p => p.name === 'work')!.id
+      const id1 = getGroupIdentity(personalId, 'group-x', 0)
+      const id2 = getGroupIdentity(workId, 'group-x', 0)
       expect(id1.npub).not.toBe(id2.npub)
     })
   })
 
   describe('createPersona', () => {
-    it('creates a custom persona at index 0', () => {
+    it('creates a custom persona at index 0 with id and children', () => {
       const identity = localIdentity()
-      initPersonas(identity, ['personal', 'bitcoiner', 'work'])
+      const personas = initPersonas(identity, ['personal'])
+      update({ personas })
 
       const persona = createPersona('stealth')
       expect(persona.name).toBe('stealth')
       expect(persona.index).toBe(0)
       expect(persona.npub).toMatch(/^npub1/)
+      expect(persona.id).toMatch(/^[a-z0-9]{8}$/)
+      expect(persona.children).toEqual({})
     })
   })
 
   describe('rotatePersona', () => {
     it('increments index and produces a new npub', () => {
       const identity = localIdentity()
-      initPersonas(identity, ['personal', 'bitcoiner', 'work'])
+      const personas = initPersonas(identity, ['personal'])
+      update({ personas })
 
-      const original = createPersona('rotate-test')
-      const rotated = rotatePersona('rotate-test', original.index)
+      const original = Object.values(personas).find(p => p.name === 'personal')!
+      const rotated = rotatePersona(original.id, original.index)
 
       expect(rotated.index).toBe(original.index + 1)
       expect(rotated.npub).toMatch(/^npub1/)

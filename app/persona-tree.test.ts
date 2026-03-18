@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { walkTree, findById, generatePersonaId } from './persona-tree.js'
-import type { TreePersona } from './persona-tree.js'
+import type { AppPersona } from './types.js'
 
-function makePersona(id: string, name: string, children: Record<string, TreePersona> = {}): TreePersona {
+function makePersona(id: string, name: string, children: Record<string, AppPersona> = {}): AppPersona {
   return { id, name, index: 0, npub: `npub-${id}`, children }
 }
 

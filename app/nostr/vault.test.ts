@@ -54,7 +54,7 @@ describe('serialiseVault', () => {
     const groups = { g1: makeGroup() }
     const json = serialiseVault(groups)
     const parsed = JSON.parse(json)
-    expect(parsed.version).toBe(2)
+    expect(parsed.version).toBe(3)
   })
 
   it('strips lastPositions from groups', () => {
@@ -94,9 +94,9 @@ describe('serialiseVault', () => {
   it('handles empty groups object', () => {
     const json = serialiseVault({})
     const parsed = JSON.parse(json)
-    expect(parsed.version).toBe(2)
+    expect(parsed.version).toBe(3)
     expect(parsed.groups).toEqual({})
-    expect(parsed.personas).toEqual([])
+    expect(parsed.personas).toEqual({})
   })
 })
 
@@ -107,23 +107,23 @@ describe('deserialiseVault', () => {
     const result = deserialiseVault(json)
     expect(result.groups.g1.name).toBe('Test Group')
     expect(result.groups.g1.counter).toBe(42)
-    expect(result.personas).toEqual([])
+    expect(result.personas).toEqual({})
   })
 
   it('returns empty groups and personas for invalid JSON', () => {
-    expect(deserialiseVault('not json')).toEqual({ groups: {}, personas: [], deletedGroupIds: [] })
+    expect(deserialiseVault('not json')).toEqual({ groups: {}, personas: {}, deletedGroupIds: [] })
   })
 
   it('returns empty groups and personas for null payload', () => {
-    expect(deserialiseVault('null')).toEqual({ groups: {}, personas: [], deletedGroupIds: [] })
+    expect(deserialiseVault('null')).toEqual({ groups: {}, personas: {}, deletedGroupIds: [] })
   })
 
   it('returns empty groups and personas for missing groups key', () => {
-    expect(deserialiseVault('{"version":1}')).toEqual({ groups: {}, personas: [], deletedGroupIds: [] })
+    expect(deserialiseVault('{"version":1}')).toEqual({ groups: {}, personas: {}, deletedGroupIds: [] })
   })
 
   it('returns empty groups and personas for non-object groups', () => {
-    expect(deserialiseVault('{"version":1,"groups":"nope"}')).toEqual({ groups: {}, personas: [], deletedGroupIds: [] })
+    expect(deserialiseVault('{"version":1,"groups":"nope"}')).toEqual({ groups: {}, personas: {}, deletedGroupIds: [] })
   })
 })
 

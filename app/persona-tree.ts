@@ -1,22 +1,14 @@
 // app/persona-tree.ts — Tree utilities for hierarchical personas
 
-/** Minimal persona shape needed for tree operations. Matches future AppPersona. */
-export interface TreePersona {
-  id: string
-  name: string
-  index: number
-  npub: string
-  children: Record<string, TreePersona>
-  [key: string]: unknown
-}
+import type { AppPersona } from './types.js'
 
 /**
  * Yield every persona in depth-first order with its ancestor chain.
  */
 export function* walkTree(
-  personas: Record<string, TreePersona>,
-  ancestors: TreePersona[] = [],
-): Generator<{ persona: TreePersona; ancestors: TreePersona[] }> {
+  personas: Record<string, AppPersona>,
+  ancestors: AppPersona[] = [],
+): Generator<{ persona: AppPersona; ancestors: AppPersona[] }> {
   for (const persona of Object.values(personas)) {
     yield { persona, ancestors }
     if (persona.children && Object.keys(persona.children).length > 0) {
@@ -30,16 +22,30 @@ export function* walkTree(
  * Returns the persona and its ancestor chain, or null if not found.
  */
 export function findById(
-  personas: Record<string, TreePersona>,
+  personas: Record<string, AppPersona>,
   id: string,
-  ancestors: TreePersona[] = [],
-): { persona: TreePersona; ancestors: TreePersona[] } | null {
+  ancestors: AppPersona[] = [],
+): { persona: AppPersona; ancestors: AppPersona[] } | null {
   for (const persona of Object.values(personas)) {
     if (persona.id === id) return { persona, ancestors }
     if (persona.children && Object.keys(persona.children).length > 0) {
       const found = findById(persona.children, id, [...ancestors, persona])
       if (found) return found
     }
+  }
+  return null
+}
+
+/**
+ * Find a persona by name at the root level only (backwards compat).
+ * Returns the persona or null if not found.
+ */
+export function findByName(
+  personas: Record<string, AppPersona>,
+  name: string,
+): AppPersona | null {
+  for (const persona of Object.values(personas)) {
+    if (persona.name === name) return persona
   }
   return null
 }

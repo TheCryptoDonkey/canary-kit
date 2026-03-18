@@ -1,8 +1,7 @@
-// app/nostr/vault-migration.test.ts — Tests for vault v1 → v2 migration
+// app/nostr/vault-migration.test.ts — Tests for vault v3 format
 import { describe, it, expect } from 'vitest'
 import { serialiseVault, deserialiseVault } from './vault.js'
-import type { AppGroup } from '../types.js'
-import type { AppPersona } from '../types.js'
+import type { AppGroup, AppPersona } from '../types.js'
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -27,35 +26,54 @@ function makeGroup(overrides: Partial<AppGroup> = {}): AppGroup {
     beaconPrecision: 5,
     usedInvites: [],
     latestInviteIssuedAt: 0,
-    personaName: 'ops',
+    personaId: 'p1',
     ...overrides,
   } as AppGroup
 }
 
-const testPersona: AppPersona = {
-  name: 'ops',
-  index: 1,
-  npub: 'npub1' + 'a'.repeat(58),
-  displayName: 'Ops Identity',
+function makePersona(id: string, name: string): AppPersona {
+  return {
+    id,
+    name,
+    index: 1,
+    npub: 'npub1' + 'a'.repeat(58),
+    children: {},
+    displayName: `${name} Identity`,
+  }
 }
 
-// ── v2 Migration Tests ──────────────────────────────────────────
+// ── v3 Format Tests ──────────────────────────────────────────────
 
-describe('vault v2 migration', () => {
-  it('serialises with version 2 and personas array', () => {
+describe('vault v3 format', () => {
+  it('serialises with version 3 and persona record keyed by id', () => {
     const groups = { g1: makeGroup() }
-    const json = serialiseVault(groups, [testPersona])
+    const personas: Record<string, AppPersona> = { p1: makePersona('p1', 'ops') }
+    const json = serialiseVault(groups, personas)
     const parsed = JSON.parse(json)
 
-    expect(parsed.version).toBe(2)
-    expect(parsed.personas).toHaveLength(1)
-    expect(parsed.personas[0].name).toBe('ops')
-    expect(parsed.personas[0].index).toBe(1)
-    expect(parsed.groups.g1.personaName).toBe('ops')
+    expect(parsed.version).toBe(3)
+    expect(parsed.personas.p1).toBeDefined()
+    expect(parsed.personas.p1.name).toBe('ops')
+    expect(parsed.personas.p1.id).toBe('p1')
+    expect(parsed.groups.g1.personaId).toBe('p1')
   })
 
-  it('deserialises v1 vault — defaults personaName to personal', () => {
-    // Simulate a v1 vault payload (version: 1, no personas, no personaName on groups)
+  it('deserialises v3 vault — preserves personaId and personas', () => {
+    const groups = { g1: makeGroup({ personaId: 'p2' }) }
+    const personas: Record<string, AppPersona> = {
+      p2: makePersona('p2', 'field-ops'),
+      p3: makePersona('p3', 'personal'),
+    }
+    const json = serialiseVault(groups, personas)
+    const result = deserialiseVault(json)
+
+    expect(result.groups.g1.personaId).toBe('p2')
+    expect(Object.keys(result.personas)).toHaveLength(2)
+    expect(result.personas.p2.name).toBe('field-ops')
+    expect(result.personas.p3.name).toBe('personal')
+  })
+
+  it('rejects v1 vault — returns empty', () => {
     const v1Json = JSON.stringify({
       version: 1,
       groups: {
@@ -64,52 +82,42 @@ describe('vault v2 migration', () => {
           name: 'Old Group',
           seed: 'b'.repeat(64),
           members: ['1'.repeat(64)],
-          admins: ['1'.repeat(64)],
-          counter: 5,
-          epoch: 1,
-          nostrEnabled: true,
-          relays: [],
-          readRelays: [],
-          writeRelays: [],
-          encodingFormat: 'words',
-          tolerance: 1,
-          livenessInterval: 3600,
-          livenessCheckins: {},
-          beaconPrecision: 5,
-          usedInvites: [],
-          latestInviteIssuedAt: 0,
-          // No personaName — v1 vaults lack this field
+          personaName: 'personal',
         },
       },
     })
 
     const result = deserialiseVault(v1Json)
-
-    expect(result.groups.g1.personaName).toBe('personal')
-    expect(result.personas).toEqual([])
-    expect(result.groups.g1.name).toBe('Old Group')
+    expect(result.groups).toEqual({})
+    expect(result.personas).toEqual({})
   })
 
-  it('deserialises v2 vault — preserves personaName and personas', () => {
-    const groups = { g1: makeGroup({ personaName: 'field-ops' }) }
-    const personas: AppPersona[] = [
-      { name: 'field-ops', index: 2, npub: 'npub1' + 'b'.repeat(58) },
-      { name: 'personal', index: 0, npub: 'npub1' + 'c'.repeat(58) },
-    ]
-    const json = serialiseVault(groups, personas)
-    const result = deserialiseVault(json)
+  it('rejects v2 vault — returns empty', () => {
+    const v2Json = JSON.stringify({
+      version: 2,
+      groups: { g1: { id: 'g1', name: 'V2 Group', personaName: 'test' } },
+      personas: [{ name: 'test', index: 0, npub: 'npub1test' }],
+    })
 
-    expect(result.groups.g1.personaName).toBe('field-ops')
-    expect(result.personas).toHaveLength(2)
-    expect(result.personas[0].name).toBe('field-ops')
-    expect(result.personas[1].name).toBe('personal')
+    const result = deserialiseVault(v2Json)
+    expect(result.groups).toEqual({})
+    expect(result.personas).toEqual({})
+  })
+
+  it('rejects unversioned vault — returns empty', () => {
+    const json = JSON.stringify({
+      groups: { g1: { id: 'g1', name: 'Ancient Group' } },
+    })
+
+    const result = deserialiseVault(json)
+    expect(result.groups).toEqual({})
+    expect(result.personas).toEqual({})
   })
 
   it('handles malformed JSON gracefully', () => {
     const result = deserialiseVault('{broken json!!!')
-
     expect(result.groups).toEqual({})
-    expect(result.personas).toEqual([])
+    expect(result.personas).toEqual({})
   })
 
   it('serialises with empty personas when none provided', () => {
@@ -117,32 +125,37 @@ describe('vault v2 migration', () => {
     const json = serialiseVault(groups)
     const parsed = JSON.parse(json)
 
-    expect(parsed.version).toBe(2)
-    expect(parsed.personas).toEqual([])
+    expect(parsed.version).toBe(3)
+    expect(parsed.personas).toEqual({})
   })
 
-  it('handles v2 vault with missing personas array', () => {
-    // Edge case: version 2 but personas field is missing
+  it('handles v3 vault with missing personas field', () => {
     const json = JSON.stringify({
-      version: 2,
-      groups: { g1: { id: 'g1', name: 'Edge', personaName: 'test' } },
+      version: 3,
+      groups: { g1: { id: 'g1', name: 'Edge', personaId: 'p1' } },
     })
     const result = deserialiseVault(json)
 
-    expect(result.groups.g1.personaName).toBe('test')
-    expect(result.personas).toEqual([])
+    expect(result.groups.g1.personaId).toBe('p1')
+    expect(result.personas).toEqual({})
   })
 
-  it('handles unversioned vault as v1', () => {
-    // Very old vault with no version field at all
-    const json = JSON.stringify({
-      groups: {
-        g1: { id: 'g1', name: 'Ancient Group' },
-      },
-    })
+  it('preserves deletedGroupIds in v3', () => {
+    const groups = { g1: makeGroup() }
+    const json = serialiseVault(groups, {}, ['old-group-1', 'old-group-2'])
     const result = deserialiseVault(json)
 
-    expect(result.groups.g1.personaName).toBe('personal')
-    expect(result.personas).toEqual([])
+    expect(result.deletedGroupIds).toEqual(['old-group-1', 'old-group-2'])
+  })
+
+  it('preserves nested children in persona tree', () => {
+    const child = makePersona('c1', 'client-a')
+    const parent = { ...makePersona('p1', 'work'), children: { c1: child } }
+    const personas: Record<string, AppPersona> = { p1: parent }
+    const json = serialiseVault({ g1: makeGroup() }, personas)
+    const result = deserialiseVault(json)
+
+    expect(result.personas.p1.children.c1).toBeDefined()
+    expect(result.personas.p1.children.c1.name).toBe('client-a')
   })
 })
