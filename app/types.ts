@@ -101,6 +101,9 @@ export interface AppPersona {
   displayName?: string
   picture?: string
   about?: string
+  readRelays?: string[]
+  writeRelays?: string[]
+  archived?: boolean
 }
 
 /** The local identity (Nostr keypair) for this device. */
@@ -129,7 +132,7 @@ export interface AppSettings {
 
 /** Root application state. */
 export interface AppState {
-  view: 'groups' | 'call-demo'
+  view: 'groups' | 'call-demo' | 'identities'
   groups: Record<string, AppGroup>
   activeGroupId: string | null
   identity: AppIdentity | null

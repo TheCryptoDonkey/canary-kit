@@ -57,6 +57,7 @@ export function renderHeader(container: HTMLElement): void {
     <nav class="header__nav" id="header-nav">
       <button class="header__nav-tab${view === 'groups' ? ' header__nav-tab--active' : ''}" data-view="groups">Groups</button>
       <button class="header__nav-tab${view === 'call-demo' ? ' header__nav-tab--active' : ''}" data-view="call-demo">Call Demo</button>
+      <button class="header__nav-tab${view === 'identities' ? ' header__nav-tab--active' : ''}" data-view="identities">Identities</button>
     </nav>
     ${renderPersonaPicker()}
     <div class="header__actions">
@@ -116,7 +117,7 @@ export function renderHeader(container: HTMLElement): void {
   nav?.addEventListener('click', (e) => {
     const tab = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-view]')
     if (!tab) return
-    const targetView = tab.dataset.view as 'groups' | 'call-demo'
+    const targetView = tab.dataset.view as 'groups' | 'call-demo' | 'identities'
     if (!targetView) return
 
     // On mobile, the Groups tab also toggles the sidebar

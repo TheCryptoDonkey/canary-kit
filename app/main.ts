@@ -32,6 +32,7 @@ import { renderBeacons, handleIncomingBeacon, cleanupBeacons } from './panels/be
 import { renderLiveness } from './panels/liveness.js'
 import { renderSettings } from './panels/settings.js'
 import { renderCallSimulation, destroyCallSimulation } from './views/call-simulation.js'
+import { renderIdentities } from './views/identities.js'
 import { showCallVerify } from './components/call-verify.js'
 import { assertRemoteInviteToken, decryptWelcomeEnvelope } from './crypto/remote-invite.js'
 import { sendJoinRequest, fetchInviteToken } from './nostr/invite-relay.js'
@@ -294,6 +295,8 @@ function buildShell(): void {
       </main>
     </div>
 
+    <div id="identities-view" style="display:none"></div>
+
     <footer class="app-footer" id="app-footer">
       <button class="app-footer__sync" id="footer-sync-btn">Sync Groups</button>
       <span class="app-footer__sep">&middot;</span>
@@ -363,9 +366,11 @@ function render(): void {
 
   const groupsView = document.getElementById('groups-view')
   const callDemoView = document.getElementById('call-demo-view')
+  const identitiesView = document.getElementById('identities-view')
 
   if (groupsView) groupsView.hidden = view !== 'groups'
   if (callDemoView) callDemoView.hidden = view !== 'call-demo'
+  if (identitiesView) identitiesView.style.display = view === 'identities' ? '' : 'none'
 
   // Re-render header (tab active state)
   const header = document.getElementById('header')
@@ -420,6 +425,10 @@ function render(): void {
   } else if (view === 'call-demo') {
     const callContainer = document.getElementById('call-simulation-container')
     if (callContainer) renderCallSimulation(callContainer)
+  } else if (view === 'identities') {
+    destroyCallSimulation()
+    const identitiesContainer = document.getElementById('identities-view')
+    if (identitiesContainer) renderIdentities(identitiesContainer)
   }
 }
 
