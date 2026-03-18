@@ -3,6 +3,7 @@
 import type { SyncTransport, SyncMessage } from 'canary-kit/sync'
 import { applySyncMessage, FIRE_AND_FORGET_FRESHNESS_SEC } from 'canary-kit/sync'
 import { getState, updateGroup } from './state.js'
+import { getGroupIdentity, isPersonasInitialised } from './persona.js'
 import { connectRelays, isConnected, getRelayCount, waitForConnection } from './nostr/connect.js'
 import { GroupSigner } from './nostr/signer.js'
 import { NostrSyncTransport } from './nostr/adapter.js'
@@ -123,7 +124,9 @@ export function reRegisterGroup(groupId: string): void {
   if (!identity?.privkey || !group?.seed) return
 
   _transport.unregisterGroup(groupId)
-  const signer = new GroupSigner(group.seed, identity.privkey)
+  if (!isPersonasInitialised()) return // NIP-07 or not yet initialised
+  const groupIdentity = getGroupIdentity(group.personaName ?? 'personal', groupId, group.epoch)
+  const signer = new GroupSigner(groupIdentity)
   _transport.registerGroup(groupId, group.seed, signer, group.members, _recoveryOptions(groupId))
 }
 
@@ -222,7 +225,9 @@ export function subscribeToGroup(groupId: string): void {
     const { identity, groups } = getState()
     const group = groups[groupId]
     if (identity?.privkey && group?.seed) {
-      const signer = new GroupSigner(group.seed, identity.privkey)
+      if (!isPersonasInitialised()) return // NIP-07 or not yet initialised
+      const groupIdentity = getGroupIdentity(group.personaName ?? 'personal', groupId, group.epoch)
+      const signer = new GroupSigner(groupIdentity)
       ;(_transport as NostrSyncTransport).registerGroup(groupId, group.seed, signer, group.members, _recoveryOptions(groupId))
     }
   }
