@@ -272,7 +272,7 @@ export function decodeSyncMessage(payload: string): SyncMessage {
       return {
         type, seed: hexToBytes(parsed.seed), counter: parsed.counter, timestamp: ts,
         epoch: parsed.epoch, opId: parsed.opId,
-        admins: [...parsed.admins], members: [...parsed.members],
+        admins: [...parsed.admins as string[]], members: [...parsed.members as string[]],
         protocolVersion: PROTOCOL_VERSION,
       }
 
@@ -358,8 +358,8 @@ export function decodeSyncMessage(payload: string): SyncMessage {
       }
       return {
         type, seed: parsed.seed, counter: parsed.counter,
-        usageOffset: parsed.usageOffset, members: [...parsed.members],
-        admins: [...parsed.admins], epoch: parsed.epoch,
+        usageOffset: parsed.usageOffset, members: [...parsed.members as string[]],
+        admins: [...parsed.admins as string[]], epoch: parsed.epoch,
         opId: parsed.opId, timestamp: ts,
         ...(parsed.prevEpochSeed !== undefined ? { prevEpochSeed: parsed.prevEpochSeed } : {}),
         protocolVersion: PROTOCOL_VERSION,
