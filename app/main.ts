@@ -273,6 +273,8 @@ function buildShell(): void {
     </div>
 
     <footer class="app-footer" id="app-footer">
+      <button class="app-footer__sync" id="footer-sync-btn">Sync Groups</button>
+      <span class="app-footer__sep">&middot;</span>
       <span class="app-footer__version">CANARY v${__APP_VERSION__}</span>
     </footer>
   `
@@ -1625,6 +1627,11 @@ async function bootApp(): Promise<void> {
   if (header) renderHeader(header)
 
   wireSidebarToggle()
+
+  document.getElementById('footer-sync-btn')?.addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('canary:sync-vault'))
+  })
+
   render()
   subscribe(scheduleRender)
   subscribe(scheduleVaultPublish)

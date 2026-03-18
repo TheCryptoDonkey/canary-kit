@@ -260,6 +260,29 @@ body::after {
   z-index: 2;
 }
 
+.app-footer__sync {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.app-footer__sync:hover {
+  color: var(--amber-400);
+}
+
+.app-footer__sep {
+  color: var(--text-muted);
+  opacity: 0.4;
+  margin: 0 0.5rem;
+}
+
 .app-footer__version {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
