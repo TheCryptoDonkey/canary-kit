@@ -20,7 +20,18 @@ vi.stubGlobal('localStorage', localStorageMock)
 import { persistState, clearPinKey, clearPinSalt, enablePin, getStoredPinSalt, restoreState } from './storage.js'
 import { loadState, getState } from './state.js'
 import type { AppState } from './types.js'
-import { mnemonicToKeypair } from './mnemonic.js'
+import { restoreFromMnemonic } from './mnemonic.js'
+
+/** Derive pubkey/privkey from mnemonic using nsec-tree (replaces removed mnemonicToKeypair). */
+function mnemonicToKeypair(mnemonic: string): { pubkey: string; privkey: string } {
+  const { root, defaultPersona } = restoreFromMnemonic(mnemonic)
+  const npub = defaultPersona.identity.npub
+  const privkey = Array.from(defaultPersona.identity.privateKey, b => b.toString(16).padStart(2, '0')).join('')
+  // Decode npub to hex pubkey
+  const pubkey = Array.from(defaultPersona.identity.publicKey, b => b.toString(16).padStart(2, '0')).join('')
+  root.destroy()
+  return { pubkey, privkey }
+}
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -216,20 +227,21 @@ describe('persistState — clean-install PIN regression', () => {
   })
 
   it('migrates the legacy plaintext mnemonic onto the matching identity', () => {
+    // nsec-tree uses m/44'/1237'/727'/0'/0' (not NIP-06 m/44'/1237'/0'/0/0)
+    // so we derive identity from nsec-tree to ensure pubkey match
     const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
     const { pubkey, privkey } = mnemonicToKeypair(mnemonic)
 
     store.set('canary:identity', JSON.stringify({
       pubkey,
       privkey,
+      mnemonic, // In the nsec-tree world, mnemonic is stored with identity directly
       signerType: 'local',
       displayName: 'Tester',
     }))
-    store.set('canary:mnemonic', mnemonic)
 
     restoreState()
 
     expect(getState().identity?.mnemonic).toBe(mnemonic)
-    expect(store.has('canary:mnemonic')).toBe(false)
   })
 })

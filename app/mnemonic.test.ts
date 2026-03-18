@@ -1,49 +1,66 @@
 import { describe, it, expect } from 'vitest'
-import { generateMnemonic, mnemonicToKeypair, validateMnemonic } from './mnemonic.js'
+import { restoreFromMnemonic, recoverFromMnemonic, validateMnemonic } from './mnemonic.js'
+import { generateMnemonic } from '@scure/bip39'
+import { wordlist } from '@scure/bip39/wordlists/english.js'
 
 describe('mnemonic', () => {
   it('generates a 12-word mnemonic', () => {
-    const mnemonic = generateMnemonic()
+    const mnemonic = generateMnemonic(wordlist)
     const words = mnemonic.split(' ')
     expect(words).toHaveLength(12)
   })
 
-  it('derives deterministic keypair from mnemonic', () => {
-    const mnemonic = generateMnemonic()
-    const kp1 = mnemonicToKeypair(mnemonic)
-    const kp2 = mnemonicToKeypair(mnemonic)
-    expect(kp1.pubkey).toBe(kp2.pubkey)
-    expect(kp1.privkey).toBe(kp2.privkey)
+  it('restores deterministic persona from mnemonic', () => {
+    const mnemonic = generateMnemonic(wordlist)
+    const r1 = restoreFromMnemonic(mnemonic)
+    const r2 = restoreFromMnemonic(mnemonic)
+    expect(r1.defaultPersona.identity.npub).toBe(r2.defaultPersona.identity.npub)
+    r1.root.destroy()
+    r2.root.destroy()
   })
 
-  it('derives different keypairs from different mnemonics', () => {
-    const kp1 = mnemonicToKeypair(generateMnemonic())
-    const kp2 = mnemonicToKeypair(generateMnemonic())
-    expect(kp1.pubkey).not.toBe(kp2.pubkey)
+  it('different mnemonics produce different personas', () => {
+    const r1 = restoreFromMnemonic(generateMnemonic(wordlist))
+    const r2 = restoreFromMnemonic(generateMnemonic(wordlist))
+    expect(r1.defaultPersona.identity.npub).not.toBe(r2.defaultPersona.identity.npub)
+    r1.root.destroy()
+    r2.root.destroy()
   })
 
-  it('produces valid 32-byte hex keys', () => {
-    const kp = mnemonicToKeypair(generateMnemonic())
-    expect(kp.privkey).toMatch(/^[0-9a-f]{64}$/)
-    expect(kp.pubkey).toMatch(/^[0-9a-f]{64}$/)
+  it('produces valid keys', () => {
+    const mnemonic = generateMnemonic(wordlist)
+    const { root, defaultPersona } = restoreFromMnemonic(mnemonic)
+    expect(defaultPersona.identity.npub).toMatch(/^npub1/)
+    expect(defaultPersona.identity.nsec).toMatch(/^nsec1/)
+    expect(defaultPersona.identity.privateKey).toBeInstanceOf(Uint8Array)
+    expect(defaultPersona.identity.privateKey.length).toBe(32)
+    root.destroy()
   })
 
   it('validates correct mnemonic', () => {
-    const mnemonic = generateMnemonic()
-    expect(validateMnemonic(mnemonic)).toBe(true)
+    const mnemonic = generateMnemonic(wordlist)
+    expect(validateMnemonic(mnemonic, wordlist)).toBe(true)
   })
 
   it('rejects invalid mnemonic', () => {
-    expect(validateMnemonic('foo bar baz qux one two three four five six seven eight')).toBe(false)
+    expect(validateMnemonic('foo bar baz qux one two three four five six seven eight', wordlist)).toBe(false)
   })
 
-  it('uses NIP-06 derivation path m/44\'/1237\'/0\'/0/0', () => {
+  it('uses nsec-tree derivation path (deterministic)', () => {
     const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
-    const kp = mnemonicToKeypair(mnemonic)
-    expect(kp.privkey).toMatch(/^[0-9a-f]{64}$/)
-    expect(kp.pubkey).toMatch(/^[0-9a-f]{64}$/)
-    const kp2 = mnemonicToKeypair(mnemonic)
-    expect(kp2.privkey).toBe(kp.privkey)
-    expect(kp2.pubkey).toBe(kp.pubkey)
+    const { root, defaultPersona } = restoreFromMnemonic(mnemonic)
+    expect(defaultPersona.identity.npub).toMatch(/^npub1/)
+    expect(defaultPersona.name).toBe('personal')
+    expect(defaultPersona.index).toBe(0)
+    root.destroy()
+  })
+
+  it('recovers multiple personas from mnemonic', () => {
+    const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+    const { root, personas } = recoverFromMnemonic(mnemonic)
+    expect(personas.size).toBeGreaterThanOrEqual(5)
+    expect(personas.has('personal')).toBe(true)
+    expect(personas.has('bitcoiner')).toBe(true)
+    root.destroy()
   })
 })
