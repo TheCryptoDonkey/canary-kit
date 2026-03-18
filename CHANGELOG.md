@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/forgesworn/canary-kit/compare/v1.0.2...v1.0.3) (2026-03-18)
+
+
+### Bug Fixes
+
+* footer version, notification prompt, vault sync reliability ([24e38d0](https://github.com/forgesworn/canary-kit/commit/24e38d01a8e4de07de876f2cc23553fd617fa9e0))
+
 ## [1.0.2](https://github.com/forgesworn/canary-kit/compare/v1.0.1...v1.0.2) (2026-03-18)
 
 
