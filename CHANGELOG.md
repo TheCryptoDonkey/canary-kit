@@ -1,3 +1,10 @@
+## [2.2.2](https://github.com/forgesworn/canary-kit/compare/v2.2.1...v2.2.2) (2026-03-18)
+
+
+### Bug Fixes
+
+* wire identity view actions — Shamir, verify proof, export nsec, archive, rotate ([0350e97](https://github.com/forgesworn/canary-kit/commit/0350e972694e22bda039452d1d17a5cf60bcf4d9))
+
 ## [2.2.1](https://github.com/forgesworn/canary-kit/compare/v2.2.0...v2.2.1) (2026-03-18)
 
 
