@@ -18,6 +18,8 @@ const DEFAULT_STATE: AppState = {
     defaultReadRelays: [...WELL_KNOWN_READ_RELAYS, DEFAULT_WRITE_RELAY],
     defaultWriteRelays: [DEFAULT_WRITE_RELAY],
   },
+  personas: {},
+  activePersonaName: null,
 }
 
 // ── Internal state ─────────────────────────────────────────────
@@ -109,4 +111,6 @@ export function clearSensitiveState(): void {
   scrubbed.groups = groups
   _state = scrubbed
   _notify()
+  // Persona TreeRoot destruction is handled by destroyPersonas() called from main.ts
+  // state.personas contains only public data (npubs) and is kept on lock
 }

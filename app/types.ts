@@ -47,6 +47,8 @@ export interface AppGroup extends GroupState {
   beaconPrecision: number
   /** Geohash precision for duress alerts (1–11, default 9 ≈ exact). Higher = more precise. */
   duressPrecision?: number
+  /** Name of the persona used for this group's signing identity. */
+  personaName: string
   /** Last known beacon positions per member pubkey — persisted so map shows data on refresh. */
   lastPositions?: Record<string, { lat: number; lon: number; geohash: string; precision: number; timestamp: number }>
 }
@@ -91,6 +93,16 @@ export function allRelaysForGroup(group: Pick<AppGroup, 'relays' | 'readRelays' 
   ])
 }
 
+/** A named Nostr persona derived from the user's master identity via nsec-tree. */
+export interface AppPersona {
+  name: string
+  index: number
+  npub: string
+  displayName?: string
+  picture?: string
+  about?: string
+}
+
 /** The local identity (Nostr keypair) for this device. */
 export interface AppIdentity {
   pubkey: string
@@ -122,4 +134,6 @@ export interface AppState {
   activeGroupId: string | null
   identity: AppIdentity | null
   settings: AppSettings
+  personas: Record<string, AppPersona>
+  activePersonaName: string | null
 }
