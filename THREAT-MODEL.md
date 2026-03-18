@@ -16,6 +16,21 @@ Out of scope: demo application (app/), build tooling, CI/CD, deployment infrastr
 
 For regulatory mapping of properties P1–P8 against FCA, RBI, UAE TDRA, EU AI Act, eIDAS, and W3C Confidence Method, see [REGULATORY.md](REGULATORY.md).
 
+## Residual Risk Summary
+
+The following table summarises the known residual risks after all mitigations
+are applied. These risks are documented here for transparency — deployers should
+account for them in their risk assessment.
+
+| Risk | Status | Mitigation | Residual Exposure |
+|------|--------|------------|-------------------|
+| State-snapshot epoch hijack | Partially mitigated | Self-consistency check; `prevEpochSeed` continuity proof (optional) | A rogue admin can force an epoch jump if `prevEpochSeed` is not validated. Single-admin groups are recommended for high-assurance deployments. |
+| 1-word encoding collision | Partially mitigated | Higher word counts reduce probability; 3-word default gives ~33 bits | 1-word mode provides approximately 11 bits of collision space. Not recommended for high-assurance use. Use 2+ words for groups of 10+ members. |
+| Seed compromise window | By design | Reseed excludes compromised member; no forward secrecy within epoch | Messages and tokens derived before reseed remain readable by a compromised member. This is an accepted trade-off for offline derivation capability. |
+| Concurrent admin reseed | Accepted by design | No quorum mechanism; single-admin groups recommended for high-assurance | Split-brain state is possible if two admins trigger reseeds simultaneously. Accepted trade-off against the complexity of quorum. |
+
+---
+
 ## Adversary Profiles
 
 ### A1: Voice Cloner
@@ -381,6 +396,26 @@ Goal: Derive valid tokens or rejoin group
 | AES-256-GCM | IND-CCA2 secure authenticated encryption | NIST SP 800-38D | Beacon/sync encryption broken |
 | crypto.getRandomValues | Cryptographically secure PRNG | Web Crypto API | Seed predictability (P1 broken) |
 | NIP-44 | Secure encryption to a known public key | Nostr NIP-44 | Seed distribution interceptable |
+
+### Post-Quantum Note
+
+The symmetric primitives used by CANARY retain strong security margins against
+quantum adversaries:
+
+- **HMAC-SHA256** — Grover's algorithm halves the effective key search space,
+  reducing 256-bit security to 128-bit post-quantum security. 128 bits is the
+  current NIST post-quantum security category (Category 1). No protocol changes
+  are anticipated.
+- **AES-256-GCM** — Similarly, Grover's algorithm gives a quadratic speedup,
+  reducing 256-bit AES to 128-bit post-quantum security. Widely accepted as
+  quantum-resistant at this key size.
+
+CANARY does not use asymmetric cryptography for its core token derivation.
+NIP-44 (used for seed distribution) relies on secp256k1 ECDH, which is
+vulnerable to Shor's algorithm on a sufficiently capable quantum computer. When
+post-quantum replacements for NIP-44 become available in the Nostr ecosystem,
+canary-kit will adopt them for seed distribution. The token derivation itself
+(HMAC-SHA256) requires no change.
 
 ## Known Limitations (By Design)
 
