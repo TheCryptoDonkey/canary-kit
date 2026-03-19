@@ -1,3 +1,10 @@
+## [2.5.4](https://github.com/forgesworn/canary-kit/compare/v2.5.3...v2.5.4) (2026-03-19)
+
+
+### Bug Fixes
+
+* apply cached kind 0 profile to identity on nsec login ([4d679d3](https://github.com/forgesworn/canary-kit/commit/4d679d3245c956af475a05fc96516db06be11f8b))
+
 ## [2.5.3](https://github.com/forgesworn/canary-kit/compare/v2.5.2...v2.5.3) (2026-03-19)
 
 
