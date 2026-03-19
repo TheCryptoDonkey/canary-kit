@@ -1,3 +1,10 @@
+## [2.5.5](https://github.com/forgesworn/canary-kit/compare/v2.5.4...v2.5.5) (2026-03-19)
+
+
+### Bug Fixes
+
+* bump dependencies to resolve security audit vulnerabilities ([a526fb6](https://github.com/forgesworn/canary-kit/commit/a526fb694da92d2754ba8c686f33e8d50bdf10e4))
+
 ## [2.5.4](https://github.com/forgesworn/canary-kit/compare/v2.5.3...v2.5.4) (2026-03-19)
 
 
