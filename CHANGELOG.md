@@ -1,3 +1,10 @@
+## [2.5.1](https://github.com/forgesworn/canary-kit/compare/v2.5.0...v2.5.1) (2026-03-19)
+
+
+### Bug Fixes
+
+* wire persona actions by id, prove ownership against master root ([b46560e](https://github.com/forgesworn/canary-kit/commit/b46560e423a3d0c6e9368a9d47193786df83b877))
+
 # [2.5.0](https://github.com/forgesworn/canary-kit/compare/v2.4.0...v2.5.0) (2026-03-19)
 
 
