@@ -8,6 +8,7 @@ import { getState } from '../state.js'
 import { findById } from '../persona-tree.js'
 import { escapeHtml } from '../utils/escape.js'
 import { personaColour } from './persona-picker.js'
+import { identityNodeLabel } from '../types.js'
 import { fromNsec } from 'nsec-tree/core'
 import { createBlindProof, createFullProof, verifyProof } from 'nsec-tree/proof'
 import type { LinkageProof } from 'nsec-tree/core'
@@ -88,6 +89,7 @@ export function showProveOwnershipModal(personaId: string): void {
 
   const { persona, ancestors } = found
   const personaName = persona.name
+  const nodeLabel = identityNodeLabel(persona).toLowerCase()
   // All values below are escaped before interpolation
   const pathStr = escapeHtml([...ancestors.map(a => a.name), personaName].join(' / '))
   const badgeHtml = badge(personaName)
@@ -99,12 +101,16 @@ export function showProveOwnershipModal(personaId: string): void {
   dialog.innerHTML = `
     <div class="modal__form" style="max-width:32rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-        <h2 style="margin:0;font-size:1.125rem;">Prove Ownership</h2>
+        <h2 style="margin:0;font-size:1.125rem;">Prove continuity</h2>
         <button data-close style="background:none;border:none;cursor:pointer;font-size:1.25rem;color:var(--text,#e0e0e0);">&times;</button>
       </div>
 
       <p style="margin:0 0 1rem;color:var(--text-secondary,#aaa);font-size:0.875rem;">
-        Prove ${badgeHtml}<strong>${nameHtml}</strong> derives from your master key.
+        Show that ${badgeHtml}<strong>${nameHtml}</strong> comes from the same root as your master identity.
+      </p>
+
+      <p style="margin:0 0 1rem;color:var(--text-secondary,#aaa);font-size:0.8125rem;line-height:1.5;">
+        Use this when you want to prove a ${escapeHtml(nodeLabel)} is yours without handing over your seed phrase or raw master key.
       </p>
 
       <div style="margin-bottom:1rem;font-family:var(--font-mono,monospace);font-size:0.75rem;color:var(--text-muted,#999);">
@@ -112,16 +118,16 @@ export function showProveOwnershipModal(personaId: string): void {
       </div>
 
       <fieldset style="border:1px solid var(--border,#444);border-radius:6px;padding:0.75rem;margin-bottom:1rem;">
-        <legend style="font-size:0.8125rem;color:var(--text-secondary,#aaa);padding:0 0.25rem;">Proof type</legend>
+        <legend style="font-size:0.8125rem;color:var(--text-secondary,#aaa);padding:0 0.25rem;">How much should the proof reveal?</legend>
         <label style="display:block;margin-bottom:0.5rem;cursor:pointer;">
           <input type="radio" name="lp-type" value="blind" checked />
-          <strong>Blind</strong>
-          <span style="display:block;margin-left:1.25rem;font-size:0.75rem;color:var(--text-secondary,#aaa);">Proves ownership without revealing your master identity.</span>
+          <strong>Private proof (recommended)</strong>
+          <span style="display:block;margin-left:1.25rem;font-size:0.75rem;color:var(--text-secondary,#aaa);">Proves both identities share a root, while keeping derivation details hidden.</span>
         </label>
         <label style="display:block;cursor:pointer;">
           <input type="radio" name="lp-type" value="full" />
-          <strong>Full</strong>
-          <span style="display:block;margin-left:1.25rem;font-size:0.75rem;color:var(--text-secondary,#aaa);">Reveals your master identity and derivation path. For legal/compliance only.</span>
+          <strong>Debug / compliance proof</strong>
+          <span style="display:block;margin-left:1.25rem;font-size:0.75rem;color:var(--text-secondary,#aaa);">Also reveals the exact derivation context. Useful for audits, recovery debugging, or compliance workflows.</span>
         </label>
       </fieldset>
 
@@ -198,12 +204,12 @@ export function showVerifyProofModal(): void {
   dialog.innerHTML = `
     <div class="modal__form" style="max-width:32rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-        <h2 style="margin:0;font-size:1.125rem;">Verify Linkage Proof</h2>
+        <h2 style="margin:0;font-size:1.125rem;">Verify continuity proof</h2>
         <button data-close style="background:none;border:none;cursor:pointer;font-size:1.25rem;color:var(--text,#e0e0e0);">&times;</button>
       </div>
 
       <label style="display:block;margin-bottom:0.75rem;">
-        <span style="font-size:0.8125rem;color:var(--text-secondary,#aaa);">Paste a linkage proof JSON</span>
+        <span style="font-size:0.8125rem;color:var(--text-secondary,#aaa);">Paste a proof JSON to confirm two identities share the same root.</span>
         <textarea id="vp-input" rows="8" style="display:block;width:100%;margin-top:0.25rem;padding:0.5rem;border-radius:6px;border:1px solid var(--border,#444);background:var(--surface,#1e1e2e);color:var(--text,#e0e0e0);font-family:monospace;font-size:0.75rem;resize:vertical;" placeholder='{"masterPubkey":"...","childPubkey":"...","attestation":"...","signature":"..."}'></textarea>
       </label>
 

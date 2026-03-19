@@ -5,9 +5,14 @@ import { deriveFromIdentity } from 'nsec-tree'
 import type { TreeRoot, Identity } from 'nsec-tree/core'
 import { derivePersona, deriveFromPersona } from 'nsec-tree/persona'
 import type { Persona } from 'nsec-tree/persona'
-import type { AppIdentity, AppPersona } from './types.js'
+import type { AppIdentity, AppPersona, IdentityNodeType } from './types.js'
 import { findById, findByName, generatePersonaId } from './persona-tree.js'
 import { getState } from './state.js'
+
+export interface DerivationPathSegment {
+  name: string
+  index?: number
+}
 
 // ── Private module state ──────────────────────────────────────
 
@@ -27,14 +32,37 @@ function hexToBytes(hex: string): Uint8Array {
 }
 
 /** Map a nsec-tree Persona to our AppPersona (public-only data). */
-function toAppPersona(persona: Persona): AppPersona {
+function toAppPersona(persona: Persona, nodeType: IdentityNodeType = 'persona'): AppPersona {
   return {
     id: generatePersonaId(),
     name: persona.name,
     index: persona.index,
     npub: persona.identity.npub,
     children: {},
+    nodeType,
   }
+}
+
+function validatePersonaSegment(segment: string): string {
+  const normalised = segment.trim()
+  if (normalised.length === 0 || normalised.length > 32) {
+    throw new Error('Derivation segments must be 1–32 characters long')
+  }
+  if (normalised !== normalised.toLowerCase()) {
+    throw new Error('Derivation segments must be lowercase')
+  }
+  if (/\s/.test(normalised)) {
+    throw new Error('Derivation segments must not contain spaces')
+  }
+  return normalised
+}
+
+function validateDerivationIndex(index: number | undefined): number {
+  if (index === undefined) return 0
+  if (!Number.isInteger(index) || index < 0) {
+    throw new Error('Derivation indices must be non-negative integers')
+  }
+  return index
 }
 
 // ── Public API ────────────────────────────────────────────────
@@ -196,6 +224,33 @@ export function resolveIdentity(persona: AppPersona, ancestors: AppPersona[]): I
 }
 
 /**
+ * Derive any tree identity from a sequence of persona path segments.
+ *
+ * The first segment maps to `derivePersona(root, name, 0)`. Each additional
+ * segment chains `deriveFromIdentity(identity, "persona:{name}", 0)`.
+ * This is intended for deterministic identity recreation examples and dev tools.
+ */
+export function derivePathIdentity(path: readonly string[] | readonly DerivationPathSegment[]): Identity {
+  if (!_masterRoot) throw new Error('Personas not initialised — call initPersonas() first')
+  if (path.length === 0) throw new Error('At least one derivation segment is required')
+
+  const segments = path.map((segment) => (
+    typeof segment === 'string'
+      ? { name: validatePersonaSegment(segment), index: 0 }
+      : { name: validatePersonaSegment(segment.name), index: validateDerivationIndex(segment.index) }
+  ))
+
+  const [head, ...rest] = segments
+  let identity = derivePersona(_masterRoot, head.name, head.index).identity
+
+  for (const segment of rest) {
+    identity = deriveFromIdentity(identity, `persona:${segment.name}`, segment.index)
+  }
+
+  return identity
+}
+
+/**
  * Derive a group-specific signing identity for a persona.
  *
  * Uses the persona tree to resolve the identity, then derives a group sub-identity.
@@ -230,7 +285,7 @@ export function getGroupIdentity(personaId: string, groupId: string, epoch: numb
  * a generated id and empty children.
  * Throws if personas have not been initialised.
  */
-export function createChildPersona(parentId: string | null, name: string): AppPersona {
+export function createChildPersona(parentId: string | null, name: string, nodeType: IdentityNodeType = 'persona'): AppPersona {
   if (!_masterRoot) throw new Error('Personas not initialised — call initPersonas() first')
 
   if (parentId === null) {
@@ -242,7 +297,7 @@ export function createChildPersona(parentId: string | null, name: string): AppPe
     }
 
     const persona = derivePersona(_masterRoot, name, 0)
-    const appPersona = toAppPersona(persona)
+    const appPersona = toAppPersona(persona, nodeType)
     _personaCache.set(appPersona.id, persona)
     return appPersona
   }
@@ -266,6 +321,7 @@ export function createChildPersona(parentId: string | null, name: string): AppPe
     index: 0,
     npub: childIdentity.npub,
     children: {},
+    nodeType,
   }
 }
 
@@ -275,8 +331,8 @@ export function createChildPersona(parentId: string | null, name: string): AppPe
  * Derives the persona, caches it, and returns the AppPersona record.
  * Throws if personas have not been initialised.
  */
-export function createPersona(name: string): AppPersona {
-  return createChildPersona(null, name)
+export function createPersona(name: string, nodeType: IdentityNodeType = 'persona'): AppPersona {
+  return createChildPersona(null, name, nodeType)
 }
 
 /**

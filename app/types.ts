@@ -94,12 +94,26 @@ export function allRelaysForGroup(group: Pick<AppGroup, 'relays' | 'readRelays' 
 }
 
 /** A named Nostr persona derived from the user's master identity via nsec-tree. */
+export type IdentityNodeType = 'persona' | 'account'
+
+/** Normalise legacy nodes that predate explicit persona/account typing. */
+export function identityNodeType(node: Pick<AppPersona, 'nodeType' | 'children'>): IdentityNodeType {
+  if (node.nodeType) return node.nodeType
+  return 'persona'
+}
+
+/** Human-friendly label for a persona/account tree node. */
+export function identityNodeLabel(node: Pick<AppPersona, 'nodeType' | 'children'>): string {
+  return identityNodeType(node) === 'account' ? 'Account' : 'Persona'
+}
+
 export interface AppPersona {
   id: string
   name: string
   index: number
   npub: string
   children: Record<string, AppPersona>
+  nodeType?: IdentityNodeType
   displayName?: string
   picture?: string
   about?: string

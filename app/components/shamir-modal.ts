@@ -9,10 +9,53 @@ import { generateQR } from './qr.js'
 
 const CLIPBOARD_WIPE_MS = 30_000
 const MODAL_ID = 'shamir-modal'
+const STYLE_ID = 'shamir-modal-styles'
 const MIN_SHARES = 2
 const MAX_SHARES = 5
 const DEFAULT_SHARES = 3
 const DEFAULT_THRESHOLD = 2
+
+const STYLES = `
+  .shamir-modal::backdrop { background: rgba(0, 0, 0, 0.72); }
+  .shamir-modal {
+    width: min(42rem, calc(100vw - 2rem));
+    max-width: 42rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    padding: 0;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  }
+  .shamir-modal__content { padding: 1rem; display: grid; gap: 0.875rem; }
+  .shamir-modal__close {
+    justify-self: end; background: none; border: none; color: var(--text-muted);
+    font-size: 1.5rem; cursor: pointer; line-height: 1; padding: 0;
+  }
+  .shamir-modal__title { margin: 0; font-size: 1.1rem; color: var(--text-bright); }
+  .shamir-modal__field { display: grid; gap: 0.35rem; }
+  .shamir-modal__field label { font-size: 0.75rem; color: var(--text-muted); }
+  .shamir-modal__field input {
+    width: 100%; font: inherit; padding: 0.55rem 0.7rem; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--bg-deep); color: var(--text-primary);
+  }
+  .shamir-modal__explain, .shamir-modal__hint {
+    margin: 0; font-size: 0.78rem; line-height: 1.55; color: var(--text-secondary);
+  }
+  .shamir-modal__actions, .shamir-modal__nav { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .shamir-modal__wordlist {
+    margin: 0; padding: 0.875rem 1rem 0.875rem 2.25rem; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--bg-deep); max-height: 18rem; overflow: auto;
+    font-family: var(--font-mono); font-size: 0.77rem; line-height: 1.6;
+  }
+  .shamir-modal__share-box {
+    border: 1px solid var(--border); border-radius: 8px; background: var(--bg-deep);
+    padding: 0.875rem; font-family: var(--font-mono); font-size: 0.75rem;
+    line-height: 1.55; word-break: break-word; max-height: 8rem; overflow: auto;
+  }
+  .shamir-modal__qr { border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; background: #fff; justify-self: center; }
+  .shamir-modal__confirm-label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+`
 
 // ── Public API ─────────────────────────────────────────────────
 
@@ -23,6 +66,7 @@ const DEFAULT_THRESHOLD = 2
 export function showShamirModal(): void {
   // Remove any existing shamir modal
   document.getElementById(MODAL_ID)?.remove()
+  ensureStyles()
 
   const mnemonic = getState().identity?.mnemonic
   if (!mnemonic) {
@@ -114,12 +158,14 @@ function renderConfigureScreen(dialog: HTMLDialogElement, mnemonic: string): voi
   splitBtn.addEventListener('click', () => {
     const total = clampInt(totalInput.value, MIN_SHARES, MAX_SHARES)
     const threshold = clampInt(thresholdInput.value, MIN_SHARES, total)
-
-    const secretBytes = new TextEncoder().encode(mnemonic)
-    const shares = splitSecret(secretBytes, threshold, total)
-    const wordShares = shares.map((s) => shareToWords(s))
-
-    renderSharesScreen(dialog, wordShares, 0)
+    try {
+      const secretBytes = new TextEncoder().encode(mnemonic)
+      const shares = splitSecret(secretBytes, threshold, total)
+      const wordShares = shares.map((s) => shareToWords(s))
+      renderSharesScreen(dialog, wordShares, 0)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to split recovery phrase.')
+    }
   })
 }
 
@@ -141,9 +187,12 @@ function renderSharesScreen(
   // All interpolated values are escaped via escapeHtml() — safe innerHTML usage
   dialog.innerHTML = `
     <div class="shamir-modal__content">
+      <button class="shamir-modal__close" type="button" aria-label="Close">&times;</button>
       <h2 class="shamir-modal__title">${escapeHtml(shareLabel)}</h2>
+      <p class="shamir-modal__hint">Keep each share separate. Any threshold-sized subset can restore your recovery phrase.</p>
 
       <ol class="shamir-modal__wordlist">${wordListHtml}</ol>
+      <div class="shamir-modal__share-box">${escapeHtml(shareText)}</div>
 
       <div class="shamir-modal__actions">
         <button class="btn btn--sm" id="shamir-copy" type="button">Copy</button>
@@ -160,6 +209,8 @@ function renderSharesScreen(
       </div>
     </div>
   `
+
+  dialog.querySelector<HTMLButtonElement>('.shamir-modal__close')?.addEventListener('click', () => closeShamirModal(dialog))
 
   // ── Wire: copy ─────────────────────────────────────────────
   const copyBtn = dialog.querySelector<HTMLButtonElement>('#shamir-copy')!
@@ -213,6 +264,7 @@ function renderConfirmScreen(dialog: HTMLDialogElement): void {
   // Static content only — no user-controlled values interpolated
   dialog.innerHTML = `
     <div class="shamir-modal__content">
+      <button class="shamir-modal__close" type="button" aria-label="Close">&times;</button>
       <h2 class="shamir-modal__title">Confirm backup</h2>
 
       <label class="shamir-modal__confirm-label">
@@ -225,6 +277,8 @@ function renderConfirmScreen(dialog: HTMLDialogElement): void {
       </div>
     </div>
   `
+
+  dialog.querySelector<HTMLButtonElement>('.shamir-modal__close')?.addEventListener('click', () => closeShamirModal(dialog))
 
   const checkbox = dialog.querySelector<HTMLInputElement>('#shamir-confirm-check')!
   const closeBtn = dialog.querySelector<HTMLButtonElement>('#shamir-close-btn')!
@@ -247,4 +301,12 @@ function clampInt(value: string, min: number, max: number): number {
   const n = parseInt(value, 10)
   if (isNaN(n)) return min
   return Math.max(min, Math.min(max, n))
+}
+
+function ensureStyles(): void {
+  if (document.getElementById(STYLE_ID)) return
+  const style = document.createElement('style')
+  style.id = STYLE_ID
+  style.textContent = STYLES
+  document.head.appendChild(style)
 }

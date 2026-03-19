@@ -4,14 +4,16 @@
 // Playfair Display headings. Matches the existing canary-kit design language.
 
 import { getState, update, updateGroup } from '../state.js'
-import { isPersonasInitialised, createPersona } from '../persona.js'
+import { isPersonasInitialised, createPersona, derivePathIdentity } from '../persona.js'
 import { renderIdentityTree, wireIdentityTree } from '../components/identity-tree.js'
 import { walkTree, findById } from '../persona-tree.js'
 import { personaColour } from '../components/persona-picker.js'
 import { generateQR } from '../components/qr.js'
 import { showToast } from '../components/toast.js'
 import { escapeHtml } from '../utils/escape.js'
-import type { AppPersona, AppGroup } from '../types.js'
+import { identityNodeLabel, identityNodeType } from '../types.js'
+import type { AppPersona, AppGroup, IdentityNodeType } from '../types.js'
+import type { DerivationPathSegment } from '../persona.js'
 
 // ── Module state ──────────────────────────────────────────────
 
@@ -22,6 +24,12 @@ let _menuOpen = false
 let _qrVisible = false
 let _customRelayEditing = false
 let _wireAbort: AbortController | null = null
+let _devDerivationInputs: DerivationPathSegment[] = [
+  { name: '', index: 0 },
+  { name: '', index: 0 },
+  { name: '', index: 0 },
+]
+let _devDerivationReveal = false
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -37,6 +45,30 @@ function isValidPersonaName(name: string): boolean {
   return true
 }
 
+function describeIdentityNode(node: AppPersona): string {
+  return identityNodeType(node) === 'account'
+    ? 'A standalone child key you can export as an nsec account.'
+    : 'A reusable branch for related identities, profiles, and group keys.'
+}
+
+function actionVerb(node: AppPersona): string {
+  return identityNodeType(node) === 'account' ? 'account' : 'persona'
+}
+
+function identityCapabilityStatus(): { label: string; detail: string; recoveryBacked: boolean } {
+  const identity = getState().identity
+  if (!identity) {
+    return { label: 'No identity', detail: 'Create or restore a mnemonic-backed root to use the identity tree and recovery features.', recoveryBacked: false }
+  }
+  if (identity.signerType === 'nip07') {
+    return { label: 'Extension managed', detail: 'Your browser extension keeps the root secret private, so canary-kit cannot derive or back up the tree here.', recoveryBacked: false }
+  }
+  if (identity.mnemonic) {
+    return { label: 'Mnemonic-backed root', detail: 'This root supports the full nsec-tree workflow: derived personas, derived accounts, proofs, and phrase/Shamir recovery.', recoveryBacked: true }
+  }
+  return { label: 'nsec-backed root', detail: 'This imported nsec can still derive the identity tree, but it has no recovery phrase. Create a new mnemonic-backed root only if you want phrase/Shamir recovery.', recoveryBacked: false }
+}
+
 function hasProfileChanges(persona: AppPersona, panel: HTMLElement): boolean {
   const displayNameInput = panel.querySelector<HTMLInputElement>('[data-field="displayName"]')
   const aboutInput = panel.querySelector<HTMLInputElement>('[data-field="about"]')
@@ -48,6 +80,81 @@ function hasProfileChanges(persona: AppPersona, panel: HTMLElement): boolean {
     (aboutInput?.value ?? '') !== (persona.about ?? '') ||
     (pictureInput?.value ?? '') !== (persona.picture ?? '')
   )
+}
+
+function getSelectedDerivationPath(): DerivationPathSegment[] | null {
+  if (!_selectedPersonaId) return null
+  const found = findById(getState().personas, _selectedPersonaId)
+  if (!found) return null
+  return [
+    ...found.ancestors.map((ancestor) => ({ name: ancestor.name, index: ancestor.index })),
+    { name: found.persona.name, index: found.persona.index },
+  ]
+}
+
+function setDevDerivationInputs(path: readonly DerivationPathSegment[]): void {
+  _devDerivationInputs = [
+    { name: path[0]?.name ?? '', index: path[0]?.index ?? 0 },
+    { name: path[1]?.name ?? '', index: path[1]?.index ?? 0 },
+    { name: path[2]?.name ?? '', index: path[2]?.index ?? 0 },
+  ]
+  _devDerivationReveal = false
+}
+
+function formatDerivationChain(path: readonly DerivationPathSegment[]): string {
+  return path.map((segment, index) => (
+    index === 0
+      ? `derivePersona(${segment.name}, ${segment.index ?? 0})`
+      : `persona:${segment.name}@${segment.index ?? 0}`
+  )).join(' → ')
+}
+
+function readDevDerivation():
+  | { path: DerivationPathSegment[]; npub: string; nsec: string }
+  | { error: string }
+  | null {
+  const path = _devDerivationInputs
+    .map((segment) => ({ name: segment.name.trim(), index: segment.index ?? 0 }))
+    .filter((segment) => segment.name.length > 0)
+  if (path.length === 0) return null
+  try {
+    const identity = derivePathIdentity(path)
+    return { path, npub: identity.npub, nsec: identity.nsec }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Unable to derive identity' }
+  }
+}
+
+function renderDerivationFeedback(): string {
+  const derivation = readDevDerivation()
+  if (derivation === null) {
+    return `<div class="id-derive__hint">Add at least the first level to derive an identity.</div>`
+  }
+  if ('error' in derivation) {
+    return `<div class="id-derive__error">${escapeHtml(derivation.error)}</div>`
+  }
+  return `
+    <div class="id-derive__result">
+      <div class="id-derive__chain">Path: ${escapeHtml(formatDerivationChain(derivation.path))}</div>
+      <div class="id-derive__row">
+        <span class="id-derive__key">npub</span>
+        <code class="id-derive__value">${escapeHtml(derivation.npub)}</code>
+      </div>
+      <div class="id-derive__row">
+        <span class="id-derive__key">nsec</span>
+        <code class="id-derive__value id-derive__value--secret${_devDerivationReveal ? ' id-derive__value--revealed' : ''}">${escapeHtml(derivation.nsec)}</code>
+      </div>
+      <div class="id-derive__copy">
+        <button class="btn btn--sm" id="id-derive-copy-npub">Copy npub</button>
+        <button class="btn btn--sm" id="id-derive-copy-nsec">${_devDerivationReveal ? 'Copy nsec' : 'Reveal + copy nsec'}</button>
+      </div>
+    </div>
+  `
+}
+
+function refreshDerivationPanel(container: HTMLElement): void {
+  const feedback = container.querySelector<HTMLElement>('#id-derive-feedback')
+  if (feedback) feedback.innerHTML = renderDerivationFeedback()
 }
 
 // ── Styles ────────────────────────────────────────────────────
@@ -132,6 +239,171 @@ const STYLES = `
     color: var(--text-muted);
     margin-top: 0.25rem;
     display: block;
+  }
+
+  .id-choice {
+    margin-top: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-deep);
+    padding: 0.875rem;
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .id-choice__title {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--text-bright);
+  }
+
+  .id-choice__sub {
+    margin: 0;
+    font-size: 0.75rem;
+    line-height: 1.55;
+    color: var(--text-secondary);
+  }
+
+  .id-choice__grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  }
+
+  .id-choice__card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    padding: 0.75rem;
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .id-choice__card-title {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+  }
+
+  .id-choice__list {
+    margin: 0;
+    padding-left: 1rem;
+    font-size: 0.75rem;
+    line-height: 1.55;
+    color: var(--text-secondary);
+  }
+
+  .id-derive {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .id-derive__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .id-derive__title {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-bright);
+  }
+
+  .id-derive__sub {
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .id-derive__actions {
+    display: flex;
+    gap: 0.375rem;
+    flex-wrap: wrap;
+  }
+
+  .id-derive__grid {
+    display: grid;
+    gap: 0.625rem;
+    grid-template-columns: 1fr;
+  }
+
+  .id-derive__field {
+    display: grid;
+    gap: 0.25rem;
+  }
+
+  .id-derive__label {
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .id-derive__hint,
+  .id-derive__error {
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+
+  .id-derive__hint { color: var(--text-muted); }
+  .id-derive__error { color: var(--failed); }
+
+  .id-derive__result {
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.75rem;
+    display: grid;
+    gap: 0.625rem;
+  }
+
+  .id-derive__chain {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    word-break: break-word;
+  }
+
+  .id-derive__row {
+    display: grid;
+    gap: 0.25rem;
+  }
+
+  .id-derive__key {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .id-derive__value {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    word-break: break-all;
+  }
+
+  .id-derive__value--secret {
+    filter: blur(5px);
+    user-select: none;
+  }
+
+  .id-derive__value--revealed {
+    filter: none;
+    user-select: text;
+  }
+
+  .id-derive__copy {
+    display: flex;
+    gap: 0.375rem;
+    flex-wrap: wrap;
   }
 
   /* ── Empty state ────────────────────────────────── */
@@ -670,17 +942,114 @@ function renderGroupSummary(): string {
   `
 }
 
+function renderChoiceGuide(hasMnemonic: boolean): string {
+  return `
+    <div class="id-choice">
+      <div>
+        <h4 class="id-choice__title">Which path should I choose?</h4>
+        <p class="id-choice__sub">Both imported <code>nsec</code> roots and mnemonic-backed roots can derive the full <code>nsec-tree</code> hierarchy. The difference is whether the root itself has phrase/Shamir recovery.</p>
+      </div>
+      <div class="id-choice__grid">
+        <div class="id-choice__card">
+          <h5 class="id-choice__card-title">Keep using this nsec-backed root</h5>
+          <ul class="id-choice__list">
+            <li>Best when this is already your live public identity</li>
+            <li>Still derives personas, anonymous accounts, and proofs</li>
+            <li>No phrase or Shamir recovery unless you already have the mnemonic elsewhere</li>
+          </ul>
+        </div>
+        <div class="id-choice__card">
+          <h5 class="id-choice__card-title">Create or restore a mnemonic-backed root</h5>
+          <ul class="id-choice__list">
+            <li>Best when you want long-term recovery and backup</li>
+            <li>Adds 12-word phrase recovery and Shamir splitting</li>
+            <li>${hasMnemonic ? 'You already have this capability on the current root.' : 'Creates a new root or restores an existing mnemonic-backed one; it does not convert the current nsec in place.'}</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  `
+}
+
 function renderMasterCard(): string {
   const { identity, personas, groups } = getState()
   if (!identity) return ''
 
   // Count active personas across the whole tree
   let personaCount = 0
+  let accountCount = 0
   for (const { persona } of walkTree(personas)) {
-    if (!persona.archived) personaCount++
+    if (persona.archived) continue
+    if (identityNodeType(persona) === 'account') accountCount++
+    else personaCount++
   }
   const totalGroupCount = Object.keys(groups).length
   const hasMnemonic = !!identity.mnemonic
+  const selectedPath = getSelectedDerivationPath()
+  const capability = identityCapabilityStatus()
+
+  const derivationHtml = !identity.privkey ? `
+    <div class="id-derive">
+      <div class="id-derive__header">
+        <div>
+          <h4 class="id-derive__title">Developer derivation example</h4>
+          <p class="id-derive__sub">This needs a local key. Browser extensions keep the raw secret hidden, so canary-kit cannot recreate child identities here.</p>
+        </div>
+      </div>
+    </div>
+  ` : `
+    <div class="id-derive">
+      <div class="id-derive__header">
+        <div>
+          <h4 class="id-derive__title">Developer derivation example</h4>
+          <p class="id-derive__sub">Enter up to three tree levels plus explicit indices and canary-kit recreates the deterministic child identity, including its <code>npub</code> and <code>nsec</code>.</p>
+        </div>
+        <div class="id-derive__actions">
+          ${selectedPath && selectedPath.length <= 3 ? '<button class="btn btn--sm" id="id-derive-use-selected">Use selected persona</button>' : ''}
+          <button class="btn btn--sm" id="id-derive-clear">Clear</button>
+        </div>
+      </div>
+      <div class="id-derive__grid">
+        ${[0, 1, 2].map((index) => `
+          <div class="id-derive__field">
+            <span class="id-derive__label">Level ${index + 1}</span>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 5.25rem;gap:0.5rem;align-items:end;">
+              <input
+                class="input"
+                id="id-derive-level-${index + 1}"
+                data-derive-slot-name="${index}"
+                type="text"
+                value="${escapeHtml(_devDerivationInputs[index]?.name ?? '')}"
+                placeholder="${index === 0 ? 'personal' : index === 1 ? 'team' : 'ops'}"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <label style="display:grid;gap:0.25rem;">
+                <span class="id-derive__label">Index</span>
+                <input
+                  class="input"
+                  id="id-derive-index-${index + 1}"
+                  data-derive-slot-index="${index}"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value="${String(_devDerivationInputs[index]?.index ?? 0)}"
+                  placeholder="0"
+                  inputmode="numeric"
+                />
+              </label>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="id-derive__hint">
+        ${selectedPath
+          ? `Selected path: <code>${escapeHtml(selectedPath.map((segment) => `${segment.name}@${segment.index ?? 0}`).join(' / '))}</code>${selectedPath.length > 3 ? ' — this example only exposes the first three tree levels, so fill it manually if you need a deeper path.' : ''}`
+          : 'Tip: select a persona in the tree, then load it here to show that the same derivation inputs recreate the same identity. Change indices to match rotated personas.'}
+      </div>
+      <div id="id-derive-feedback">${renderDerivationFeedback()}</div>
+    </div>
+  `
 
   return `
     <div class="id-master">
@@ -688,21 +1057,32 @@ function renderMasterCard(): string {
         <div class="id-master__stats">
           <span>${personaCount} persona${personaCount === 1 ? '' : 's'}</span>
           <span>\u00B7</span>
+          <span>${accountCount} account${accountCount === 1 ? '' : 's'}</span>
+          <span>\u00B7</span>
           <span>${totalGroupCount} group${totalGroupCount === 1 ? '' : 's'}</span>
           <span>\u00B7</span>
           <span>${hasMnemonic ? 'Backed up' : 'No backup'}</span>
         </div>
         <div class="id-master__actions">
           ${hasMnemonic ? '<button class="btn btn--sm" id="id-backup-btn">Backup</button>' : ''}
-          <button class="btn btn--sm" id="id-shamir-btn">Shamir</button>
+          <button class="btn btn--sm" id="id-shamir-btn"${hasMnemonic ? '' : ' disabled title="Shamir backup requires a mnemonic-backed root"'}>Shamir</button>
           <button class="btn btn--sm" id="id-verify-proof-btn">Verify proof</button>
         </div>
       </div>
       ${hasMnemonic ? `
         <div id="id-mnemonic" class="id-master__mnemonic${_backupRevealed ? ' id-master__mnemonic--revealed' : ''}">${escapeHtml(identity.mnemonic ?? '')}</div>
         <span class="id-master__mnemonic-hint">${_backupRevealed ? 'Click to hide' : 'Click to reveal recovery phrase'}</span>
-      ` : ''}
+      ` : `
+        <span class="id-master__mnemonic-hint">This root can derive personas and accounts, but it cannot be recovered with a phrase or split with Shamir because no mnemonic is stored.</span>
+        <div class="id-master__actions" style="margin-top:0.75rem;">
+          <button class="btn btn--sm btn--primary" id="id-create-recovery-root">Create or restore mnemonic-backed root</button>
+        </div>
+      `}
+      <div class="id-derive__hint"><strong>${escapeHtml(capability.label)}.</strong> ${escapeHtml(capability.detail)}</div>
+      <div class="id-derive__hint">One root can create many unlinkable personas and exportable nsec accounts. Use proofs only when you want to prove continuity between identities.</div>
+      ${renderChoiceGuide(hasMnemonic)}
       ${renderGroupSummary()}
+      ${derivationHtml}
     </div>
   `
 }
@@ -829,6 +1209,7 @@ function renderGroupsSection(persona: AppPersona): string {
 }
 
 function renderActions(persona: AppPersona): string {
+  const noun = actionVerb(persona)
   return `
     <div class="persona-card__actions">
       <button class="btn btn--sm" id="id-detail-export">Export nsec</button>
@@ -841,9 +1222,9 @@ function renderActions(persona: AppPersona): string {
             <button class="persona-card__menu-item" id="id-detail-show-qr">
               ${_qrVisible ? 'Hide QR' : 'Show QR'}
             </button>
-            <button class="persona-card__menu-item" id="id-detail-rotate">Rotate</button>
-            <button class="persona-card__menu-item" id="id-detail-prove">Prove ownership</button>
-            <button class="persona-card__menu-item persona-card__menu-item--danger" id="id-detail-archive">Archive</button>
+            <button class="persona-card__menu-item" id="id-detail-rotate">Rotate ${noun}</button>
+            <button class="persona-card__menu-item" id="id-detail-prove">Prove continuity</button>
+            <button class="persona-card__menu-item persona-card__menu-item--danger" id="id-detail-archive">Archive ${noun}</button>
           </div>
         ` : ''}
       </div>
@@ -874,7 +1255,7 @@ function renderDetailPanel(): string {
   if (!_selectedPersonaId) {
     return `
       <div class="id-detail" id="id-detail">
-        <div class="id-detail__hint">Select a persona from the tree above</div>
+        <div class="id-detail__hint">Select a persona or account from the tree above</div>
       </div>
     `
   }
@@ -883,7 +1264,7 @@ function renderDetailPanel(): string {
   if (!found) {
     return `
       <div class="id-detail" id="id-detail">
-        <div class="id-detail__hint">Select a persona from the tree above</div>
+        <div class="id-detail__hint">Select a persona or account from the tree above</div>
       </div>
     `
   }
@@ -891,6 +1272,8 @@ function renderDetailPanel(): string {
   const { persona, ancestors } = found
   const colour = personaColour(persona.name)
   const letter = escapeHtml(persona.name.slice(0, 1).toUpperCase())
+  const typeLabel = identityNodeLabel(persona)
+  const typeDescription = describeIdentityNode(persona)
 
   return `
     <div class="id-detail" id="id-detail" data-detail-persona-id="${escapeHtml(persona.id)}">
@@ -901,6 +1284,7 @@ function renderDetailPanel(): string {
           ${persona.displayName ? `<div style="font-size:0.8125rem;color:var(--text-secondary);">${escapeHtml(persona.displayName)}</div>` : ''}
         </div>
       </div>
+      <div class="id-derive__hint"><strong>${escapeHtml(typeLabel)}.</strong> ${escapeHtml(typeDescription)}</div>
       ${renderBreadcrumb([...ancestors, persona])}
       <div class="persona-card__npub">${escapeHtml(persona.npub)}</div>
       ${renderProfileSection(persona)}
@@ -916,9 +1300,14 @@ function renderDetailPanel(): string {
 function renderNewPersonaForm(): string {
   return `
     <div class="id-create">
-      <input class="input" type="text" id="id-new-name" placeholder="persona name" maxlength="32" autocomplete="off" style="flex: 1; min-width: 0;" />
-      <button class="btn btn--primary btn--sm" id="id-create-btn">+ Create persona</button>
+      <input class="input" type="text" id="id-new-name" placeholder="persona or account name" maxlength="32" autocomplete="off" style="flex: 1; min-width: 0;" />
+      <select class="input" id="id-new-type" style="max-width: 10rem;">
+        <option value="persona">Persona</option>
+        <option value="account">Anonymous account</option>
+      </select>
+      <button class="btn btn--primary btn--sm" id="id-create-btn">+ Create</button>
     </div>
+    <div class="id-derive__hint">Personas are reusable branches. Anonymous accounts are standalone exportable nsec identities, unlinkable by default.</div>
     <div class="id-create__error" id="id-create-error"></div>
   `
 }
@@ -1039,6 +1428,62 @@ export function renderIdentities(container: HTMLElement): void {
   }, { signal })
   container.querySelector('#id-verify-proof-btn')?.addEventListener('click', () => {
     document.dispatchEvent(new CustomEvent('canary:verify-proof', { bubbles: true }))
+  }, { signal })
+  container.querySelector('#id-create-recovery-root')?.addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('canary:open-recovery-root-modal', { bubbles: true }))
+  }, { signal })
+
+  // ── Developer derivation example ────────────────────────────
+  container.querySelectorAll<HTMLInputElement>('[data-derive-slot-name]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const slot = Number(input.dataset.deriveSlotName)
+      _devDerivationInputs[slot] = { ..._devDerivationInputs[slot]!, name: input.value }
+      _devDerivationReveal = false
+      refreshDerivationPanel(container)
+    }, { signal })
+  })
+
+  container.querySelectorAll<HTMLInputElement>('[data-derive-slot-index]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const slot = Number(input.dataset.deriveSlotIndex)
+      const value = input.value.trim()
+      const index = value === '' ? 0 : Number(value)
+      _devDerivationInputs[slot] = { ..._devDerivationInputs[slot]!, index }
+      _devDerivationReveal = false
+      refreshDerivationPanel(container)
+    }, { signal })
+  })
+
+  container.querySelector('#id-derive-clear')?.addEventListener('click', () => {
+    setDevDerivationInputs([])
+    renderIdentities(container)
+  }, { signal })
+
+  container.querySelector('#id-derive-use-selected')?.addEventListener('click', () => {
+    const path = getSelectedDerivationPath()
+    if (!path) return
+    setDevDerivationInputs(path)
+    renderIdentities(container)
+  }, { signal })
+
+  container.querySelector('#id-derive-copy-npub')?.addEventListener('click', () => {
+    const derivation = readDevDerivation()
+    if (!derivation || 'error' in derivation) return
+    navigator.clipboard.writeText(derivation.npub).then(() => {
+      showToast('npub copied', 'success')
+    }).catch(() => {})
+  }, { signal })
+
+  container.querySelector('#id-derive-copy-nsec')?.addEventListener('click', () => {
+    const derivation = readDevDerivation()
+    if (!derivation || 'error' in derivation) return
+    _devDerivationReveal = true
+    navigator.clipboard.writeText(derivation.nsec).then(() => {
+      showToast('nsec copied', 'success')
+      refreshDerivationPanel(container)
+    }).catch(() => {
+      refreshDerivationPanel(container)
+    })
   }, { signal })
 
   // ── Detail panel actions ────────────────────────────────────
@@ -1232,6 +1677,7 @@ export function renderIdentities(container: HTMLElement): void {
 
   // ── New persona form ─────────────────────────────────────────
   const nameInput = container.querySelector<HTMLInputElement>('#id-new-name')
+  const typeInput = container.querySelector<HTMLSelectElement>('#id-new-type')
   const createBtn = container.querySelector<HTMLButtonElement>('#id-create-btn')
   const errorEl = container.querySelector<HTMLElement>('#id-create-error')
 
@@ -1252,17 +1698,20 @@ export function renderIdentities(container: HTMLElement): void {
     }
 
     try {
-      const newPersona = createPersona(name)
+      const nodeType = (typeInput?.value === 'account' ? 'account' : 'persona') as IdentityNodeType
+      const newPersona = createPersona(name, nodeType)
       update({ personas: { ...personas, [newPersona.id]: newPersona } })
       nameInput.value = ''
+      if (typeInput) typeInput.value = 'persona'
       errorEl.textContent = ''
       // Auto-select the newly created persona
       _selectedPersonaId = newPersona.id
       _menuOpen = false
       _qrVisible = false
       _customRelayEditing = false
+      showToast(`${identityNodeLabel(newPersona)} "${newPersona.name}" created`, 'success')
     } catch (err) {
-      errorEl.textContent = err instanceof Error ? err.message : 'Failed to create persona.'
+      errorEl.textContent = err instanceof Error ? err.message : 'Failed to create item.'
     }
   }
 

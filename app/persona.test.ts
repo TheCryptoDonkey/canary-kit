@@ -9,6 +9,8 @@ import {
   isPersonasInitialised,
   getPersona,
   getGroupIdentity,
+  derivePathIdentity,
+  createChildPersona,
   createPersona,
   rotatePersona,
   destroyPersonas,
@@ -145,6 +147,70 @@ describe('persona module', () => {
     })
   })
 
+  describe('derivePathIdentity', () => {
+    it('recreates the same identity for the same path', () => {
+      const identity = fixedIdentity()
+      initPersonas(identity, ['personal'])
+
+      const first = derivePathIdentity(['personal', 'workshop', 'demo'])
+      const second = derivePathIdentity(['personal', 'workshop', 'demo'])
+
+      expect(first.npub).toBe(second.npub)
+      expect(first.nsec).toBe(second.nsec)
+    })
+
+    it('produces different identities for different paths', () => {
+      const identity = fixedIdentity()
+      initPersonas(identity, ['personal'])
+
+      const first = derivePathIdentity(['personal', 'workshop', 'demo'])
+      const second = derivePathIdentity(['personal', 'workshop', 'ops'])
+
+      expect(first.npub).not.toBe(second.npub)
+    })
+
+    it('rejects invalid segments', () => {
+      const identity = fixedIdentity()
+      initPersonas(identity, ['personal'])
+
+      expect(() => derivePathIdentity(['Personal'])).toThrow('Derivation segments must be lowercase')
+      expect(() => derivePathIdentity(['two words'])).toThrow('Derivation segments must not contain spaces')
+      expect(() => derivePathIdentity([])).toThrow('At least one derivation segment is required')
+    })
+
+    it('supports explicit indices per level', () => {
+      const identity = fixedIdentity()
+      initPersonas(identity, ['personal'])
+
+      const first = derivePathIdentity([
+        { name: 'personal', index: 1 },
+        { name: 'workshop', index: 2 },
+        { name: 'demo', index: 3 },
+      ])
+      const second = derivePathIdentity([
+        { name: 'personal', index: 1 },
+        { name: 'workshop', index: 2 },
+        { name: 'demo', index: 3 },
+      ])
+      const different = derivePathIdentity([
+        { name: 'personal', index: 1 },
+        { name: 'workshop', index: 2 },
+        { name: 'demo', index: 4 },
+      ])
+
+      expect(first.npub).toBe(second.npub)
+      expect(first.npub).not.toBe(different.npub)
+    })
+
+    it('rejects invalid indices', () => {
+      const identity = fixedIdentity()
+      initPersonas(identity, ['personal'])
+
+      expect(() => derivePathIdentity([{ name: 'personal', index: -1 }])).toThrow('Derivation indices must be non-negative integers')
+      expect(() => derivePathIdentity([{ name: 'personal', index: 1.5 }])).toThrow('Derivation indices must be non-negative integers')
+    })
+  })
+
   describe('createPersona', () => {
     it('creates a custom persona at index 0 with id and children', () => {
       const identity = localIdentity()
@@ -157,6 +223,29 @@ describe('persona module', () => {
       expect(persona.npub).toMatch(/^npub1/)
       expect(persona.id).toMatch(/^[a-z0-9]{8}$/)
       expect(persona.children).toEqual({})
+    })
+
+    it('creates an anonymous account node when requested', () => {
+      const identity = localIdentity()
+      const personas = initPersonas(identity, ['personal'])
+      update({ personas })
+
+      const account = createPersona('burner', 'account')
+      expect(account.nodeType).toBe('account')
+      expect(account.npub).toMatch(/^npub1/)
+    })
+  })
+
+  describe('createChildPersona', () => {
+    it('creates child account nodes beneath a persona', () => {
+      const identity = localIdentity()
+      const personas = initPersonas(identity, ['personal'])
+      update({ personas })
+
+      const parent = Object.values(personas).find(p => p.name === 'personal')!
+      const account = createChildPersona(parent.id, 'forum-burner', 'account')
+      expect(account.nodeType).toBe('account')
+      expect(account.npub).toMatch(/^npub1/)
     })
   })
 

@@ -1147,6 +1147,84 @@ function wireGlobalEvents(): void {
     })
   })
 
+  document.addEventListener('canary:open-recovery-root-modal', () => {
+    import('./components/recovery-root-modal.js').then(({ showRecoveryRootModal }) => {
+      showRecoveryRootModal()
+    })
+  })
+
+  document.addEventListener('canary:create-recovery-root', async (evt) => {
+    const name = ((evt as CustomEvent<{ name?: string }>).detail?.name ?? '').trim()
+    if (!name) {
+      alert('Please enter a name for the new mnemonic-backed root.')
+      return
+    }
+
+    const { generateMnemonic } = await import('@scure/bip39')
+    const { wordlist } = await import('@scure/bip39/wordlists/english.js')
+    const { restoreFromMnemonic } = await import('./mnemonic.js')
+    const mnemonic = generateMnemonic(wordlist)
+    const { root, defaultPersona } = restoreFromMnemonic(mnemonic)
+    const privkey = bytesToHex(defaultPersona.identity.privateKey)
+    const pubkey = bytesToHex(defaultPersona.identity.publicKey)
+    defaultPersona.identity.privateKey.fill(0)
+    root.destroy()
+
+    teardownSync()
+    update({
+      identity: { pubkey, privkey, mnemonic, signerType: 'local', displayName: name },
+      groups: {},
+      personas: {},
+      activeGroupId: null,
+      activePersonaId: null,
+    })
+    document.dispatchEvent(new CustomEvent('canary:resync'))
+    render()
+    showRecoveryPhraseModal(mnemonic)
+  })
+
+  document.addEventListener('canary:restore-recovery-root', async (evt) => {
+    const phrase = ((evt as CustomEvent<{ mnemonic?: string }>).detail?.mnemonic ?? '').trim().replace(/\s+/g, ' ')
+    if (!phrase) {
+      alert('Please paste a recovery phrase first.')
+      return
+    }
+
+    const words = phrase.split(/\s+/)
+    if (words.length !== 12) {
+      alert('Recovery phrase must be exactly 12 words.')
+      return
+    }
+
+    try {
+      const { validateMnemonic, restoreFromMnemonic } = await import('./mnemonic.js')
+      const { wordlist } = await import('@scure/bip39/wordlists/english.js')
+      if (!validateMnemonic(phrase, wordlist)) {
+        alert('Invalid recovery phrase. Please check your words and try again.')
+        return
+      }
+
+      const { root, defaultPersona } = restoreFromMnemonic(phrase)
+      const privkey = bytesToHex(defaultPersona.identity.privateKey)
+      const pubkey = bytesToHex(defaultPersona.identity.publicKey)
+      defaultPersona.identity.privateKey.fill(0)
+      root.destroy()
+
+      teardownSync()
+      update({
+        identity: { pubkey, privkey, mnemonic: phrase, signerType: 'local', displayName: 'You' },
+        groups: {},
+        personas: {},
+        activeGroupId: null,
+        activePersonaId: null,
+      })
+      document.dispatchEvent(new CustomEvent('canary:resync'))
+      render()
+    } catch {
+      alert('Invalid recovery phrase.')
+    }
+  })
+
   document.addEventListener('canary:export-persona', (evt) => {
     const { personaId } = (evt as CustomEvent<{ personaId: string }>).detail
     const { personas } = getState()

@@ -5,7 +5,8 @@ import { walkTree, findById } from '../persona-tree.js'
 import { createChildPersona } from '../persona.js'
 import { personaColour } from './persona-picker.js'
 import { escapeHtml } from '../utils/escape.js'
-import type { AppPersona, AppGroup } from '../types.js'
+import { identityNodeLabel } from '../types.js'
+import type { AppPersona, AppGroup, IdentityNodeType } from '../types.js'
 
 // ── Styles ─────────────────────────────────────────────────────
 
@@ -76,6 +77,16 @@ const TREE_STYLES = `
   .id-tree__display-name {
     color: var(--text-muted);
     font-size: 0.75rem;
+  }
+
+  .id-tree__type {
+    font-size: 0.625rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.05rem 0.35rem;
   }
 
   .id-tree__groups {
@@ -179,6 +190,7 @@ function renderNode(
   const displayNameHtml = persona.displayName && persona.displayName !== persona.name
     ? ` <span class="id-tree__display-name">(${escapeHtml(persona.displayName)})</span>`
     : ''
+  const typeHtml = `<span class="id-tree__type">${escapeHtml(identityNodeLabel(persona))}</span>`
 
   const paddingLeft = depth * 1.5
   const isSelected = persona.id === selectedId
@@ -189,7 +201,8 @@ function renderNode(
       <span class="id-tree__connector">${parentPrefixes}${connector}</span>
       <span class="id-tree__badge" style="background: ${colour};">${letter}</span>
       <span class="id-tree__name">${escapeHtml(persona.name)}</span>${displayNameHtml}
-      <button class="id-tree__add-btn" data-tree-add-child="${escapeHtml(persona.id)}" title="Add child persona">+</button>
+      ${typeHtml}
+      <button class="id-tree__add-btn" data-tree-add-child="${escapeHtml(persona.id)}" title="Add child persona or account">+</button>
       ${groupLabel ? `<span class="id-tree__groups" data-tree-groups-persona="${escapeHtml(persona.id)}">${groupLabel}</span>` : ''}
     </div>
   `
@@ -320,7 +333,16 @@ function showInlineInput(tree: HTMLElement, addBtn: HTMLElement, parentId: strin
   input.maxLength = 32
   input.autocomplete = 'off'
 
+  const typeSelect = document.createElement('select')
+  typeSelect.className = 'input'
+  typeSelect.style.cssText = 'font-size:0.75rem;padding:0.125rem 0.375rem;max-width:8rem;'
+  typeSelect.innerHTML = `
+    <option value="account">Account</option>
+    <option value="persona">Persona</option>
+  `
+
   inputRow.appendChild(input)
+  inputRow.appendChild(typeSelect)
   nodeRow.insertAdjacentElement('afterend', inputRow)
   input.focus()
 
@@ -336,7 +358,8 @@ function showInlineInput(tree: HTMLElement, addBtn: HTMLElement, parentId: strin
     }
 
     try {
-      const newChild = createChildPersona(parentId, name)
+      const nodeType = (typeSelect.value === 'persona' ? 'persona' : 'account') as IdentityNodeType
+      const newChild = createChildPersona(parentId, name, nodeType)
       const { personas } = getState()
 
       // Insert child into parent's children
