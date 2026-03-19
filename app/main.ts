@@ -42,6 +42,7 @@ import { getPublicKey } from 'nostr-tools/pure'
 import { broadcastAction, ensureTransport, subscribeToAllGroups, teardownSync } from './sync.js'
 import { fetchVault, fetchVaultNip07, publishVault, publishVaultNip07, mergeVaultGroups, subscribeToVault, unsubscribeFromVault } from './nostr/vault.js'
 import { initPersonas, initPersonasFromTree, destroyPersonas } from './persona.js'
+import { findById } from './persona-tree.js'
 import { fetchPersonaProfiles, publishPersonaProfile } from './nostr/profiles.js'
 import { showToast } from './components/toast.js'
 import { showDuressAlert } from './components/duress-alert.js'
@@ -1147,43 +1148,58 @@ function wireGlobalEvents(): void {
   })
 
   document.addEventListener('canary:export-persona', (evt) => {
-    const { personaName } = (evt as CustomEvent<{ personaName: string }>).detail
+    const { personaId } = (evt as CustomEvent<{ personaId: string }>).detail
     const { personas } = getState()
-    // Find persona by name (events from persona-card use name)
-    const entry = Object.values(personas).find(p => p.name === personaName)
-    if (!entry) return
+    const found = findById(personas, personaId)
+    if (!found) return
     import('./components/export-modal.js').then(({ showExportModal }) => {
-      showExportModal(entry)
+      showExportModal(found.persona)
     })
   })
 
   document.addEventListener('canary:prove-ownership', (evt) => {
-    const { personaName } = (evt as CustomEvent<{ personaName: string }>).detail
+    const { personaId } = (evt as CustomEvent<{ personaId: string }>).detail
     import('./components/linkage-proof.js').then(({ showProveOwnershipModal }) => {
-      showProveOwnershipModal(personaName)
+      showProveOwnershipModal(personaId)
     })
   })
 
   document.addEventListener('canary:archive-persona', (evt) => {
-    const { personaName } = (evt as CustomEvent<{ personaName: string }>).detail
+    const { personaId } = (evt as CustomEvent<{ personaId: string }>).detail
     const { personas } = getState()
-    const entry = Object.entries(personas).find(([, p]) => p.name === personaName)
-    if (!entry) return
-    const [id, persona] = entry
-    update({ personas: { ...personas, [id]: { ...persona, archived: true } } })
-    showToast(`Archived "${personaName}"`, 'success')
+    const found = findById(personas, personaId)
+    if (!found) return
+    // Deep update: set archived flag in the persona tree
+    function deepArchive(tree: Record<string, any>, id: string): Record<string, any> {
+      const result: Record<string, any> = {}
+      for (const [k, p] of Object.entries(tree)) {
+        if (p.id === id) {
+          result[k] = { ...p, archived: true }
+        } else if (p.children && Object.keys(p.children).length > 0) {
+          result[k] = { ...p, children: deepArchive(p.children, id) }
+        } else {
+          result[k] = p
+        }
+      }
+      return result
+    }
+    update({ personas: deepArchive(personas, personaId) as any })
+    showToast(`Archived "${found.persona.name}"`, 'success')
   })
 
   document.addEventListener('canary:rotate-persona', (evt) => {
-    const { personaName } = (evt as CustomEvent<{ personaName: string }>).detail
+    const { personaId } = (evt as CustomEvent<{ personaId: string }>).detail
     import('./persona.js').then(({ rotatePersona }) => {
       const { personas } = getState()
-      const entry = Object.entries(personas).find(([, p]) => p.name === personaName)
-      if (!entry) return
-      const [id, persona] = entry
-      const rotated = rotatePersona(id, persona.index)
-      update({ personas: { ...personas, [id]: rotated } })
-      showToast(`Rotated "${personaName}" to index ${rotated.index}`, 'success')
+      const found = findById(personas, personaId)
+      if (!found) return
+      const rotated = rotatePersona(personaId, found.persona.index)
+      // Deep update: replace persona in tree
+      // For now, only handle top-level
+      if (personas[personaId]) {
+        update({ personas: { ...personas, [personaId]: rotated } })
+      }
+      showToast(`Rotated "${found.persona.name}" to index ${rotated.index}`, 'success')
     })
   })
 

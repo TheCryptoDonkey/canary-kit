@@ -1159,7 +1159,7 @@ export function renderIdentities(container: HTMLElement): void {
       if (!found) return
       container.dispatchEvent(new CustomEvent('canary:export-persona', {
         bubbles: true,
-        detail: { personaName: found.persona.name },
+        detail: { personaId: currentId },
       }))
     }, { signal })
 
@@ -1194,7 +1194,7 @@ export function renderIdentities(container: HTMLElement): void {
       _menuOpen = false
       container.dispatchEvent(new CustomEvent('canary:rotate-persona', {
         bubbles: true,
-        detail: { personaName: found.persona.name },
+        detail: { personaId: currentId },
       }))
     }, { signal })
 
@@ -1205,7 +1205,7 @@ export function renderIdentities(container: HTMLElement): void {
       _menuOpen = false
       container.dispatchEvent(new CustomEvent('canary:prove-ownership', {
         bubbles: true,
-        detail: { personaName: found.persona.name },
+        detail: { personaId: currentId },
       }))
     }, { signal })
 
@@ -1216,7 +1216,7 @@ export function renderIdentities(container: HTMLElement): void {
       _menuOpen = false
       container.dispatchEvent(new CustomEvent('canary:archive-persona', {
         bubbles: true,
-        detail: { personaName: found.persona.name },
+        detail: { personaId: currentId },
       }))
     }, { signal })
   }
