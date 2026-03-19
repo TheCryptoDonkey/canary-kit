@@ -121,9 +121,22 @@ export function deserialiseVault(json: string): VaultData {
     }
 
     // Migrate groups: personaName → personaId
+    // Create personas for any names referenced by groups but missing from the array
     for (const group of Object.values(groups) as any[]) {
-      if (group.personaName && !group.personaId) {
-        group.personaId = nameToId[group.personaName] ?? ''
+      const pName = group.personaName ?? 'personal'
+      if (!nameToId[pName]) {
+        const id = generatePersonaId()
+        nameToId[pName] = id
+        personaTree[id] = {
+          name: pName,
+          id,
+          index: 0,
+          npub: '',
+          children: {},
+        }
+      }
+      if (!group.personaId) {
+        group.personaId = nameToId[pName]
         delete group.personaName
       }
     }

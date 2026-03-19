@@ -1,6 +1,6 @@
 // app/persona.ts — Persona lifecycle: TreeRoot management, derivation, group identity
 
-import { fromNsec } from 'nsec-tree/core'
+import { fromNsec, derive } from 'nsec-tree/core'
 import { deriveFromIdentity } from 'nsec-tree'
 import type { TreeRoot, Identity } from 'nsec-tree/core'
 import { derivePersona, deriveFromPersona } from 'nsec-tree/persona'
@@ -203,9 +203,19 @@ export function resolveIdentity(persona: AppPersona, ancestors: AppPersona[]): I
  * rotation when a group reseeds.
  */
 export function getGroupIdentity(personaId: string, groupId: string, epoch: number): Identity {
+  if (!_masterRoot) throw new Error('Personas not initialised — call initPersonas() first')
+  if (!personaId) {
+    // Fallback: derive directly from master root for groups with no persona assigned
+    const purpose = `canary:group:${groupId}:${epoch}`
+    return derive(_masterRoot, purpose, 0)
+  }
+
   const found = findById(getState().personas, personaId)
   if (!found) {
-    throw new Error(`Persona "${personaId}" not found — cannot derive group identity`)
+    // Persona id not in tree — derive from master root as fallback
+    console.warn(`[canary:persona] Persona "${personaId}" not found — falling back to master root for group ${groupId}`)
+    const purpose = `canary:group:${groupId}:${epoch}`
+    return derive(_masterRoot, purpose, 0)
   }
 
   const identity = resolveIdentity(found.persona, found.ancestors)
