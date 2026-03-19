@@ -1,3 +1,10 @@
+## [2.5.3](https://github.com/forgesworn/canary-kit/compare/v2.5.2...v2.5.3) (2026-03-19)
+
+
+### Bug Fixes
+
+* handle missing personaId during v2 vault migration and sync ([19fa62c](https://github.com/forgesworn/canary-kit/commit/19fa62cab00fa1f6b68082408c6f81fa94c5726a))
+
 ## [2.5.2](https://github.com/forgesworn/canary-kit/compare/v2.5.1...v2.5.2) (2026-03-19)
 
 
