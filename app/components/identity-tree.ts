@@ -39,6 +39,11 @@ const TREE_STYLES = `
     border-radius: 3px;
   }
 
+  .id-tree__node--selected {
+    background: var(--bg-hover, rgba(255,255,255,0.04));
+    border-left: 2px solid var(--amber-500);
+  }
+
   .id-tree__node:hover {
     background: var(--bg-hover, rgba(255,255,255,0.04));
   }
@@ -159,6 +164,7 @@ function renderNode(
   depth: number,
   isLast: boolean,
   parentPrefixes: string,
+  selectedId?: string | null,
 ): string {
   if (persona.archived) return ''
 
@@ -175,9 +181,11 @@ function renderNode(
     : ''
 
   const paddingLeft = depth * 1.5
+  const isSelected = persona.id === selectedId
+  const selectedClass = isSelected ? ' id-tree__node--selected' : ''
 
   const row = `
-    <div class="id-tree__node" data-tree-persona-id="${escapeHtml(persona.id)}" style="padding-left: ${paddingLeft}rem;">
+    <div class="id-tree__node${selectedClass}" data-tree-persona-id="${escapeHtml(persona.id)}" style="padding-left: ${paddingLeft}rem;">
       <span class="id-tree__connector">${parentPrefixes}${connector}</span>
       <span class="id-tree__badge" style="background: ${colour};">${letter}</span>
       <span class="id-tree__name">${escapeHtml(persona.name)}</span>${displayNameHtml}
@@ -192,7 +200,7 @@ function renderNode(
 
   const childRows = childEntries.map((child, i) => {
     const childIsLast = i === childEntries.length - 1
-    return renderNode(child, groups, depth + 1, childIsLast, childPrefix)
+    return renderNode(child, groups, depth + 1, childIsLast, childPrefix, selectedId)
   }).join('')
 
   return row + childRows
@@ -201,7 +209,7 @@ function renderNode(
 // ── Public API ──────────────────────────────────────────────
 
 /** Render the identity tree HTML. */
-export function renderIdentityTree(): string {
+export function renderIdentityTree(selectedId?: string | null): string {
   const { identity, personas, groups } = getState()
 
   if (!identity) {
@@ -219,7 +227,7 @@ export function renderIdentityTree(): string {
 
   const nodeRows = rootPersonas.map((p, i) => {
     const isLast = i === rootPersonas.length - 1
-    return renderNode(p, groups, 0, isLast, '')
+    return renderNode(p, groups, 0, isLast, '', selectedId)
   }).join('')
 
   return `
@@ -266,12 +274,12 @@ export function wireIdentityTree(container: HTMLElement): void {
       return
     }
 
-    // ── Persona node click → scroll to persona card ───────
+    // ── Persona node click → select in detail panel ───────
     const nodeEl = target.closest<HTMLElement>('[data-tree-persona-id]')
     if (nodeEl) {
       const id = nodeEl.dataset.treePersonaId
       if (id) {
-        document.getElementById('persona-card-' + id)?.scrollIntoView({ behavior: 'smooth' })
+        document.dispatchEvent(new CustomEvent('canary:select-persona', { detail: { personaId: id } }))
       }
     }
   })
@@ -336,6 +344,8 @@ function showInlineInput(tree: HTMLElement, addBtn: HTMLElement, parentId: strin
       if (found) {
         const updatedPersonas = deepInsertChild(personas, parentId, newChild)
         update({ personas: updatedPersonas })
+        // Auto-select the newly created child
+        document.dispatchEvent(new CustomEvent('canary:select-persona', { detail: { personaId: newChild.id } }))
       }
     } catch {
       // Name conflict or other error — just close

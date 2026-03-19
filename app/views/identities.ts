@@ -1,20 +1,27 @@
-// app/views/identities.ts — Identity hub: master card, persona cards, tree, archive
+// app/views/identities.ts — Identity hub: master card, tree nav, detail panel, archive
 //
 // Numbers Station aesthetic — deep slate, amber accents, monospace body,
 // Playfair Display headings. Matches the existing canary-kit design language.
 
-import { getState, update } from '../state.js'
+import { getState, update, updateGroup } from '../state.js'
 import { isPersonasInitialised, createPersona } from '../persona.js'
-import { renderPersonaCard, wirePersonaCards } from '../components/persona-card.js'
 import { renderIdentityTree, wireIdentityTree } from '../components/identity-tree.js'
 import { walkTree, findById } from '../persona-tree.js'
+import { personaColour } from '../components/persona-picker.js'
+import { generateQR } from '../components/qr.js'
+import { showToast } from '../components/toast.js'
 import { escapeHtml } from '../utils/escape.js'
-import type { AppPersona } from '../types.js'
+import type { AppPersona, AppGroup } from '../types.js'
 
 // ── Module state ──────────────────────────────────────────────
 
 let _archivedVisible = false
 let _backupRevealed = false
+let _selectedPersonaId: string | null = null
+let _menuOpen = false
+let _qrVisible = false
+let _customRelayEditing = false
+let _wireAbort: AbortController | null = null
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -28,6 +35,19 @@ function isValidPersonaName(name: string): boolean {
   if (name !== name.toLowerCase()) return false
   if (/\s/.test(name)) return false
   return true
+}
+
+function hasProfileChanges(persona: AppPersona, panel: HTMLElement): boolean {
+  const displayNameInput = panel.querySelector<HTMLInputElement>('[data-field="displayName"]')
+  const aboutInput = panel.querySelector<HTMLInputElement>('[data-field="about"]')
+  const pictureInput = panel.querySelector<HTMLInputElement>('[data-field="picture"]')
+  if (!displayNameInput && !aboutInput && !pictureInput) return false
+
+  return (
+    (displayNameInput?.value ?? '') !== (persona.displayName ?? '') ||
+    (aboutInput?.value ?? '') !== (persona.about ?? '') ||
+    (pictureInput?.value ?? '') !== (persona.picture ?? '')
+  )
 }
 
 // ── Styles ────────────────────────────────────────────────────
@@ -279,31 +299,29 @@ const STYLES = `
   .id-nip07__why summary { cursor: pointer; }
   .id-nip07__why code { font-family: var(--font-mono); font-size: 0.6875rem; }
 
-  /* ── Persona cards ──────────────────────────────── */
+  /* ── Detail panel ────────────────────────────────── */
 
-  .persona-card {
+  .id-detail {
     background: var(--bg-raised);
     border: 1px solid var(--border);
+    border-left: 3px solid var(--amber-500);
     border-radius: 6px;
-    margin-bottom: 0.75rem;
-    overflow: hidden;
+    padding: 1rem 1.25rem 1.25rem;
+    margin-bottom: 1.5rem;
   }
 
-  .persona-card--expanded {
-    border-color: var(--border-amber);
+  .id-detail__hint {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 1.5rem 0;
   }
 
-  .persona-card__header {
+  .id-detail__header {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.875rem 1rem;
-    cursor: pointer;
-    transition: background 0.15s var(--ease-out);
-  }
-
-  .persona-card__header:hover {
-    background: var(--bg-hover);
+    margin-bottom: 0.5rem;
   }
 
   .persona-card__badge {
@@ -317,46 +335,6 @@ const STYLES = `
     font-size: 0.75rem;
     font-weight: 700;
     flex-shrink: 0;
-  }
-
-  .persona-card__info {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-  }
-
-  .persona-card__name {
-    font-weight: 600;
-    font-size: 0.9375rem;
-    color: var(--text-primary);
-  }
-
-  .persona-card__display-name {
-    font-size: 0.8125rem;
-    color: var(--text-secondary);
-  }
-
-  .persona-card__meta {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-  }
-
-  .persona-card__chevron {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    flex-shrink: 0;
-    transition: transform 0.2s var(--ease-out);
-  }
-
-  .persona-card--expanded .persona-card__chevron {
-    transform: rotate(90deg);
-  }
-
-  .persona-card__body {
-    padding: 0 1rem 1rem;
-    border-top: 1px solid var(--border);
   }
 
   .persona-card__breadcrumb {
@@ -558,6 +536,11 @@ const STYLES = `
     margin-top: 0.375rem;
   }
 
+  .persona-card__meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
   /* ── Mobile ─────────────────────────────────────── */
 
   @media (max-width: 480px) {
@@ -724,31 +707,208 @@ function renderMasterCard(): string {
   `
 }
 
-// ── Render: Active persona cards ─────────────────────────────
+// ── Render: Detail panel ──────────────────────────────────────
 
-function renderActivePersonas(): string {
-  const { personas, groups } = getState()
-  const groupList = Object.values(groups)
+function renderBreadcrumb(ancestors: AppPersona[]): string {
+  if (ancestors.length === 0) return ''
+  const parts = ancestors.map((a, i) => {
+    const isLast = i === ancestors.length - 1
+    const nameHtml = escapeHtml(a.name)
+    return isLast
+      ? `<span class="persona-card__breadcrumb-current">${nameHtml}</span>`
+      : `<span>${nameHtml}</span>`
+  })
+  const joined = parts.join(' <span class="persona-card__breadcrumb-sep">/</span> ')
+  return `<div class="persona-card__breadcrumb">${joined}</div>`
+}
 
-  // Use walkTree to render in depth-first order
-  const activeEntries = [...walkTree(personas)].filter(({ persona }) => !persona.archived)
+function renderProfileSection(persona: AppPersona): string {
+  return `
+    <div class="persona-card__section">
+      <h4 class="persona-card__section-title">Profile</h4>
+      <label class="persona-card__field">
+        <span class="persona-card__field-label">Display name</span>
+        <input class="input persona-card__input" type="text" data-field="displayName"
+          value="${escapeHtml(persona.displayName ?? '')}" placeholder="Display name" />
+      </label>
+      <label class="persona-card__field">
+        <span class="persona-card__field-label">About</span>
+        <input class="input persona-card__input" type="text" data-field="about"
+          value="${escapeHtml(persona.about ?? '')}" placeholder="Short bio" />
+      </label>
+      <label class="persona-card__field">
+        <span class="persona-card__field-label">Picture URL</span>
+        <input class="input persona-card__input" type="url" data-field="picture"
+          value="${escapeHtml(persona.picture ?? '')}" placeholder="https://..." />
+      </label>
+      <button class="btn btn--sm btn--primary persona-card__publish-btn" id="id-detail-publish" hidden>
+        Publish
+      </button>
+    </div>
+  `
+}
 
-  if (activeEntries.length === 0) {
+function renderRelaySection(persona: AppPersona): string {
+  const { settings } = getState()
+  const hasCustom = (persona.readRelays && persona.readRelays.length > 0) ||
+    (persona.writeRelays && persona.writeRelays.length > 0)
+
+  if (!hasCustom && !_customRelayEditing) {
     return `
-      <div class="id-empty">
-        <div class="id-empty__icon">\u{1F464}</div>
-        <h3 class="id-empty__title">No personas yet</h3>
-        <p class="id-empty__text">
-          Create your first persona to get started. Each persona is an independent
-          Nostr identity \u2014 use one for personal groups, another for bitcoin meetups,
-          another as a burner. They\u2019re all derived from your master key and recoverable
-          from your 12-word phrase.
-        </p>
+      <div class="persona-card__section">
+        <h4 class="persona-card__section-title">Relays</h4>
+        <span class="persona-card__relay-default">Using default relays</span>
+        <a href="#" class="persona-card__customise-link" id="id-detail-customise-relays">Customise</a>
       </div>
     `
   }
 
-  return activeEntries.map(({ persona, ancestors }) => renderPersonaCard(persona, groupList, ancestors)).join('')
+  const readRelays = persona.readRelays ?? settings.defaultReadRelays ?? []
+  const writeRelays = persona.writeRelays ?? settings.defaultWriteRelays ?? []
+
+  return `
+    <div class="persona-card__section">
+      <h4 class="persona-card__section-title">Relays</h4>
+      <label class="persona-card__field">
+        <span class="persona-card__field-label">Read relays</span>
+        <input class="input persona-card__input" type="text" data-relay-field="read"
+          value="${escapeHtml(readRelays.join(', '))}" placeholder="wss://relay.example.com" />
+      </label>
+      <label class="persona-card__field">
+        <span class="persona-card__field-label">Write relays</span>
+        <input class="input persona-card__input" type="text" data-relay-field="write"
+          value="${escapeHtml(writeRelays.join(', '))}" placeholder="wss://relay.example.com" />
+      </label>
+      <button class="btn btn--sm btn--primary" id="id-detail-save-relays">Save relays</button>
+    </div>
+  `
+}
+
+function renderGroupsSection(persona: AppPersona): string {
+  const { groups, personas: allPersonas } = getState()
+  const groupList = Object.values(groups)
+  const personaGroups = groupList.filter((g) => g.personaId === persona.id)
+  const otherGroups = groupList.filter((g) => g.personaId !== persona.id)
+
+  const chips = personaGroups.map((g) => `
+    <span class="persona-card__group-chip-wrap">
+      <button class="persona-card__group-chip" data-navigate-group="${escapeHtml(g.id)}">${escapeHtml(g.name)}</button>
+      <button class="persona-card__group-remove" data-unassign-group="${escapeHtml(g.id)}"
+        title="Unassign from this persona" aria-label="Unassign ${escapeHtml(g.name)}">\u00D7</button>
+    </span>
+  `).join('')
+
+  function personaNameForGroup(g: AppGroup): string {
+    if (!g.personaId) return ''
+    for (const { persona: p } of walkTree(allPersonas)) {
+      if (p.id === g.personaId) return p.name
+    }
+    return ''
+  }
+
+  const assignOptions = otherGroups.length > 0
+    ? `<select class="input persona-card__assign-select" id="id-detail-assign" style="font-size:0.75rem;padding:0.25rem 0.375rem;">
+        <option value="">+ Assign group\u2026</option>
+        ${otherGroups.map((g) => {
+          const fromName = personaNameForGroup(g)
+          const from = fromName ? ` (${escapeHtml(fromName)})` : ''
+          return `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}${from}</option>`
+        }).join('')}
+      </select>`
+    : ''
+
+  return `
+    <div class="persona-card__section">
+      <h4 class="persona-card__section-title">Groups</h4>
+      ${personaGroups.length > 0
+        ? `<div class="persona-card__group-chips">${chips}</div>`
+        : `<span class="persona-card__meta">No groups assigned</span>`}
+      ${assignOptions}
+    </div>
+  `
+}
+
+function renderActions(persona: AppPersona): string {
+  return `
+    <div class="persona-card__actions">
+      <button class="btn btn--sm" id="id-detail-export">Export nsec</button>
+      <div class="persona-card__more">
+        <button class="btn btn--sm persona-card__more-btn" id="id-detail-menu-btn"
+          aria-label="More actions" title="More actions">\u22EF</button>
+        ${_menuOpen ? `
+          <div class="persona-card__menu" id="id-detail-menu-panel">
+            <button class="persona-card__menu-item" id="id-detail-copy-npub">Copy npub</button>
+            <button class="persona-card__menu-item" id="id-detail-show-qr">
+              ${_qrVisible ? 'Hide QR' : 'Show QR'}
+            </button>
+            <button class="persona-card__menu-item" id="id-detail-rotate">Rotate</button>
+            <button class="persona-card__menu-item" id="id-detail-prove">Prove ownership</button>
+            <button class="persona-card__menu-item persona-card__menu-item--danger" id="id-detail-archive">Archive</button>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+    ${_qrVisible ? `
+      <div class="persona-card__qr">
+        ${generateQR(persona.npub, 3)}
+        <span class="persona-card__qr-label">${escapeHtml(truncateNpub(persona.npub))}</span>
+      </div>
+    ` : ''}
+  `
+}
+
+function renderDetailPanel(): string {
+  const { personas } = getState()
+  const activeEntries = [...walkTree(personas)].filter(({ persona }) => !persona.archived)
+
+  // Auto-select first persona if nothing selected or selection is stale
+  if (activeEntries.length > 0) {
+    const stillExists = _selectedPersonaId && activeEntries.some(({ persona }) => persona.id === _selectedPersonaId)
+    if (!stillExists) {
+      _selectedPersonaId = activeEntries[0].persona.id
+    }
+  } else {
+    _selectedPersonaId = null
+  }
+
+  if (!_selectedPersonaId) {
+    return `
+      <div class="id-detail" id="id-detail">
+        <div class="id-detail__hint">Select a persona from the tree above</div>
+      </div>
+    `
+  }
+
+  const found = findById(personas, _selectedPersonaId)
+  if (!found) {
+    return `
+      <div class="id-detail" id="id-detail">
+        <div class="id-detail__hint">Select a persona from the tree above</div>
+      </div>
+    `
+  }
+
+  const { persona, ancestors } = found
+  const colour = personaColour(persona.name)
+  const letter = escapeHtml(persona.name.slice(0, 1).toUpperCase())
+
+  return `
+    <div class="id-detail" id="id-detail" data-detail-persona-id="${escapeHtml(persona.id)}">
+      <div class="id-detail__header">
+        <span class="persona-card__badge" style="background-color:${colour}">${letter}</span>
+        <div>
+          <div style="font-weight:600;font-size:0.9375rem;color:var(--text-primary);">${escapeHtml(persona.name)}</div>
+          ${persona.displayName ? `<div style="font-size:0.8125rem;color:var(--text-secondary);">${escapeHtml(persona.displayName)}</div>` : ''}
+        </div>
+      </div>
+      ${renderBreadcrumb([...ancestors, persona])}
+      <div class="persona-card__npub">${escapeHtml(persona.npub)}</div>
+      ${renderProfileSection(persona)}
+      ${renderRelaySection(persona)}
+      ${renderGroupsSection(persona)}
+      ${renderActions(persona)}
+    </div>
+  `
 }
 
 // ── Render: New persona form ─────────────────────────────────
@@ -804,6 +964,11 @@ function renderArchivedSection(): string {
 // ── Public API ────────────────────────────────────────────────
 
 export function renderIdentities(container: HTMLElement): void {
+  // Abort previous listeners to prevent accumulation
+  _wireAbort?.abort()
+  _wireAbort = new AbortController()
+  const { signal } = _wireAbort
+
   container.textContent = ''
 
   // Inject scoped styles once
@@ -829,16 +994,27 @@ export function renderIdentities(container: HTMLElement): void {
     '<h1 class="id-hub__heading">Identities</h1>',
     '<div class="id-hub__sub">Derived from your master key</div>',
     renderMasterCard(),
-    renderIdentityTree(),
-    renderActivePersonas(),
+    renderIdentityTree(_selectedPersonaId),
+    renderDetailPanel(),
     renderNewPersonaForm(),
     renderArchivedSection(),
   ].join('')
   container.appendChild(wrapper)
 
-  // ── Wire components ──────────────────────────────────────────
-  wirePersonaCards(container)
+  // ── Wire identity tree ──────────────────────────────────────
   wireIdentityTree(container)
+
+  // ── Listen for persona selection ────────────────────────────
+  document.addEventListener('canary:select-persona', ((e: CustomEvent) => {
+    const { personaId } = e.detail as { personaId: string }
+    if (personaId === _selectedPersonaId) return
+    _selectedPersonaId = personaId
+    // Reset detail panel transient state
+    _menuOpen = false
+    _qrVisible = false
+    _customRelayEditing = false
+    renderIdentities(container)
+  }) as EventListener, { signal })
 
   // ── Backup reveal ────────────────────────────────────────────
   const backupBtn = container.querySelector<HTMLButtonElement>('#id-backup-btn')
@@ -854,16 +1030,205 @@ export function renderIdentities(container: HTMLElement): void {
     }
   }
 
-  backupBtn?.addEventListener('click', toggleBackup)
-  mnemonicEl?.addEventListener('click', toggleBackup)
+  backupBtn?.addEventListener('click', toggleBackup, { signal })
+  mnemonicEl?.addEventListener('click', toggleBackup, { signal })
 
   // ── Shamir + Verify events ───────────────────────────────────
   container.querySelector('#id-shamir-btn')?.addEventListener('click', () => {
     document.dispatchEvent(new CustomEvent('canary:shamir-split', { bubbles: true }))
-  })
+  }, { signal })
   container.querySelector('#id-verify-proof-btn')?.addEventListener('click', () => {
     document.dispatchEvent(new CustomEvent('canary:verify-proof', { bubbles: true }))
-  })
+  }, { signal })
+
+  // ── Detail panel actions ────────────────────────────────────
+  const detailPanel = container.querySelector<HTMLElement>('#id-detail')
+
+  if (detailPanel && _selectedPersonaId) {
+    const currentId = _selectedPersonaId
+
+    // Profile input change → show publish button
+    detailPanel.addEventListener('input', (e) => {
+      const input = e.target as HTMLInputElement
+      if (!input.dataset.field) return
+      const { personas } = getState()
+      const found = findById(personas, currentId)
+      if (!found) return
+      const publishBtn = detailPanel.querySelector<HTMLButtonElement>('#id-detail-publish')
+      if (publishBtn) {
+        publishBtn.hidden = !hasProfileChanges(found.persona, detailPanel)
+      }
+    }, { signal })
+
+    // Profile publish
+    detailPanel.querySelector('#id-detail-publish')?.addEventListener('click', () => {
+      const { personas } = getState()
+      const found = findById(personas, currentId)
+      if (!found) return
+      const displayNameInput = detailPanel.querySelector<HTMLInputElement>('[data-field="displayName"]')
+      const aboutInput = detailPanel.querySelector<HTMLInputElement>('[data-field="about"]')
+      const pictureInput = detailPanel.querySelector<HTMLInputElement>('[data-field="picture"]')
+
+      const updated: AppPersona = {
+        ...found.persona,
+        displayName: displayNameInput?.value || undefined,
+        about: aboutInput?.value || undefined,
+        picture: pictureInput?.value || undefined,
+      }
+
+      const updatedPersonas = deepUpdatePersona(personas, currentId, updated)
+      update({ personas: updatedPersonas })
+      showToast(`Profile saved for "${found.persona.name}"`, 'success')
+    }, { signal })
+
+    // Customise relays link
+    detailPanel.querySelector('#id-detail-customise-relays')?.addEventListener('click', (e) => {
+      e.preventDefault()
+      _customRelayEditing = true
+      renderIdentities(container)
+    }, { signal })
+
+    // Save relays
+    detailPanel.querySelector('#id-detail-save-relays')?.addEventListener('click', () => {
+      const readInput = detailPanel.querySelector<HTMLInputElement>('[data-relay-field="read"]')
+      const writeInput = detailPanel.querySelector<HTMLInputElement>('[data-relay-field="write"]')
+      const readRelays = (readInput?.value ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      const writeRelays = (writeInput?.value ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+
+      const { personas } = getState()
+      const found = findById(personas, currentId)
+      if (!found) return
+      const updated: AppPersona = { ...found.persona, readRelays, writeRelays }
+      const updatedPersonas = deepUpdatePersona(personas, currentId, updated)
+      update({ personas: updatedPersonas })
+      _customRelayEditing = false
+      showToast(`Relays saved for "${found.persona.name}"`, 'success')
+    }, { signal })
+
+    // Group chip navigation
+    detailPanel.addEventListener('click', (e) => {
+      const groupChip = (e.target as HTMLElement).closest<HTMLElement>('[data-navigate-group]')
+      if (groupChip) {
+        const groupId = groupChip.dataset.navigateGroup!
+        update({ view: 'groups', activeGroupId: groupId })
+        return
+      }
+
+      // Unassign group
+      const unassignBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-unassign-group]')
+      if (unassignBtn) {
+        e.stopPropagation()
+        const groupId = unassignBtn.dataset.unassignGroup!
+        const { groups } = getState()
+        const group = groups[groupId]
+        if (!group) return
+        updateGroup(groupId, { personaId: '' })
+        showToast(`"${group.name}" unassigned`, 'info')
+        return
+      }
+
+      // Close menu on outside click
+      if (_menuOpen) {
+        const inMenu = (e.target as HTMLElement).closest<HTMLElement>('#id-detail-menu-panel')
+        const isMenuBtn = (e.target as HTMLElement).closest<HTMLElement>('#id-detail-menu-btn')
+        if (!inMenu && !isMenuBtn) {
+          _menuOpen = false
+          renderIdentities(container)
+        }
+      }
+    }, { signal })
+
+    // Assign group dropdown
+    detailPanel.querySelector('#id-detail-assign')?.addEventListener('change', (e) => {
+      const select = e.target as HTMLSelectElement
+      const groupId = select.value
+      if (!groupId) return
+      const { groups, personas } = getState()
+      const group = groups[groupId]
+      if (!group) return
+      updateGroup(groupId, { personaId: currentId })
+      const found = findById(personas, currentId)
+      showToast(`"${group.name}" assigned to ${found?.persona.name ?? currentId}`, 'success')
+      select.value = ''
+    }, { signal })
+
+    // Export nsec
+    detailPanel.querySelector('#id-detail-export')?.addEventListener('click', () => {
+      const { personas } = getState()
+      const found = findById(personas, currentId)
+      if (!found) return
+      container.dispatchEvent(new CustomEvent('canary:export-persona', {
+        bubbles: true,
+        detail: { personaName: found.persona.name },
+      }))
+    }, { signal })
+
+    // More menu toggle
+    detailPanel.querySelector('#id-detail-menu-btn')?.addEventListener('click', () => {
+      _menuOpen = !_menuOpen
+      renderIdentities(container)
+    }, { signal })
+
+    // Menu items
+    detailPanel.querySelector('#id-detail-copy-npub')?.addEventListener('click', () => {
+      const { personas } = getState()
+      const found = findById(personas, currentId)
+      if (!found) return
+      navigator.clipboard.writeText(found.persona.npub).then(() => {
+        showToast('npub copied', 'success')
+      }).catch(() => {})
+      _menuOpen = false
+      renderIdentities(container)
+    }, { signal })
+
+    detailPanel.querySelector('#id-detail-show-qr')?.addEventListener('click', () => {
+      _qrVisible = !_qrVisible
+      _menuOpen = false
+      renderIdentities(container)
+    }, { signal })
+
+    detailPanel.querySelector('#id-detail-rotate')?.addEventListener('click', () => {
+      const { personas } = getState()
+      const found = findById(personas, currentId)
+      if (!found) return
+      _menuOpen = false
+      container.dispatchEvent(new CustomEvent('canary:rotate-persona', {
+        bubbles: true,
+        detail: { personaName: found.persona.name },
+      }))
+    }, { signal })
+
+    detailPanel.querySelector('#id-detail-prove')?.addEventListener('click', () => {
+      const { personas } = getState()
+      const found = findById(personas, currentId)
+      if (!found) return
+      _menuOpen = false
+      container.dispatchEvent(new CustomEvent('canary:prove-ownership', {
+        bubbles: true,
+        detail: { personaName: found.persona.name },
+      }))
+    }, { signal })
+
+    detailPanel.querySelector('#id-detail-archive')?.addEventListener('click', () => {
+      const { personas } = getState()
+      const found = findById(personas, currentId)
+      if (!found) return
+      _menuOpen = false
+      container.dispatchEvent(new CustomEvent('canary:archive-persona', {
+        bubbles: true,
+        detail: { personaName: found.persona.name },
+      }))
+    }, { signal })
+  }
+
+  // ── Master card group chip navigation ──────────────────────
+  container.querySelector('.id-master')?.addEventListener('click', (e) => {
+    const groupChip = (e.target as HTMLElement).closest<HTMLElement>('[data-navigate-group]')
+    if (groupChip) {
+      const groupId = groupChip.dataset.navigateGroup!
+      update({ view: 'groups', activeGroupId: groupId })
+    }
+  }, { signal })
 
   // ── New persona form ─────────────────────────────────────────
   const nameInput = container.querySelector<HTMLInputElement>('#id-new-name')
@@ -891,13 +1256,18 @@ export function renderIdentities(container: HTMLElement): void {
       update({ personas: { ...personas, [newPersona.id]: newPersona } })
       nameInput.value = ''
       errorEl.textContent = ''
+      // Auto-select the newly created persona
+      _selectedPersonaId = newPersona.id
+      _menuOpen = false
+      _qrVisible = false
+      _customRelayEditing = false
     } catch (err) {
       errorEl.textContent = err instanceof Error ? err.message : 'Failed to create persona.'
     }
   }
 
-  createBtn?.addEventListener('click', handleCreate)
-  nameInput?.addEventListener('keydown', e => { if (e.key === 'Enter') handleCreate() })
+  createBtn?.addEventListener('click', handleCreate, { signal })
+  nameInput?.addEventListener('keydown', e => { if (e.key === 'Enter') handleCreate() }, { signal })
 
   // ── Archived toggle + restore ────────────────────────────────
   const archivedToggle = container.querySelector<HTMLButtonElement>('#id-archived-toggle')
@@ -908,7 +1278,7 @@ export function renderIdentities(container: HTMLElement): void {
       archivedList.style.maxHeight = _archivedVisible ? archivedList.scrollHeight + 'px' : '0'
       const chevron = archivedToggle.querySelector('span')
       if (chevron) chevron.textContent = _archivedVisible ? '\u25BC' : '\u25B6'
-    })
+    }, { signal })
   }
 
   container.addEventListener('click', e => {
@@ -916,14 +1286,14 @@ export function renderIdentities(container: HTMLElement): void {
     if (!restoreBtn) return
     const personaId = restoreBtn.dataset.restorePersona!
     const { personas } = getState()
-    // Find persona by id anywhere in the tree
     const found = findById(personas, personaId)
     if (!found) return
-    // Immutably update the persona's archived flag in the tree
     const updatedPersonas = deepSetArchived(personas, personaId, false)
     update({ personas: updatedPersonas })
-  })
+  }, { signal })
 }
+
+// ── Tree helpers ──────────────────────────────────────────────
 
 /**
  * Immutably set archived flag for a persona anywhere in the tree.
@@ -939,6 +1309,27 @@ function deepSetArchived(
       result[id] = { ...p, archived }
     } else if (p.children && Object.keys(p.children).length > 0) {
       result[id] = { ...p, children: deepSetArchived(p.children, targetId, archived) }
+    } else {
+      result[id] = p
+    }
+  }
+  return result
+}
+
+/**
+ * Immutably replace a persona anywhere in the tree by id.
+ */
+function deepUpdatePersona(
+  personas: Record<string, AppPersona>,
+  targetId: string,
+  updated: AppPersona,
+): Record<string, AppPersona> {
+  const result: Record<string, AppPersona> = {}
+  for (const [id, p] of Object.entries(personas)) {
+    if (id === targetId) {
+      result[id] = updated
+    } else if (p.children && Object.keys(p.children).length > 0) {
+      result[id] = { ...p, children: deepUpdatePersona(p.children, targetId, updated) }
     } else {
       result[id] = p
     }
