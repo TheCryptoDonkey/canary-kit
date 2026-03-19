@@ -21,6 +21,9 @@ const visibleQRs = new Set<string>()
 /** Track which persona cards have custom relay editing enabled. */
 const customRelayEditing = new Set<string>()
 
+/** AbortController for the current set of persona card event listeners. */
+let _wireAbort: AbortController | null = null
+
 // ── Helpers ───────────────────────────────────────────────────
 
 function truncateNpub(npub: string): string {
@@ -252,6 +255,11 @@ export function renderPersonaCard(persona: AppPersona, groups: AppGroup[], ances
  * Wire all persona card event handlers within a container.
  */
 export function wirePersonaCards(container: HTMLElement): void {
+  // Abort previous listeners to prevent duplicates on re-render
+  _wireAbort?.abort()
+  _wireAbort = new AbortController()
+  const { signal } = _wireAbort
+
   // ── Toggle expand/collapse ────────────────────────────────
   container.addEventListener('click', (e) => {
     const toggle = (e.target as HTMLElement).closest<HTMLElement>('[data-persona-toggle]')
@@ -418,7 +426,7 @@ export function wirePersonaCards(container: HTMLElement): void {
         update({ view: getState().view })
       }
     }
-  })
+  }, { signal })
 
   // ── Assign group to persona ─────────────────────────────
   container.addEventListener('change', (e) => {
