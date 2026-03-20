@@ -1,3 +1,10 @@
+## [2.6.2](https://github.com/forgesworn/canary-kit/compare/v2.6.1...v2.6.2) (2026-03-20)
+
+
+### Bug Fixes
+
+* correct copyright to TheCryptoDonkey ([61f2ad7](https://github.com/forgesworn/canary-kit/commit/61f2ad7646a787de3d64068a0599f1393f8cad9c))
+
 ## [2.6.1](https://github.com/forgesworn/canary-kit/compare/v2.6.0...v2.6.1) (2026-03-19)
 
 
