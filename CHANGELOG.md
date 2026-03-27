@@ -1,3 +1,10 @@
+# [2.7.0](https://github.com/forgesworn/canary-kit/compare/v2.6.2...v2.7.0) (2026-03-27)
+
+
+### Features
+
+* add GitHub repo link to demo site header ([5624301](https://github.com/forgesworn/canary-kit/commit/5624301b2c59d7b3a5f6e455a362a00e8639e4ed))
+
 ## [2.6.2](https://github.com/forgesworn/canary-kit/compare/v2.6.1...v2.6.2) (2026-03-20)
 
 
