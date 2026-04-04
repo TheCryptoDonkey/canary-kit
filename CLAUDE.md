@@ -50,6 +50,15 @@ Layered architecture — each spec builds on the one above:
 5. **`NIP-CANARY.md`** — Nostr application profile of NIP-XX for CANARY groups
 6. **`INTEGRATION.md`** — enterprise/finance integration guide
 
+## Security-Critical Paths
+
+Be extra careful when modifying:
+- `src/token.ts` — duress word derivation, liveness challenges, directional pair generation
+- `src/sync-crypto.ts` — AES-256-GCM envelope encryption for group sync messages
+- `src/beacon.ts` — encrypted location beacons and duress alert broadcasting
+- `src/session.ts` — directional two-party verification (word ordering matters for security)
+- `src/group.ts` — group reseeding and member removal (key material lifecycle)
+
 ## Conventions
 
 - **British English** — colour, initialise, behaviour, licence
