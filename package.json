@@ -46,7 +46,9 @@
   "files": [
     "dist/",
     "LICENSE",
+    "API.md",
     "CANARY.md",
+    "COOKBOOK.md",
     "NIP-CANARY.md",
     "INTEGRATION.md",
     "SECURITY.md",
