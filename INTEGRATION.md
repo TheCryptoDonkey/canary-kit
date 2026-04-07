@@ -367,18 +367,121 @@ authorisation:
 
 CANARY tokens rotate on a time-based counter (P4: Replay Resistance). For
 transaction-specific dynamic linking (required by FCA for remote electronic
-payments), construct the session namespace or counter from transaction parameters:
+payments), construct the session namespace or counter from transaction parameters.
+
+#### Full FCA SCA implementation
 
 ```typescript
+import { createSession, deriveSeed, generateSeed } from 'canary-kit/session'
+```
+
+**Step 1: Server-side seed derivation (backend, runs once per customer)**
+
+```typescript
+// The master key lives in an HSM — never in application code
+// deriveSeed uses HMAC-SHA256 with null-byte-separated components
+const customerSeed = deriveSeed(
+  hsmMasterKey,           // Uint8Array from HSM (min 16 bytes)
+  customerId,             // e.g. 'CUST-2026-00491'
+  seedVersion.toString(), // increment to rotate without re-enrolment
+)
+// Deliver customerSeed to the customer's app over TLS during login
+// Store in iOS Keychain / Android KeyStore (possession factor)
+```
+
+**Step 2: Standard call verification (agent side)**
+
+```typescript
+// Agent's desktop app — seed was derived from the same master_key + customer_id
 const session = createSession({
-  secret: seed,
-  namespace: `aviva:payment:${payeeId}:${amountPence}`,
+  secret: customerSeed,
+  namespace: 'aviva',
+  roles: ['caller', 'agent'],
+  myRole: 'agent',
+  preset: 'call',          // 30-second rotation, 1 word, ±1 tolerance
+  theirIdentity: customerId,
+})
+
+// Agent asks: "What's your verification word?"
+// Customer speaks their word from the app
+const result = session.verify(spokenWord)
+
+switch (result.status) {
+  case 'valid':
+    // Customer identity confirmed — two SCA factors satisfied:
+    //   Knowledge: customer knows the seed (derives the correct word)
+    //   Possession: seed stored on their device behind biometrics
+    const agentWord = session.myToken()
+    // Agent reads aloud: "Your confirmation word is: [agentWord]"
+    // Customer verifies on their app — bidirectional authentication
+    break
+
+  case 'duress':
+    // Customer spoke their duress word — they are under coercion
+    showVerified()                        // maintain plausible deniability
+    triggerDuressProtocol(result.identities) // silent security alert
+    break
+
+  case 'invalid':
+    // Word does not match — escalate to manual identity checks
+    escalateToSecurity()
+    break
+}
+```
+
+**Step 3: Transaction-specific dynamic linking (FCA requirement)**
+
+FCA SCA requires authentication codes to be dynamically linked to the specific
+transaction amount and payee for remote electronic payments. Encode transaction
+parameters into the session namespace:
+
+```typescript
+// Payment: £1,250.00 to payee 'ACME-CORP'
+const paymentSession = createSession({
+  secret: customerSeed,
+  namespace: `aviva:payment:ACME-CORP:125000`, // payee + amount in pence
   roles: ['caller', 'agent'],
   myRole: 'agent',
   preset: 'call',
   theirIdentity: customerId,
 })
+
+// This session produces different words from the standard session —
+// the token is cryptographically bound to the transaction parameters.
+// Changing the amount or payee produces a different word.
+const paymentWord = paymentSession.myToken()
 ```
+
+**Step 4: Customer-side implementation (mobile app)**
+
+```typescript
+// Customer's app — same seed, same namespace, opposite role
+const customerSession = createSession({
+  secret: customerSeed,       // retrieved from Keychain/KeyStore
+  namespace: 'aviva',
+  roles: ['caller', 'agent'],
+  myRole: 'caller',           // customer is the caller
+  preset: 'call',
+  theirIdentity: 'aviva-agent',
+})
+
+// App displays:
+//   "Your word: [customerSession.myToken()]"     — speak this to the agent
+//   "Expect to hear: [customerSession.theirToken()]" — agent should say this
+//   Countdown bar showing seconds until rotation
+```
+
+**Replacing SMS OTP with CANARY**
+
+| Property | SMS OTP | CANARY |
+|----------|---------|--------|
+| Factor type | Possession only (SIM) | Knowledge + Possession |
+| Phishing resistance | None (code can be relayed) | High (HMAC-derived, no transmittable code) |
+| Offline capable | No (requires SMS delivery) | Yes (derived locally after initial sync) |
+| Bidirectional | No (institution never proves identity) | Yes (mutual verification) |
+| Coercion resistance | None | Duress word triggers silent alert |
+| SIM-swap vulnerability | Critical | None (seed in device secure storage) |
+| Dynamic linking | Separate mechanism needed | Built into namespace construction |
 
 ### RBI Digital Payment Authentication (India)
 
@@ -633,6 +736,229 @@ NIP-44 self-encryption and NIP-78 application-specific replaceable events on
 Nostr relays. The vault is a single JSON blob containing all group states,
 encrypted with the user's own keypair, published as a kind 30078 event with
 a `d` tag of `canary:vault`.
+
+## Distributed Deployment Architecture
+
+When deploying CANARY across multiple nodes (multi-region call centres, redundant
+backend services, or clustered enterprise systems), verification state must be
+synchronised without compromising the protocol's deepfake-proof guarantees.
+
+### Architecture overview
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Node A      │     │  Node B      │     │  Node C      │
+│  (London)    │     │  (Mumbai)    │     │  (Dubai)     │
+│              │     │              │     │              │
+│  GroupState   │◄───►│  GroupState   │◄───►│  GroupState   │
+│  applySyncMsg │     │  applySyncMsg │     │  applySyncMsg │
+│              │     │              │     │              │
+│  Verify ✓    │     │  Verify ✓    │     │  Verify ✓    │
+└──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+       │                    │                    │
+       └────────────────────┼────────────────────┘
+                            │
+                    ┌───────┴───────┐
+                    │  Nostr Relays │
+                    │  (sync layer) │
+                    └───────────────┘
+```
+
+### Key principle: verification is stateless, sync is not
+
+Verification word derivation (`deriveVerificationWord`, `deriveToken`,
+`session.myToken()`) is a pure function of `(seed, counter)`. Any node with the
+seed can derive the correct word independently. No network round-trip needed.
+
+State synchronisation is only required for:
+- **Counter advances** (burn-after-use rotation)
+- **Member changes** (join/leave triggers reseed)
+- **Reseed events** (new seed distribution)
+
+This means nodes can verify callers even during network partitions. Sync is
+an optimisation for counter freshness, not a requirement for verification.
+
+### Conflict resolution via authority invariants
+
+The sync protocol enforces six invariants (I1-I6) that guarantee convergence:
+
+```typescript
+import {
+  applySyncMessage,
+  decodeSyncMessage,
+  decryptEnvelope,
+  deriveGroupKey,
+  type SyncMessage,
+} from 'canary-kit/sync'
+
+// Each node maintains its own GroupState and applies messages identically
+function handleIncomingSync(
+  localState: GroupState,
+  encryptedPayload: string,
+  senderPubkey: string,
+): GroupState {
+  const groupKey = deriveGroupKey(localState.seed)
+  const decrypted = await decryptEnvelope(groupKey, encryptedPayload)
+  const msg = decodeSyncMessage(decrypted)
+  const nowSec = Math.floor(Date.now() / 1000)
+
+  // applySyncMessage enforces all invariants:
+  //   I1: sender must be in admins (for privileged actions)
+  //   I2: opId must not be consumed (replay protection)
+  //   I3: epoch must match local epoch (non-reseed ops)
+  //   I4: reseed epoch must be local.epoch + 1
+  //   I5: snapshot epoch must be >= local epoch
+  //   I6: stale epoch messages are dropped
+  return applySyncMessage(localState, msg, nowSec, senderPubkey)
+}
+```
+
+### Eventual consistency model
+
+CANARY's sync protocol guarantees **eventual consistency** across nodes:
+
+| Scenario | Resolution |
+|----------|------------|
+| Two nodes advance counter simultaneously | Monotonic rule: `effective(incoming) > effective(local)` — highest wins, lower is no-op |
+| Node misses a counter advance | Next advance carries the latest counter; stale node catches up |
+| Node misses a reseed | Stale node rejects subsequent messages (epoch mismatch I3); admin must re-invite |
+| Network partition heals | Nodes exchange messages; invariant checks accept valid, reject stale |
+| Duplicate message delivery | opId replay guard (I2) silently drops duplicates |
+| Clock skew between nodes | ±60 second future skew tolerance; counter derived from `floor(time / interval)` absorbs drift |
+
+### Multi-node sync implementation
+
+```typescript
+import {
+  encodeSyncMessage,
+  applySyncMessage,
+  applySyncMessageWithResult,
+  encryptEnvelope,
+  decryptEnvelope,
+  deriveGroupKey,
+  STORED_MESSAGE_TYPES,
+} from 'canary-kit/sync'
+import { buildSignalEvent, buildStoredSignalEvent } from 'canary-kit/nostr'
+
+// Publish a state change to all nodes via Nostr relay
+async function broadcastSync(
+  group: GroupState,
+  msg: SyncMessage,
+  signer: EventSigner,
+): Promise<void> {
+  const groupKey = deriveGroupKey(group.seed)
+  const encrypted = await encryptEnvelope(groupKey, encodeSyncMessage(msg))
+
+  // Stored messages (member changes, reseeds) use kind 30078
+  // so offline nodes receive them when they reconnect.
+  // Ephemeral messages (beacons, liveness) use kind 20078.
+  const event = STORED_MESSAGE_TYPES.has(msg.type)
+    ? buildStoredSignalEvent({
+        groupId: group.name,
+        signalType: msg.type,
+        encryptedContent: encrypted,
+      })
+    : buildSignalEvent({
+        groupId: group.name,
+        signalType: msg.type,
+        encryptedContent: encrypted,
+      })
+
+  const signed = await signer.sign({ ...event, pubkey: signer.pubkey })
+  await relay.publish(signed)
+}
+
+// Receive and apply sync messages from other nodes
+function onSyncMessage(
+  localState: GroupState,
+  encryptedPayload: string,
+  senderPubkey: string,
+): { state: GroupState; applied: boolean } {
+  const groupKey = deriveGroupKey(localState.seed)
+  const decrypted = await decryptEnvelope(groupKey, encryptedPayload)
+  const msg = decodeSyncMessage(decrypted)
+  const nowSec = Math.floor(Date.now() / 1000)
+
+  // applySyncMessageWithResult tells you whether the message was applied
+  // or silently rejected by invariant checks — useful for logging
+  const result = applySyncMessageWithResult(localState, msg, nowSec, senderPubkey)
+
+  if (!result.applied) {
+    // Message rejected — log for debugging (never log seed material)
+    auditLog.warn('sync_rejected', {
+      type: msg.type,
+      epoch: (msg as { epoch?: number }).epoch,
+      localEpoch: localState.epoch,
+      sender: senderPubkey,
+    })
+  }
+
+  return result
+}
+```
+
+### Handling network partitions
+
+During a partition, each node continues to derive and verify words locally.
+When the partition heals:
+
+1. **Counter advances** — the monotonic rule resolves ordering automatically.
+   Only the highest effective counter is kept; lower values are no-ops.
+
+2. **Member changes during partition** — if an admin added/removed members while
+   a node was partitioned, the node will reject post-reseed messages (epoch
+   mismatch). The admin must send a `state-snapshot` to catch up partitioned
+   nodes within the same epoch, or re-invite for cross-epoch recovery.
+
+3. **Verification during partition** — works normally. Words derive from
+   `(seed, counter)` which both sides share. The only risk is counter drift
+   if one side burned words (burn-after-use) while the other didn't. The
+   tolerance window (`±tolerance` counter values) absorbs small drift.
+
+### Error handling
+
+```typescript
+import { decodeSyncMessage } from 'canary-kit/sync'
+
+// decodeSyncMessage validates all fields and rejects malformed messages
+try {
+  const msg = decodeSyncMessage(payload)
+} catch (err) {
+  // Common rejection reasons:
+  //   'Unsupported protocol version' — sender is on a different protocol version
+  //   'Invalid sync message type'    — unknown message type (forward compatibility)
+  //   'not valid JSON'               — corrupted or tampered payload
+  // All are safe to log and discard
+}
+
+// applySyncMessage returns unchanged state on rejection (fail-closed)
+// Use applySyncMessageWithResult to distinguish applied from rejected
+const { state, applied } = applySyncMessageWithResult(group, msg, nowSec, sender)
+if (!applied) {
+  // Invariant violation — message is either:
+  //   - From a non-admin (I1)
+  //   - Replayed opId (I2)
+  //   - Wrong epoch (I3/I4/I6)
+  //   - Stale counter (monotonic check)
+  // Safe to discard. Do not retry.
+}
+```
+
+### Deepfake-proof guarantees in distributed deployments
+
+The distributed architecture preserves all CANARY security properties:
+
+| Property | How it's preserved across nodes |
+|----------|-------------------------------|
+| P1: Token Unpredictability | Each node derives tokens from the same `(seed, counter)` — pure HMAC-SHA256 |
+| P2: Duress Indistinguishability | Duress derivation is local; duress alerts propagate via encrypted sync |
+| P4: Replay Resistance | Counter monotonicity enforced by `applySyncMessage`; opId deduplication prevents replay |
+| P5: Coercion Resistance | Duress signals broadcast to all nodes via sync; all nodes alert security teams |
+| P6: Liveness Guarantee | Liveness heartbeats are fire-and-forget; freshness gate (300s) prevents stale replay |
+| P8: Timing Safety | Constant-time string comparison (`timingSafeStringEqual`) on every node |
+
+The sync layer is a consistency optimisation. The security properties are
+properties of the cryptographic derivation, not the transport.
 
 ## Licence
 

@@ -363,6 +363,228 @@ Six characters spoken over radio gives ~610m accuracy. No GPS, no internet, no m
 
 ---
 
+## 7. Nostr — Decentralised Identity & Group Management
+
+Full lifecycle: create a group, publish to Nostr relays, subscribe, sync state,
+and verify members. This binds CANARY's verification protocol to Nostr's
+decentralised identity layer.
+
+### Architecture
+
+```mermaid
+graph TB
+  subgraph Device A — Admin
+    A1[createGroup] --> A2[buildGroupStateEvent]
+    A2 --> A3[Sign + publish to relay]
+    A1 --> A4[buildRumourEvent per member]
+    A4 --> A5[NIP-59 gift wrap + publish]
+  end
+
+  subgraph Relay
+    R1[kind 30078 — group state]
+    R2[kind 20078 — signals]
+    R3[kind 1059 — gift wraps]
+  end
+
+  subgraph Device B — Member
+    B1[Subscribe kind 30078 + 1059]
+    B2[Unwrap seed from gift wrap]
+    B3[deriveVerificationWord]
+    B4[Verify spoken word]
+  end
+
+  A3 --> R1
+  A5 --> R3
+  R1 --> B1
+  R3 --> B1
+  B1 --> B2
+  B2 --> B3
+  B3 --> B4
+```
+
+### Step 1: Create a group and build Nostr events
+
+```typescript
+import { createGroup, getCurrentWord, verifyWord } from 'canary-kit'
+import {
+  buildGroupStateEvent,
+  buildRumourEvent,
+  buildSignalEvent,
+  KINDS,
+  type GroupConfigPayload,
+  type SeedDistributionPayload,
+} from 'canary-kit/nostr'
+
+// Create a group with the family preset (7-day word rotation)
+const group = createGroup({
+  name: 'Martinez Family',
+  members: [alicePubkey, bobPubkey, charliePubkey],
+  admins: [alicePubkey],
+  preset: 'family',
+})
+
+// Build the kind 30078 group state event
+// Content must be NIP-44 encrypted before publishing
+const configPayload: GroupConfigPayload = {
+  description: 'Family safety group',
+  policies: { invite_by: 'admin', reseed_by: 'admin' },
+}
+const encryptedConfig = await signer.encrypt(
+  JSON.stringify(configPayload),
+  alicePubkey, // self-encrypt for group state
+)
+const groupEvent = buildGroupStateEvent({
+  groupId: group.name,
+  members: group.members,
+  encryptedContent: encryptedConfig,
+  rotationInterval: group.rotationInterval,
+})
+
+// Sign and publish to relay
+const signed = await signer.sign({ ...groupEvent, pubkey: alicePubkey })
+await relay.publish(signed)
+```
+
+### Step 2: Distribute the seed via NIP-17
+
+```typescript
+// Build a seed distribution rumour for each member
+for (const memberPubkey of [bobPubkey, charliePubkey]) {
+  const seedPayload: SeedDistributionPayload = {
+    seed: group.seed,
+    counter_offset: 0,
+    group_d: group.name,
+  }
+  const encryptedSeed = await signer.encrypt(
+    JSON.stringify(seedPayload),
+    memberPubkey,
+  )
+  const rumour = buildRumourEvent({
+    recipientPubkey: memberPubkey,
+    subject: 'ssg:seed',
+    encryptedContent: encryptedSeed,
+  })
+
+  // Wrap in NIP-59 gift wrap (kind 1059) and publish
+  const sealed = await nip59.seal(rumour, memberPubkey)
+  const wrapped = await nip59.giftWrap(sealed, memberPubkey)
+  await relay.publish(wrapped)
+}
+```
+
+### Step 3: Subscribe and receive the seed (member side)
+
+```typescript
+// Bob subscribes for gift wraps addressed to him
+const sub = relay.subscribe([
+  { kinds: [KINDS.giftWrap], '#p': [bobPubkey] },
+  { kinds: [KINDS.groupState], '#p': [bobPubkey] },
+])
+
+sub.on('event', async (event) => {
+  if (event.kind === KINDS.giftWrap) {
+    // Unwrap NIP-59 gift wrap → NIP-44 decrypt → extract seed
+    const rumour = await nip59.unwrap(event, bobPrivkey)
+    const subjectTag = rumour.tags.find(t => t[0] === 'subject')
+
+    if (subjectTag?.[1] === 'ssg:seed') {
+      const payload: SeedDistributionPayload = JSON.parse(
+        await signer.decrypt(rumour.content, rumour.pubkey),
+      )
+      // Store seed securely — derive verification words from it
+      await secureStorage.save(payload.group_d, payload.seed)
+    }
+  }
+})
+```
+
+### Step 4: Derive and verify words over Nostr
+
+```typescript
+// Both Alice and Bob derive the same word from the shared seed
+const word = getCurrentWord(group) // e.g. "garnet"
+
+// On a phone call, Alice speaks the word. Bob verifies:
+const result = verifyWord(
+  'garnet',           // what Bob heard Alice say
+  group.seed,         // the shared seed
+  group.members,      // all member pubkeys
+  group.counter + group.usageOffset,
+  group.wordCount,
+)
+
+if (result.status === 'verified') {
+  // Alice is confirmed — she knows the seed
+} else if (result.status === 'duress') {
+  // Alice is under coercion — alert the group silently
+  const alert = buildSignalEvent({
+    groupId: group.name,
+    signalType: 'duress-alert',
+    encryptedContent: await encryptForGroup(group.seed, JSON.stringify({
+      type: 'duress',
+      member: result.members![0],
+      timestamp: Math.floor(Date.now() / 1000),
+    })),
+  })
+  const signedAlert = await signer.sign({ ...alert, pubkey: bobPubkey })
+  await relay.publish(signedAlert)
+}
+```
+
+### Step 5: Sync state changes across devices
+
+```typescript
+import {
+  encodeSyncMessage,
+  decodeSyncMessage,
+  applySyncMessage,
+  encryptEnvelope,
+  decryptEnvelope,
+  deriveGroupKey,
+} from 'canary-kit/sync'
+
+// When Bob uses a word for verification, broadcast a counter advance
+const syncMsg = encodeSyncMessage({
+  type: 'counter-advance',
+  counter: group.counter,
+  usageOffset: group.usageOffset + 1,
+  timestamp: Math.floor(Date.now() / 1000),
+})
+
+// Encrypt with the group's symmetric key and publish as ephemeral signal
+const groupKey = deriveGroupKey(group.seed)
+const encrypted = await encryptEnvelope(groupKey, syncMsg)
+const signal = buildSignalEvent({
+  groupId: group.name,
+  signalType: 'counter-advance',
+  encryptedContent: encrypted,
+})
+const signedSignal = await signer.sign({ ...signal, pubkey: bobPubkey })
+await relay.publish(signedSignal)
+
+// Other devices receive, decrypt, decode, and apply
+const decrypted = await decryptEnvelope(groupKey, encrypted)
+const decoded = decodeSyncMessage(decrypted)
+const updatedGroup = applySyncMessage(group, decoded, nowSec, bobPubkey)
+```
+
+### Complete Nostr identity binding
+
+The binding between CANARY verification and Nostr identity works as follows:
+
+1. **Identity = Nostr keypair** — each member's secp256k1 public key is their
+   identity within the group. Duress words are derived per-member using this key.
+2. **Group state on relays** — kind 30078 events store encrypted group config
+   with member pubkeys in `p` tags, enabling relay-side subscription filtering.
+3. **Seed via NIP-17** — seeds are distributed using Nostr's private messaging
+   layer (gift wraps), hiding sender, recipient, and content from relays.
+4. **Sync via kind 20078** — counter advances, beacons, and duress alerts are
+   broadcast as ephemeral events encrypted with a group-derived symmetric key.
+5. **Verification is local** — word derivation never touches the network. Nostr
+   provides the group management and sync layer, not the verification layer.
+
+---
+
 ## What Never Touches a Network
 
 Regardless of transport, these always stay local:
